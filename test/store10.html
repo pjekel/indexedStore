@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Indexed Memory Store</title>
+    <style type="text/css">
+      @import "../../dijit/themes/claro/claro.css";
+      @import "../../dijit/themes/claro/document.css";
+      @import "../../dijit/tests/css/dijitTests.css";
+    </style>
+
+    <script type="text/javascript">
+      var dojoConfig = {
+            async: true,
+            parseOnLoad: true,
+            isDebug: true,
+            baseUrl: "../../",
+            packages: [
+              { name: "dojo",  location: "dojo" },
+              { name: "dijit", location: "dijit" },
+              { name: "store", location: "store" }
+            ]
+      };
+    </script>
+
+    <script type="text/javascript" src="../../dojo/dojo.js"></script>
+    <script type="text/javascript">
+      require([
+        "dojo/_base/lang",
+        "dojo/ready",
+        "store/_base/KeyRange",
+        "store/Hierarchy"
+        ], function( lang, ready, KeyRange, Store ) {
+
+//					console.log("Start loading the store....");
+//					console.log( new Date());
+					var store = new Store( { url:"../json/us-zipcodes-05k.json",
+//						var store = new Store( { url:"http://thejekels.com/json/us-zipcodes-43k.json",
+//																		suppressEvents:true,
+																		keyPath:"zip"
+																	});
+
+					function start () {
+						var indexByState = store.createIndex( "state", "code", {async:true});
+						var indexByCity  = store.createIndex("city", "city", {async:true});
+
+						indexByState.ready( function (index) {
+							console.log( "Index by State ready");
+						});
+
+						indexByCity.ready( function (index) {
+							console.log( "Index by City ready");
+							var keys   = KeyRange.only("Boston");
+							var cursor = index.openCursor( keys );
+							var record;
+							
+							while(record = cursor.value) {
+								console.log( record.city+" state: "+record.state+" zipcode: "+record.zip );
+								cursor.continue();
+							}
+						});
+					}
+
+					store.ready( lang.hitch( store, start ), function (err) {console.error(err);} );
+
+      });
+    </script>
+
+  </head>
+
+  <body class="claro">
+    <h1 class="DemoTitle">Indexed Memory Store</h1>
+    <div id="progress"></div>
+  </body>
+</html>

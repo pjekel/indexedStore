@@ -5,7 +5,6 @@
 	{"DataCloneError": 				{"text":"the object can not be cloned."} },
 	{"ItemExistError":				{"text":"object with specified ID already exist"} },
 	{"InvalidAccessError":		{"text":"operation or parameter is not allowed"} },
-	{"InvalidDataError":			{"text":"store data must be an array of objects"} },
 	{"InvalidPropertyError":	{"text":"invalid property or type specified"} },
 	{"InvalidObjectError":		{"text":"item is not an a valid store object"} },
 	{"InvalidPathError":			{"text":"invalid path"} },

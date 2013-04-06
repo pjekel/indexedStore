@@ -217,6 +217,19 @@ define(["dojo/_base/declare",
 			//		Public
 		},
 
+		getRange: function (/*Key|KeyRange*/ keyRange, /*QueryOptions?*/ options) {
+			// summary:
+			//		Retrieve a range of store records.
+			// keyRange:
+			//		A KeyRange object or a valid key.
+			// options:
+			//		The optional arguments to apply to the resultset.
+			// returns: dojo/store/api/Store.QueryResults
+			//		The results of the query, extended with iterative methods.
+			// tag:
+			//		Public
+		},
+		
 		index: function (name){
 			// summary:
 			//		Returns an Index object representing an index that is part of the
@@ -373,6 +386,7 @@ define(["dojo/_base/declare",
 		//		The number of how many results should be returned.
 		// ignoreCase: Boolean?
 		//		Match object properties case insensitive. Default is false.
+		// unique: Boolean?
 	});
 
 	return Store;

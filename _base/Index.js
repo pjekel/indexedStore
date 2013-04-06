@@ -9,13 +9,16 @@
 //
 define(["dojo/_base/lang",
 				"dojo/Deferred",
+				"dojo/store/util/QueryResults",
 			  "./Cursor",
 			  "./Keys",
 			  "./KeyRange",
 			  "./Library",
 			  "./Record",
-				"../error/createError!../error/StoreErrors.json"
-			 ], function (lang, Deferred, Cursor, Keys, KeyRange, Lib, Record, createError) {
+				"../error/createError!../error/StoreErrors.json",
+				"../util/QueryEngine",
+			 ], function (lang, Deferred, QueryResults, Cursor, Keys, KeyRange, 
+										 Lib, Record, createError, QueryEngine) {
 	"use strict";
 
 	//module:
@@ -28,7 +31,7 @@ define(["dojo/_base/lang",
 	// Requires JavaScript 1.8.5
 	var defineProperty = Object.defineProperty;
 
-	var IDBIndexOptions = { unique: false, multiEntry: false, async: false };
+	var IDBIndexOptions = { unique: false, multiEntry: false, caseSensitive: true, async: false };
 	var StoreError = createError( "Index" );		// Create the StoreError type.
 	var debug = dojo.config.isDebug || false;
 	var undef;
@@ -98,6 +101,56 @@ define(["dojo/_base/lang",
 				var record = new Record( indexKey, [storeKey]);
 				index._records.splice(locator.gt, 0, record);
 			}
+			index._updates++;
+		}
+
+		function onStoreEvent (evt) {
+			// summary:
+			//		Local store event handler.
+			// evt:
+			//		Store event.
+			// tag:
+			//		Private
+			switch( evt.type ) {
+				case "loadStart":
+					this.loading = true;
+					this._updates = 0;
+					break;
+				case "loadFailed":
+				case "loadEnd":
+					if (this.loading) {
+						delete this.loading;
+						sortDuplicates( this );
+					}
+					break;
+			}
+		}
+
+		function sortDuplicates( index ) {
+			// summary:
+			//		Sort all duplicate index entries. This method is called when either
+			//		a store was indexed or a store load request completed, this because
+			//		during both such events the sorting of duplicate index entries is
+			//		suspended for performance reasons.
+			// returns:
+			//		Total number of records in the index.
+			// tag:
+			//		Private
+			var records = index._records;
+			var count = 0, dup;
+
+			// Only sort when strictly required.
+			if (!index.unique && index._updates) {
+				records.forEach( function (record) {
+					if ((dup = record.value.length) > 1) {
+						record.value.sort();
+					}
+					count += dup;
+				});
+			} else {
+				count = records.length;
+			}
+			return count;
 		}
 
 		function indexStore( index, store, defer ) {
@@ -112,21 +165,12 @@ define(["dojo/_base/lang",
 			var records = store._records, i;
 			var count = 0, dup;
 			try {
-				if (debug) {Lib.debug("Start loading index ["+index.name+"]");}
+				if (debug) {Lib.debug("Start building index ["+index.name+"]");}
 				index.loading = true;
+				index._clear();
 				records.forEach( index._add, index );
-				// If duplcates are allowed, sort them in ascending order.
-				if (!index.unique) {
-					index._records.forEach( function (record) {
-						if ((dup = record.value.length) > 1) {
-							record.value.sort();
-						}
-						count += dup;
-					});
-				} else {
-					count = index._records.length;
-				}
-				if (debug) {Lib.debug("End loading index ["+index.name+"], "+index._records.length+" unique, "+count+" total");}
+				count = sortDuplicates( index );
+				if (debug) {Lib.debug("End building index ["+index.name+"], "+index._records.length+" unique, "+count+" total");}
 				defer.resolve(index);		// Index is ready.
 			} catch(err) {
 				var error = new StoreError( err, "indexStore" );
@@ -313,19 +357,18 @@ define(["dojo/_base/lang",
 		//=========================================================================
 		// Public methods
 
-		this.count = function (/*any*/ key) {
+		this.count = function (/*any*/ key,/*Boolean*/ unique) {
 			// summary:
 			//		Count the total number of records that share the key or key range and
 			//		return that value as the result for the IDBRequest.
 			// key:
 			//		Key identifying the record to be retrieved. The key arguments can also
 			//		be an KeyRange.
+			// unique:
+			//		If true only unique index entries are counted otherwise all entries
+			//		are counted.
 			// returns:
-			//		An IDBRequest object.
-			// exceptions:
-			//		DataError
-			//		InvalidStateError
-			//		TransactionInactiveError
+			//		Number of index entries.
 			// tag:
 			//		Public
 
@@ -342,8 +385,12 @@ define(["dojo/_base/lang",
 			var count = 0, i;
 			
 			if (range.length) {
-				for (i = range.first; i <= range.last; i++) {
-					count += this._records[i].value.length;
+				if (!unique) {
+					for (i = range.first; i <= range.last; i++) {
+						count += this._records[i].value.length;
+					}
+				} else {
+					count = range.length;
 				}
 			}
 			return count;
@@ -402,6 +449,45 @@ define(["dojo/_base/lang",
 			assert(this, key);
 
 			return retrieveIndexValue( this, key );
+		};
+
+		this.getRange = function (/*Key|KeyRange*/ keyRange, /*QueryOptions?*/ options) {
+			// summary:
+			//		Retrieve a range of store records.
+			// keyRange:
+			//		A KeyRange object or a valid key.
+			// options:
+			//		The optional arguments to apply to the resultset.
+			// returns: dojo/store/api/Store.QueryResults
+			//		The results of the query, extended with iterative methods.
+			// tag:
+			//		Public
+			var paginate = !!(options && (options.sort || options.count || options.start));
+			var unique   = this.unique || ((options && options.unique) || false);
+			var results  = [];
+			
+			if (!(keyRange instanceof KeyRange)) {
+				if (keyRange && !Keys.validKey(keyRange)) {
+					throw new StoreError( "TypeError", "getRange" );
+				}
+				return this.getRange( KeyRange.only( keyRange ), options );
+			} else {
+				var range = Keys.getRange( this, keyRange );
+				if (range.length) {
+					var records = this._records.slice(range.first, range.last+1);
+					records.forEach( function (record) {
+						var keys = unique ? [record.value[0]] : record.value;
+						keys.forEach( function (key) {
+							results.push( this.store.get( key ) );
+						}, this);
+					}, this);
+				}
+			}
+			if (results.length && paginate) {
+				return QueryResults( this.queryEngine(null, options)(results) );
+			} else  {
+				return QueryResults( results );
+			}
 		};
 
 		this.openCursor = function (/*any*/ range, /*DOMString*/ direction) {
@@ -465,6 +551,43 @@ define(["dojo/_base/lang",
 			return cursor;
 		};
 
+		this.query = function (/*Object*/ query,/*QueryOptions?*/ options) {
+			// summary:
+			//		Queries the index for objects.
+			// query: Object
+			//		The query to use for retrieving objects from the store.
+			// options:
+			//		The optional arguments to apply to the resultset.
+			// returns: dojo/store/api/Store.QueryResults
+			//		The results of the query, extended with iterative methods.
+			// tag:
+			//		Public
+			var results = [], keys = [];
+			
+			// To query index keys the query must at least have a 'key' property.
+			if (query && query.key) {
+				results = this.queryEngine(query, options)(this._records, true);
+				if (results.length) {
+					results.forEach( function (primKeys) {
+						if (options.unique) {
+							keys.push(primKeys[0]);						
+						} else {
+							primKeys.forEach( function (key) {
+								if (Keys.indexOf(keys,key) == -1) {
+									keys.push(key);
+								}
+							}, this);
+						}
+					}, this);
+
+					results = keys.map( function (key) {
+						return this.store.get( key );
+					}, this);
+				}
+			}
+			return QueryResults( results );
+		};
+
 		this.ready = function (/*Function?*/ callback,/*Function?*/ errback,/*thisArg*/ scope) {
 			// summary:
 			//		Execute the callback when the store has been loaded. If an error
@@ -508,16 +631,22 @@ define(["dojo/_base/lang",
 			}
 			this._indexReady = new Deferred();
 			this._records    = [];
+			this._updates    = 0;
 
-			this.multiEntry = !!indexOptions.multiEntry;
-			this.unique     = !!indexOptions.unique;
-			this.name       = name;
-			this.keyPath    = keyPath;
-			this.store      = store;
-			this.type       = "index";
+			this.caseSensitive = !!indexOptions.caseSensitive;
+			this.multiEntry    = !!indexOptions.multiEntry;
+			this.unique        = !!indexOptions.unique;
+			this.name          = name;
+			this.keyPath       = keyPath;
+			this.store         = store;
+			this.type          = "index";
+			this.queryEngine   = QueryEngine;
 
 			var async = !!indexOptions.async;
 			var index = this;
+
+			// Add the event listeners
+			store.on("loadStart, loadEnd, loadFailed", lang.hitch( this, onStoreEvent ));
 
 			if (async) {
 				setTimeout( function () {
@@ -527,9 +656,9 @@ define(["dojo/_base/lang",
 				indexStore( index, store, index._indexReady );
 			}
 
-			Lib.enumerate( this, ["_add", "_clear", "_destroy", "_remove"], false);
-			Lib.enumerate( this, "_indexReady", false);
-			Lib.writable( this, "type", false );
+			Lib.enumerate( this, "_add, _clear, _destroy, _remove", false);
+			Lib.enumerate( this, "_indexReady, _updates", false);
+			Lib.writable( this, "keyPath, name, store, type", false );
 
 		} else {
 			throw new StoreError( "SyntaxError", "constructor" );

@@ -80,9 +80,11 @@ define(["../_base/Record",
 		//		otherwise false.
 		// query:
 		//		JavaScript key:value pairs object.
-		for(var key in query) {
-			if (/\./.test(key)) {
-				return true;
+		if (query) {
+			for(var key in query) {
+				if (/\./.test(key)) {
+					return true;
+				}
 			}
 		}
 		return false;
@@ -186,47 +188,50 @@ define(["../_base/Record",
 		//	| });
 
 		var ignoreCase  = options && !!options.ignoreCase;
-		var queryFunc   = function () {};
 		var hasDotPath  = false;
+		var queryFunc   = null;
 		
-		// create our matching query function
-		switch (typeof query) {
-			case "undefined":
-			case "object":
-				// Test query object for dot-separated property names.
-				hasDotPath = hasPropertyPath(query);
-				queryFunc  = function (object) {
-					var key, value, required;
-					for(key in query) {
-						required = query[key];
-						value		 = hasDotPath ? getProp(key,object) : object[key];
-						if (!match( value, required, ignoreCase )) {
-							if (typeof required == "function") {
-								if (required(value, key, object)) {
-									continue;
+		// Create matching query function. If no query is specified only pagination
+		// options will be applied to a dataset.
+		if (query) {
+			switch (typeof query) {
+				case "undefined":
+				case "object":
+					// Test query object for dot-separated property names.
+					hasDotPath = hasPropertyPath(query);
+					queryFunc  = function (object) {
+						var key, value, required;
+						for(key in query) {
+							required = query[key];
+							value		 = hasDotPath ? getProp(key,object) : object[key];
+							if (!match( value, required, ignoreCase )) {
+								if (typeof required == "function") {
+									if (required(value, key, object)) {
+										continue;
+									}
 								}
+								return false;
 							}
-							return false;
 						}
+						return true;
+					};
+					break;
+				case "string":
+					// named query
+					if (!this[query] || typeof this[query] != "function") {
+						throw new StoreError( "MethodMissing", "QueryEngine", "No filter function " + query + " was found in store");
 					}
-					return true;
-				};
-				break;
-			case "string":
-				// named query
-				if (!this[query] || typeof this[query] != "function") {
-					throw new StoreError( "MethodMissing", "QueryEngine", "No filter function " + query + " was found in store");
-				}
-				queryFunc = this[query];
-				break;
-			case "function":
-				queryFunc = query;
-				break;
-			default:
-				throw new StoreError("InvalidType", "QueryEngine", "Can not query with a " + typeof query);
-		} /*end switch() */
-
-		function filter( filterFunc, data ) {
+					queryFunc = this[query];
+					break;
+				case "function":
+					queryFunc = query;
+					break;
+				default:
+					throw new StoreError("InvalidType", "QueryEngine", "Can not query with a " + typeof query);
+			} /*end switch() */
+		}
+		
+		function filter( filterFunc, data, queryKeys ) {
 			// summary:
 			// filterFunc:
 			// data:
@@ -245,8 +250,14 @@ define(["../_base/Record",
 				}
 				objects.forEach( function(object) {
 					if (object instanceof Record) {
-						if (filterFunc(object.value)) {
-							results.push(object.value);
+						if (queryKeys) {
+							if (filterFunc( object )) {
+								results.push(object.value);
+							}
+						} else {
+							if (filterFunc(object.value)) {
+								results.push(object.value);
+							}
 						}
 					} else {
 						if (filterFunc(object)) {
@@ -258,7 +269,7 @@ define(["../_base/Record",
 			return results;
 		} /* end filter() */
 
-		function execute(/*(Object|Record)[] | Cursor*/ data) {
+		function execute(/*(Object|Record)[] | Cursor*/ data, /*Boolean*/ queryKeys) {
 			// summary:
 			//		Execute the query on	a set of data and apply pagination	to the
 			//		query result.	This function is returned as the result of a call to
@@ -271,9 +282,10 @@ define(["../_base/Record",
 			//		An array of objects matching the query.
 			// tag:
 			//		Private
+			"use strict";
 			var data     = data || [];  // Make sure we always return something
 			var sortSet  = options && options.sort;
-			var results  = filter(queryFunc, data);
+			var results  = queryFunc ? filter(queryFunc, data, queryKeys) : data;
 			var sortFunc = sortSet;
 
 			if (sortSet) {

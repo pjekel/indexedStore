@@ -26,8 +26,8 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			function inMemory(memory, object) {
 				var obj;
 				memory.some( function(entry) {
-					if (entry.iObj === object) {
-						obj = entry.oObj;
+					if (entry.inObj === object) {
+						obj = entry.outObj;
 						return true;
 					}
 				});
@@ -56,7 +56,7 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 								obj[key] = val;
 							}
 						}
-						memory.push( {iObj:object, oObj:obj} );
+						memory.push( {inObj:object, outObj:obj} );
 						return obj;
 					case "Date":
 						return new Date( object.valueOf() );
@@ -77,18 +77,21 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			console.info( msg );
 		},
 
-		enumerate: function ( object, property, value ) {
+		enumerate: function (/*Object*/ object,/*String|String[]*/ property,/*Boolean*/ value ) {
 			// summary:
-
+			// object:
+			// property:
+			// value:
 			if (property instanceof Array) {
 				property.forEach( function (prop) {
 					this.enumerate( object, prop, value );
 				}, this);
-			}
-			if (typeof object[property] == "function") {
+			} else if (/,/.test(property)) {
+				this.enumerate( object, property.split(","), value );
+			} else if (typeof object[property] == "function") {
 //				Object.defineProperty( object, property, {value: object[property], enumerable:false});
 			} else {
-				Object.defineProperty( object, property, {enumerable:value});
+				Object.defineProperty( object, property.trim(), {enumerable:value});
 			}
 		},
 
@@ -153,15 +156,23 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			return value;
 		},
 
-		writable: function ( object, property, value ) {
+		writable: function (/*Object*/ object,/*String|String[]*/ property,/*Boolean*/ value ) {
 			// summary:
+			// object:
+			// property:
+			// value:
 
-			if (property instanceof Array) {
-				property.forEach( function (prop) {
-					this.enumerate( object, prop, value );
-				}, this);
+			if (property) {
+				if (property instanceof Array) {
+					property.forEach( function (prop) {
+						this.writable( object, prop, value );
+					}, this);
+				} else if (/,/.test(property)) {
+					this.writable( object, property.split(","), value );
+				} else {
+					Object.defineProperty( object, property.trim(), {writable:value});
+				}
 			}
-			Object.defineProperty( object, property, {writable:value});
 		}
 
 	};

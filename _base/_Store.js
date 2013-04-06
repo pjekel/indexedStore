@@ -172,14 +172,13 @@ define(["dojo/_base/declare",
 		//		from the new store object.
 		defaultProperties: null,
 
-		// features: FeatureList
-		features: null,
-		
 		// idProperty: String
 		//		The property name to use as the object identity property. The value of
 		//		this property should be unique. If the object being added to the store
 		//		does NOT have this property it will be added to the object.
 		idProperty: "id",
+
+		indexes: null,
 
 		// keyPath: String|String[]
 		//		A key path is a DOMString that defines how to extract a key from an
@@ -211,6 +210,9 @@ define(["dojo/_base/declare",
 		
 		// End constructor keyword
 		//=========================================================================
+		
+		// features: FeatureList [READ-ONLY]
+		features: null,
 		
 		// total: Number [read-only]
 		//		The total number of objects currently in the store.
@@ -268,9 +270,33 @@ define(["dojo/_base/declare",
 			//		Private
 			this._keyPathSetter(keyPath);
 		},
+
+		_indexesSetter: function (indexes) {
+			// summary:
+			// indexes:
+			// tag:
+			//		Private
+			if (indexes) {
+				if (!(indexes instanceof Array)) {
+					indexes = [indexes];
+				}
+				indexes.forEach( function (index) {
+					if (isObject(index)) {
+						if (index.name && index.keyPath) {
+							this.createIndex( index.name, index.keyPath, index.options );
+						} else {
+							throw new StoreError( "PropertyMissing", "indexSetter", "Required property 'name' or 'keyPath' missing" );
+						}
+					} else {
+						throw new StoreError( "TypeError", "indexSetter", "index property is not a valid object" );
+					}
+				}, this);
+			}
+		},
 		
 		_keyPathSetter: function (keyPath ) {
 			// summary:
+			// keyPath:
 			// tag:
 			//		Private
 			if (!Keys.validPath(keyPath)) {
@@ -607,6 +633,21 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Public
 			return Keys.keyValue(this.keyPath, object);
+		},
+
+		getRange: function (/*Key|KeyRange*/ keyRange, /*QueryOptions?*/ options) {
+			// summary:
+			//		Retrieve a range of store records.
+			// keyRange:
+			//		A KeyRange object or a valid key.
+			// options:
+			//		The optional arguments to apply to the resultset.
+			// returns: dojo/store/api/Store.QueryResults
+			//		The results of the query, extended with iterative methods.
+			// tag:
+			//		Public
+
+			AbstractOnly("getRange");
 		},
 
 		index: function (name){

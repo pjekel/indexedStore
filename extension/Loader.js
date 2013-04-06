@@ -17,10 +17,11 @@ define(["dojo/_base/declare",
 				"dojo/request/handlers",
 				"dojo/store/util/QueryResults",
 				"../_base/Library",
+				"../dom/event/Event",
 				"../error/createError!../error/StoreErrors.json",
 				"../util/QueryEngine"
 			 ], function (declare, lang, Deferred, request, Stateful, handlers,
-										 QueryResults, Lib, createError, QueryEngine) {
+										 QueryResults, Lib, Event, createError, QueryEngine) {
 	
 	// module:
 	//		store/extension/Loader
@@ -279,46 +280,70 @@ define(["dojo/_base/declare",
 			// data:
 			//		An array of objects.
 			// returns:
-			//		dojo/promise/Promise
+			//		void
 			// tag:
 			//		Private
 
-			if (debug) {Lib.debug( "Start loading store" );	}
 			var data  = data || [];
 			var max   = data.length;
+			var clone = this._clone;
 			var store = this;
-			var done  = 0;
+			var i;
+
+			if (debug) {Lib.debug( "Start loading store" );	}
 			
 			if (data instanceof Array) {
-				if (this.filter) {
-					data = QueryEngine(this.filter)(data);
+				if (store.filter) {
+					data = QueryEngine(store.filter)(data);
 				}
-				data.forEach( function (object, curr) {
-					this._storeRecord( object );
-					// Report progress every 500 records.
-					if (this.progress && !(curr % 500)) {
-						done = ((curr / max) * 100) >>> 0;
-						this._loadProgress(done, defer);
+				try {
+					store.dispatchEvent( new Event ("loadStart") );
+					// If loading from a remote source skip cloning...
+					if (defer.url) {
+						store._clone = false;
 					}
-				}, this);
-				this._loadSuccess(defer);
-				if (debug) {Lib.debug("End loading store, "+data.length+" records" );	}
+					for (i = 0; i < max; i++) {
+						store._storeRecord( data[i] );
+						// Report progress every 500 records.
+						if (store.progress && !(i % 500)) {
+							store._loadProgress(max, i, defer);
+						}
+					}
+					store.dispatchEvent( new Event ("loadEnd") );
+					store._loadProgress(100, 100, defer);
+					store._loadSuccess(defer);
+				} catch (err) {
+					store.dispatchEvent( new Event ("loadFailed") );
+					throw err;
+				} finally {
+					store._clone = clone;
+				}
 			} else {
-				throw new StoreError("InvalidData", "_loadData");
+				throw new StoreError("DataError", "_loadData", "store data must be an array of objects");
 			}
 		},
 
-		_loadProgress: function (done, defer) {
+		_loadProgress: function (/*Number*/ total, /*Number*/ loaded, /*dojo.Deferred*/ defer) {
 			// summary:
-			//		Report progress to both the current load request and the store
-			// done:
-			//		Percentage done (0-100)
+			//		Report progress to both the current load request and the store. The
+			//		progress is reported as a percentage of loaded units. Units in this
+			//		context can be anything. (bytes, records, ...)
+			// total:
+			//		Total units to be loaded.
+			// loaded:
+			//		Units currently loaded.
 			// defer:
 			//		dojo/Deferred associated with the current load request.
 			// tag:
 			//		Private
-			this._storeReady.progress(done);
-			defer.progress(done);
+
+			if (this.progress) {
+				var done = total > 0 ? (((loaded / total) * 100) >>> 0) : 0;
+				this._storeReady.progress(done);
+				if (defer) {
+					defer.progress(done);
+				}
+			}
 		},
 
 		_loadSuccess: function (/*dojo/Deferred*/ defer) {
@@ -330,11 +355,11 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Private
 
+			if (debug) {Lib.debug("End loading store, "+this._records.length+" records" );	}
 			delete this.error;
-			this._loadProgress(100, defer);
-			this._storeReady.resolve(this);
 			this._loadReset(null);
-			defer.resolve();
+			this._storeReady.resolve(this);
+			defer.resolve(this);
 		},
 
 		_loadReset: function (reason) {
@@ -355,6 +380,7 @@ define(["dojo/_base/declare",
 		},
 
 		_xhrGet: function (url, handleAs) {
+			if (debug) {Lib.debug( "Start XHR request" );	}
 			return request(this.url, {method:"GET", handleAs: handleAs, preventCache: true});
 		},
 
@@ -418,6 +444,7 @@ define(["dojo/_base/declare",
 							if (!this.handleAs) {
 								this.handleAs = "json";
 							}
+							ldrDef.url = this.url;
 							var result = this._xhrGet( this.url, this.handleAs, null );
 							result.then( 
 								function (data){
@@ -430,6 +457,9 @@ define(["dojo/_base/declare",
 								function (err) {
 									// Don't throw exception as it will be caught by dojo/Deferred
 									store._loadError(err, ldrDef);
+								}, 
+								function (progress) {
+									store._loadProgress( progress.total, progress.loaded, ldrDef );
 								}
 							);
 						}

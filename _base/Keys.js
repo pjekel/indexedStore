@@ -125,7 +125,6 @@ define(["exports",
 		if (key) {
 			var entry = exports.search(source, key);
 			var index = entry.eq >= 0 ? entry.eq : entry.gt;
-
 			for( ; index < max; index++) {
 				result = exports.cmp( key, records[index].key );
 				switch (type) {

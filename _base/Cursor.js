@@ -143,13 +143,13 @@ define(["dojo/_base/lang",
 
 			if (record && Keys.inRange( record.key, keyRange)) {
 				currentKey = primaryKey = record.key;
-				currentVal = store._clone ? clone(record.value) : record.value;
-
 				if (index) {
 					primaryKey = record.value[position];
 					if (!keyCursor) {
 						currentVal = store.get( primaryKey );
 					}
+				} else {
+					currentVal = store._clone ? clone(record.value) : record.value;
 				}
 			} else {
 				currentVal = currentKey = primaryKey = undefined;
@@ -193,7 +193,8 @@ define(["dojo/_base/lang",
 			throw new StoreError("InvalidState", "advance");
 		}
 
-		this.continue = function (/*any?*/ key) {
+		// dojo buildsystem doesn't allow 'this.continue' therefore we use 'this.cont'
+		this.cont = function (/*any?*/ key) {
 			// summary:
 			//		Advance the cursor once in the direction set for the cursor or to
 			//		the key if specified.
@@ -205,14 +206,15 @@ define(["dojo/_base/lang",
 			// tag:
 			//		Public
 			if (key && !Keys.isValidKey(key)) {
-				throw new StoreError("DataError", "continue");
+				throw new StoreError("DataError", "cont");
 			}
 			if (gotValue) {
 				return !!advanceCursor (this, key, 1);
 			}
-			throw new StoreError("InvalidState", "continue");
+			throw new StoreError("InvalidState", "cont");
 		}
 
+		// dojo buildsystem doesn't allow 'this.delete' therefore we use 'this.remove'
 		this.remove = function () {
 			// summary:
 			//		Delete the record with the cursor's current primary key from the store.
@@ -308,7 +310,7 @@ define(["dojo/_base/lang",
 				
 				while (cursor.value && count--) {
 					values.push( cursor.value );
-					cursor.continue();
+					cursor.cont();
 				}
 				return values.slice(begin,end);
 			}

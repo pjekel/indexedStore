@@ -12,8 +12,7 @@
 define(["dojo/_base/declare",
 				"./_base/_Store",
 				"./_base/_Natural",
-				"./extension/Loader",
-				"./extension/Hierarchy"
+				"./extension/Loader"
 			 ], function (declare, _Store, _Natural, Loader) {
 	"use strict";
 	// module:

@@ -11,6 +11,7 @@
 
 define(["dojo/_base/declare",
 				"dojo/_base/lang",
+				"dojo/store/util/QueryResults",
 				"./Keys",
 				"./KeyRange",
 				"./Library",
@@ -18,8 +19,8 @@ define(["dojo/_base/declare",
 				"./Record",
 				"../error/createError!../error/StoreErrors.json",
 				"../dom/event/Event"
-			 ], function (declare, lang, Keys, KeyRange, Lib, Location, Record,
-										 createError, Event) {
+			 ], function (declare, lang, QueryResults, Keys, KeyRange, Lib, Location, 
+										 Record, createError, Event) {
 	"use strict";
 	// module:
 	//		store/_base/_Natural
@@ -369,6 +370,40 @@ define(["dojo/_base/declare",
 				return (this.get(key) ? 1 : 0);
 			}
 			return this.total;
+		},
+
+		getRange: function (/*Key|KeyRange*/ keyRange, /*QueryOptions?*/ options) {
+			// summary:
+			//		Retrieve a range of store records.
+			// keyRange:
+			//		A KeyRange object or valid key.
+			// options:
+			//		The optional arguments to apply to the resultset.
+			// returns: dojo/store/api/Store.QueryResults
+			//		The results of the query, extended with iterative methods.
+			// tag:
+			//		Public
+			var paginate = !!(options && (options.sort || options.count || options.start));
+			var results  = [];
+			
+			if (!(keyRange instanceof KeyRange)) {
+				if (keyRange && !Keys.validKey(keyRange)) {
+					throw new StoreError( "TypeError", "getRange" );
+				}
+				return this.getRange( KeyRange.only( keyRange ), options );
+			} else {
+				var results = this._getRange( this, keyRange );
+				if (results.length) {
+					results = results.map( function (record) {
+						return this._clone ? Lib.clone(record.value) : record.value;
+					}, this);
+				}
+			}
+			if (result.length && paginate) {
+				return QueryResults( this.queryEngine(null, options)(results) );
+			} else  {
+				return QueryResults( results );
+			}
 		},
 
 		toString: function () {

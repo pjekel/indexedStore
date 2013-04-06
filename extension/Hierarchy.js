@@ -226,7 +226,7 @@ define(["dojo/_base/declare",
 			while (cursor.primaryKey) {
 				loc = this._retrieveRecord(cursor.primaryKey);
 				temp[loc.eq] = cursor.value;
-				cursor.continue();
+				cursor.cont();
 			}
 			return temp.filter( function() {return true;} );
 		},

@@ -101,7 +101,7 @@ define(["./Keys"], function (Keys) {
 			} else {
 				if (!unique && (source.type == "index" && !source.unique)) {
 					var storeKeys = source._records[this.eq].value;
-					if (this.position < storeKeys.length) {
+					if (this.position < storeKeys.length - 1) {
 						return new Location( source, this.ls, this.eq, this.gt, this.position + 1 );
 					}
 					this.position = 0;

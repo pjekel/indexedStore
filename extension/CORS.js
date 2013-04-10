@@ -30,11 +30,6 @@ define(["dojo/_base/declare",
 		//		Add support for Cross-Origin Resource Sharing (CORS).
 		//
 		
-		// timeout: Number | null
-		//		The number of milliseconds to wait for the response. If this time passes
-		//		the request is canceled and the promise rejected.
-		timeout: null,
-
 		//=========================================================================
 		// constructor
 		
@@ -49,7 +44,7 @@ define(["dojo/_base/declare",
 		// Private methods.
 		
 		_xhrGet: function (url, handleAs, options) {
-			var options = lang.mixin ({timeout: this.timeout}, options);
+			var timeout = (options && options.timeout) || 0;
 			var headers = null;
 
 			// URL must start with either 'http://' or 'https://'
@@ -72,8 +67,8 @@ define(["dojo/_base/declare",
 						xdr.ontimeout = function() {
 							dfd.reject( new StoreError( "RequestError", "_xhrGet", "Timeout loading: "+url ) );
 						}
-						if (options.timeout && options.timeout > 0) {
-							xdr.timeout = options.timeout;
+						if (timeout > 0) {
+							xdr.timeout = timeout;
 						}
 						xdr.open("get", url);
 						xdr.send();
@@ -86,7 +81,7 @@ define(["dojo/_base/declare",
 				}
 			}
 			return request(this.url, {method:"GET", handleAs: handleAs, headers:headers, 
-																 timeout: options.timeout, preventCache: true});
+																 timeout: timeout, preventCache: true});
 		}
 
 	};

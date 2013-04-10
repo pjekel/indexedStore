@@ -72,6 +72,7 @@ define(["dojo/_base/declare",
 	
 	var StoreError = createError( "Indexed" );		// Create the StoreError type.
 	var clone      = Lib.clone;										// HTML5 structured clone.
+	var undef;
 	
 	var _Indexed = {
 
@@ -137,6 +138,7 @@ define(["dojo/_base/declare",
 					// Make sure we destroy the real store record and not a clone.
 					record = this._records.splice( recNum, 1 )[0];
 					record.destroy();
+					this.total = this._records.length;
 					return true;
 				}
 			}
@@ -175,7 +177,7 @@ define(["dojo/_base/declare",
 			//		Key identifying the record to be retrieved. The key arguments can also
 			//		be an KeyRange.
 			// returns:
-			//		A location object. (see the ./util/Keys module for detais).
+			//		A location object. (see the Location module for detais).
 			// tag:
 			//		Private
 			if (key instanceof KeyRange) {
@@ -221,26 +223,28 @@ define(["dojo/_base/declare",
 			var optKey, overwrite = true;
 			
 			if (options) {
-				overwrite = options.overwrite || true;
+				overwrite = "overwrite" in options ? !!options.overwrite : true;
 				optKey    = options.key || options.id || null;
 			}
+
 			// Test if the primary key already exists.
-			var key     = Keys.getKey(this, value, optKey);
-			var locator = this._retrieveRecord(key);
+			var baseVal = Keys.getKey(this, value, optKey);
+			var keyVal  = this.uppercase ? Keys.toUpperCase(baseVal) : baseVal;
+			var locator = this._retrieveRecord(keyVal);
 			var curRec  = locator.record;
 			var at      = locator.eq;
 			
 			if (curRec) {
 				if (!overwrite) {
-					throw new StoreError("ConstraintError", "_storeRecord", "record with key [%{0}] already exist", key);
+					throw new StoreError("ConstraintError", "_storeRecord", "record with key [%{0}] already exist", keyVal);
 				}
 				this._removeFromIndex( curRec );
 			}
 
-			value = callback ? callback.call( this, key, value, options) : value;
+			value = callback ? callback.call( this, keyVal, value, options) : value;
 			try {
 				value  = this._clone ? clone(value) : value;
-				newRec = new Record( key, value );
+				newRec = new Record( keyVal, value );
 			} catch(err) {
 				throw new StoreError( "DataCloneError", "_storeRecord" );
 			}
@@ -263,7 +267,7 @@ define(["dojo/_base/declare",
 				this.dispatchEvent( event );
 			}
 			this.total = this._records.length;
-			return key;
+			return keyVal;
 		},
 
 		//=========================================================================
@@ -281,18 +285,15 @@ define(["dojo/_base/declare",
 			//		returned.
 			// tag:
 			//		Public
-			if (key) {
+			this._assertStore( this, "count" );
+			if (key != undef) {
 				if (!(key instanceof KeyRange)) {
-					if (Keys.validKey(key)) {
-						key = KeyRange.only( key );
-					}
+					key = KeyRange.only( key );
 				}
-			} else {
-				key = KeyRange.bound("", "");
+				var range = Keys.getRange(this, key);
+				return range.length;
 			}
-
-			var range = Keys.getRange(this, key);
-			return range.length;
+			return this.total;
 		},
 		
 		getRange: function (/*Key|KeyRange*/ keyRange, /*QueryOptions?*/ options) {
@@ -310,10 +311,16 @@ define(["dojo/_base/declare",
 			var results  = [];
 			
 			if (!(keyRange instanceof KeyRange)) {
-				if (keyRange && !Keys.validKey(keyRange)) {
+				if (keyRange != undef) {
+					if (Keys.validKey(keyRange)) {
+						return this.getRange( KeyRange.only( keyRange ), options );
+					}
 					throw new StoreError( "TypeError", "getRange" );
+				} else {
+					results = this._records.map( function (record) {
+						return this._clone ? Lib.clone(record.value) : record.value;
+					}, this);					
 				}
-				return this.getRange( KeyRange.only( keyRange ), options );
 			} else {
 				var range = Keys.getRange( this, keyRange );
 				if (range.length) {
@@ -330,7 +337,7 @@ define(["dojo/_base/declare",
 			}
 		},
 
-		openCursor: function (/*any*/ range, /*DOMString*/ direction) {
+		openCursor: function (/*any?*/ range, /*DOMString?*/ direction) {
 			// summary:
 			//		Open a new cursor. A cursor is a transient mechanism used to iterate
 			//		over multiple records in the store.
@@ -348,10 +355,26 @@ define(["dojo/_base/declare",
 			//		| };
 			// tag:
 			//		Public
-			var range = range || null;
-			if (range) {
-				if (Keys.validKey(range)) {
+
+			this._assertKey( range, "openCursor", false );
+			// If there's only argument test if it is the 'direction'...
+			if (arguments.length == 1) {
+				switch(arguments[0]) {
+					case "next": 
+					case "nextunique": 
+					case "prev": 
+					case "prevunique":
+						direction = arguments[0];
+						range = undef;
+						break;
+				}
+			}
+
+			if (!(range instanceof KeyRange)) {
+				if (range != undef) {
 					range = KeyRange.only( range );
+				} else {
+					range = null;
 				}
 			}
 			var cursor  = new Cursor( this, range, direction, false );

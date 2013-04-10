@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Compound Keys</title>
+    <style type="text/css">
+      @import "../../dijit/themes/claro/claro.css";
+      @import "../../dijit/themes/claro/document.css";
+      @import "../../dijit/tests/css/dijitTests.css";
+    </style>
+
+    <script type="text/javascript">
+      var dojoConfig = {
+            async: true,
+            parseOnLoad: true,
+            isDebug: true,
+            baseUrl: "../../",
+            packages: [
+              { name: "dojo", location: "dojo" },
+              { name: "doh",  location: "util/doh" },
+              { name: "store",location: "indexedStore" }
+            ]
+      };
+    </script>
+
+    <script type="text/javascript" src="../../dojo/dojo.js"></script>
+    <script type="text/javascript">
+      require([
+        "doh/runner",
+        "dojo/_base/declare",
+        "dojo/_base/lang",
+        "dojo/store/util/QueryResults",
+        "dojo/ready",
+        "store/_base/_Store",
+        "store/_base/_Natural",
+        "store/_base/_Indexed",
+        "store/_base/KeyRange",
+				"store/error/createError!store/error/StoreErrors.json"
+        ], function( doh, declare, lang, QueryResults, ready,
+											_Store, _Natural, _Indexed, KeyRange, createError ) {
+					"use strict";
+					
+					// IMPORTANT:
+					//		Don't change the number of records without updating any of
+					//		the range and count tests.
+					var StoreError = createError("store");
+					var data = [
+						{ "name":"Abe", "address":{ "city":"Springfield", "street":"Second Street", "number":10} },
+						{ "name":"Mona", "address":{ "city":"Springfield", "street":"Second Street", "number":10} },
+						{ "name":"Jacqueline", "address":{ "city":"Springfield", "street":"Circly Street", "number":10} },
+						{ "name":"Homer", "address":{ "city":"Springfield", "street":"Main Street", "number":1} },
+						{ "name":"Marge", "address":{ "city":"Springfield", "street":"Main Street", "number":1} },
+						{ "name":"Ned", "address":{ "city":"Springfield", "street":"Main Street", "number":10} },
+						{ "name":"Lisa", "address":{ "city":"Springfield", "street":"Main Street", "number":1} },
+						{ "name":"Bart", "address":{ "city":"Springfield", "street":"Main Street", "number":1} },
+						{ "name":"Maggie", "address":{ "city":"Springfield", "street":"Main Street", "number":1} },
+						{ "name":"Patty", "address":{ "city":"Springfield", "street":"Circly Street", "number":10} },
+						{ "name":"Selma", "address":{ "city":"Springfield", "street":"Circly Street", "number":10} },
+						{ "name":"Rod", "address":{ "city":"Springfield", "street":"Main Street", "number":10} },
+						{ "name":"Todd", "address":{ "city":"Springfield", "street":"Main Street", "number":10} },
+						{ "name":"Apu", "address":{ "city":"Springfield", "street":"Quicky Mart", "number":711} },
+						{ "name":"Manjula", "address":{ "city":"Springfield", "street":"Quicky Mart", "number":711} }
+					];
+					
+					doh.register("Natural Store", [
+						{
+							name: "Compound Keys, generate invalid keys",
+							runTest: function (t) {
+								var Store = declare( [_Store, _Natural]);
+								var store = new Store ( {autoIncrement: true, keyPath:["name","address.id"]});
+								var max   = data.length;
+								
+								// Try to add objects to the store. This should fail because the
+								// address property has no 'id' property resulting in a sparse
+								// key array. (e.g. ["Bart", undefined] ) which is not allowed
+								// for primary keys.
+								data.forEach( function (obj) {
+									t.e( Error, store, "add", [obj] );
+								});
+								t.is ( store.total, 0 );
+
+								// This should fail, generating a key like [undefined, undefined]
+								var obj = { id:"Butters" };
+								t.e( Error, store, "add", [obj] );
+							}
+
+						},
+						{
+							name: "Compound Keys, Natural Store, valid keys",
+							runTest: function (t) {
+								var Store = declare( [_Store, _Natural]);
+								var store = new Store ( {keyPath:["name","address.number"]});
+								var max   = data.length;
+								var count, cursor, results, keyRange, expected;
+								
+								// Add all object to the store...
+								data.forEach( function (obj) {
+									store.add( obj );
+								});
+								// Test number of store records.
+								t.is( store.count(), max );
+								t.is( store.total, max );
+
+								// Because there is no public method to expose the record keys
+								// use the store._records property directly (testing only).
+								store._records.forEach( function (record) {
+									t.t( record.key instanceof Array );
+									t.is( record.key.length, 2 );
+									t.t( typeof record.key[0] == "string")
+									t.t( typeof record.key[1] == "number")
+								});
+
+								// These should fail (inproper key format or partial key).
+								t.f ( !!store.get("Bart") );
+								t.f ( !!store.get(["Bart"]) );
+
+								// This should be Ok
+								t.t ( !!store.get(["Bart", 1]) );
+
+								expected = ["Abe", "Apu", "Bart", "Homer", "Jacqueline", "Lisa"];
+								keyRange = KeyRange.bound( ["A"], ["M"] );
+								results  = store.getRange( keyRange, {sort:[{property:"name"}]} );
+								results.forEach( function (obj) {
+									t.t( expected.indexOf( obj.name ) != -1 );
+								});
+								t.is( store.count(keyRange), 6);
+								t.is( results.total, 6);
+
+							}
+						},
+						{
+							name: "Compound Keys, Indexed Store, valid keys",
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ( {keyPath:["name","address.number"]});
+								var max   = data.length;
+								var count, cursor, results, keyRange, expected;
+								
+								// Add all object to the store...
+								data.forEach( function (obj) {
+									store.add( obj );
+								});
+								// Test number of store records.
+								t.is( store.count(), max );
+								t.is( store.total, max );
+
+								// Because there is no public method to expose the record keys
+								// use the store._records property directly (testing only).
+								store._records.forEach( function (record) {
+									t.t( record.key instanceof Array );
+									t.is( record.key.length, 2 );
+									t.t( typeof record.key[0] == "string")
+									t.t( typeof record.key[1] == "number")
+								});
+
+								// These should fail (inproper key format or partial key).
+								t.f ( !!store.get("Bart") );
+								t.f ( !!store.get(["Bart"]) );
+
+								// This should be Ok
+								t.t ( !!store.get(["Bart", 1]) );
+
+								expected = ["Abe", "Apu", "Bart", "Homer", "Jacqueline", "Lisa"];
+								keyRange = KeyRange.bound( ["A"], ["M"] );
+								results  = store.getRange( keyRange, {sort:[{property:"name"}]} );
+								results.forEach( function (obj) {
+									t.t( expected.indexOf( obj.name ) != -1 );
+								});
+								t.is( store.count(keyRange), 6);
+								t.is( results.total, 6);
+
+								//============================================================
+								// Cursor with KeyRange
+								
+								cursor = store.openCursor( keyRange );
+								t.t( !!(cursor && cursor.length == 6) );
+								for (count = 1; cursor.cont(); count++);
+								t.is( count,6 );
+
+								//============================================================
+								// Cursor, try updating portion of the key (should fail).
+								
+								cursor = store.openCursor();
+								t.t( !!(cursor && cursor.length) );
+								while (cursor && cursor.value) {
+									var object = cursor.value;
+									object.address.number++;
+									t.e( Error, cursor, "update", [object] );
+									cursor.cont();
+								}
+
+							}
+						}
+					]);
+
+					ready( function () {
+						doh.run();
+
+					});
+
+
+				}
+      );
+    </script>
+
+  </head>
+
+  <body class="claro">
+    <h1 class="DemoTitle">Compound Keys</h1>
+  </body>
+</html>

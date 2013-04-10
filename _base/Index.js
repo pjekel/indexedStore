@@ -31,8 +31,15 @@ define(["dojo/_base/lang",
 	// Requires JavaScript 1.8.5
 	var defineProperty = Object.defineProperty;
 
-	var IDBIndexOptions = { unique: false, multiEntry: false, caseSensitive: true, async: false };
+	// Define default index properties.
+	var IDBIndexOptions = { unique: false, 
+	                        multiEntry: false, 
+	                        uppercase: false, 
+	                        rangeSort: true, 
+	                        async: false };
+
 	var StoreError = createError( "Index" );		// Create the StoreError type.
+	var isObject = Lib.isObject;
 	var debug = dojo.config.isDebug || false;
 	var undef;
 	
@@ -70,7 +77,7 @@ define(["dojo/_base/lang",
 			if ( index._destroyed || index.store._destroyed || index.store._beingDestroyed ) {
 				throw new StoreError("InvalidStateError", "assert");
 			}
-			if (key) {
+			if (key != undef) {
 				if (!(key instanceof KeyRange) && !Keys.validKey(key)) {
 					throw new StoreError("DataError", "assert", "Invalid key or key range");
 				}
@@ -102,6 +109,17 @@ define(["dojo/_base/lang",
 				index._records.splice(locator.gt, 0, record);
 			}
 			index._updates++;
+		}
+
+		function isDirection( value ) {
+			switch (value) {
+				case "next":
+				case "nextunique":
+				case "prev":
+				case "prevunique":
+					return true;
+			}
+			return false;
 		}
 
 		function onStoreEvent (evt) {
@@ -143,7 +161,10 @@ define(["dojo/_base/lang",
 			if (!index.unique && index._updates) {
 				records.forEach( function (record) {
 					if ((dup = record.value.length) > 1) {
-						record.value.sort();
+						record.value.sort( 
+							function (a,b) { 
+								return Keys.cmp(a,b); 
+							});
 					}
 					count += dup;
 				});
@@ -193,14 +214,15 @@ define(["dojo/_base/lang",
 			//		Index key.
 			// tag:
 			//		Private
-			var locator;
+			var record;
 			if (key instanceof KeyRange) {
-				locator = Keys.rangeToLocation( Keys.getRange(index, key) );
+				record = Keys.getRange(index, key).record;
 			} else {
-				locator = Keys.search(index, key);
+				key = index.uppercase ? Keys.toUpperCase(key) : key;
+				record = Keys.search(index, key).record;
 			}
-			if (locator.record) {
-				return locator.record.value[0];
+			if (record) {
+				return record.value[0];
 			}
 		}
 
@@ -261,6 +283,9 @@ define(["dojo/_base/lang",
 			if (storeRecord instanceof Record) {
 				var indexKey = Keys.indexKeyValue( this.keyPath, storeRecord.value );
 				if (indexKey) {
+					if (index.uppercase) {
+						indexKey = Keys.toUpperCase( indexKey );
+					}
 					if (!hasKey(this, indexKey) || !this.unique) {
 						if (this.multiEntry) {
 							if (indexKey instanceof Array) {
@@ -314,6 +339,9 @@ define(["dojo/_base/lang",
 			var i;
 
 			if (indexKey) {
+				if (this.uppercase) {
+					indexKey = Keys.toUpperCase(indexKey);
+				}
 				// First, based on the index key(s) collect all candidate index records.
 				if (indexKey instanceof Array && this.multiEntry) {
 					indexKey.forEach( function (key) {
@@ -354,10 +382,12 @@ define(["dojo/_base/lang",
 			}
 		};
 
+		Lib.enumerate( this, "_add, _clear, _destroy, _remove", false);
+
 		//=========================================================================
 		// Public methods
 
-		this.count = function (/*any*/ key,/*Boolean*/ unique) {
+		this.count = function (/*any?*/ key,/*Boolean?*/ unique) {
 			// summary:
 			//		Count the total number of records that share the key or key range and
 			//		return that value as the result for the IDBRequest.
@@ -372,13 +402,19 @@ define(["dojo/_base/lang",
 			// tag:
 			//		Public
 
+			if (arguments.length == 1) {
+				if (typeof arguments[0] == "boolean") {
+					unique = arguments[0];
+					key    = undef;
+				}
+			}
 			assert( this, key, true );
-			if (key) {
+			if (key != undef) {
 				if (!(key instanceof KeyRange)) {
-					key = KeyRange.only( key );
+					key = KeyRange.only( this.uppercase ? Keys.toUpperCase(key) : key );
 				}
 			} else {
-				key = KeyRange.bound("", "");
+				key = KeyRange.unbound();
 			}
 
 			var range = Keys.getRange(this, key);
@@ -405,23 +441,6 @@ define(["dojo/_base/lang",
 			//		KeyRange in which case the function retreives the first existing
 			//		value in that range.
 			// returns:
-			//		An IDBRequest object.
-			// exceptions:
-			//		DataError
-			//		InvalidStateError
-			//		TransactionInactiveError
-			// example:
-			//		| var request = index.get( myKey );
-			//		| request.onsuccess = function (event) {
-			//		|   var value = this.result;
-			//		| };
-			//
-			//		Alternatively:
-			//
-			//		| var request = index.get( myKey );
-			//		| request.addEventListener( "success", function (event) {
-			//		|   var value = this.result;
-			//		| });
 			// tag:
 			//		Public
 
@@ -431,56 +450,77 @@ define(["dojo/_base/lang",
 
 		this.getKey = function (/*any*/ key) {
 			// summary:
-			//		Get the first record that matches key.   The index record value, that
-			//		is, the primary key of the referenced store is returned as the result
-			//		of the IDBRequest.
+			//		Get the first record that matches key. The index record value, that
+			//		is, the primary key of the referenced store is returned.
 			// key:
 			//		Key identifying the record to be retrieved. This can also be an
 			//		KeyRange in which case the function retreives the first existing
 			//		value in that range.
 			// returns:
-			//		An IDBRequest object.
-			// exceptions:
-			//		DataError
-			//		InvalidStateError
-			//		TransactionInactiveError
+			//		The index key value.
 			// tag:
 			//		Public
 			assert(this, key);
-
 			return retrieveIndexValue( this, key );
 		};
 
-		this.getRange = function (/*Key|KeyRange*/ keyRange, /*QueryOptions?*/ options) {
+		this.getRange = function (/*Key|KeyRange*/ keyRange,/*Boolean?*/ keyValue, /*QueryOptions?*/ options) {
 			// summary:
 			//		Retrieve a range of store records.
 			// keyRange:
 			//		A KeyRange object or a valid key.
+			// keyValue:
+			//		If true the index record value, that is, the primary key(s) of
+			//		the referenced store are returned. Otherwise the store records
+			//		are returned.
 			// options:
-			//		The optional arguments to apply to the resultset.
-			// returns: dojo/store/api/Store.QueryResults
-			//		The results of the query, extended with iterative methods.
+			//		Optional pagination arguments to apply to the resultset.
+			// returns: dojo/store/util/QueryResults
+			//		The range results, extended with iterative methods.
 			// tag:
 			//		Public
+			
+			if (arguments.length > 1) {
+				// handle optional arguments first.
+				if (isObject(arguments[1])) {
+					options  = arguments[1];
+					keyValue = false;
+				}
+			}
+	
 			var paginate = !!(options && (options.sort || options.count || options.start));
 			var unique   = this.unique || ((options && options.unique) || false);
-			var results  = [];
+			var results  = [], keys = [];
 			
 			if (!(keyRange instanceof KeyRange)) {
 				if (keyRange && !Keys.validKey(keyRange)) {
 					throw new StoreError( "TypeError", "getRange" );
 				}
-				return this.getRange( KeyRange.only( keyRange ), options );
+				keyRange = KeyRange.only( this.uppercase ? Keys.toUpperCase(keyRange) : keyRange );
+				return this.getRange( keyRange, keyValue, options );
 			} else {
 				var range = Keys.getRange( this, keyRange );
 				if (range.length) {
 					var records = this._records.slice(range.first, range.last+1);
 					records.forEach( function (record) {
-						var keys = unique ? [record.value[0]] : record.value;
+						keys = keys.concat( unique ? record.value[0] : record.value );
+					});
+					// Remove all duplicate keys
+					if (range.length > 1) {
+						keys = Keys.purgeKey(keys);
+						if (this.rangeSort) {
+							keys = keys.sort( function (a,b) {
+																	return Keys.cmp(a,b);
+																});
+						}
+					}
+					if (!keyValue) {
 						keys.forEach( function (key) {
 							results.push( this.store.get( key ) );
 						}, this);
-					}, this);
+					} else {
+						results = keys;
+					}
 				}
 			}
 			if (results.length && paginate) {
@@ -490,39 +530,7 @@ define(["dojo/_base/lang",
 			}
 		};
 
-		this.openCursor = function (/*any*/ range, /*DOMString*/ direction) {
-			// summary:
-			//		Open a new cursor. A cursor is a transient mechanism used to iterate
-			//		over multiple records in the store.
-			// range:
-			//		The key range to use as the cursor's range.
-			// direction:
-			//		The cursor's required direction.
-			// returns:
-			//		A cursorWithValue object.
-			// example:
-			//		| var request = store.openCursor();
-			//		| request.onsuccess = function (event) {
-			//		|   var cursor = this.result;
-			//		|   if (cursor) {
-			//		|       ...
-			//		|     cursor.continue();
-			//		|   }
-			//		| };
-			// tag:
-			//		Public
-			var range = range || null;
-
-			if (range) {
-				if (Keys.validKey(range)) {
-					range = KeyRange.only( range );
-				}
-			}
-			var cursor = new Cursor( this, range, direction, false );
-			return cursor;
-		};
-
-		this.openKeyCursor = function (/*any*/ range, /*DOMString*/ direction) {
+		this.openCursor = function (/*any?*/ range, /*DOMString?*/ direction) {
 			// summary:
 			//		Open a new cursor. A cursor is a transient mechanism used to iterate
 			//		over multiple records in the store.
@@ -540,11 +548,56 @@ define(["dojo/_base/lang",
 			//		| };
 			// tag:
 			//		Public
-			var range = range || null;
 
-			if (range) {
-				if (Keys.validKey(range)) {
+			// If there's only argument test if it is the 'direction'...
+			if (arguments.length == 1 && isDirection(arguments[0])) {
+				direction = arguments[0];
+				range = undef;
+			} else {
+				assertKey( this, range );
+			}
+			if (!(range instanceof KeyRange)) {
+				if (range != undef) {
 					range = KeyRange.only( range );
+				} else {
+					range = null;
+				}
+			}
+			var cursor = new Cursor( this, range, direction, false );
+			return cursor;
+		};
+
+		this.openKeyCursor = function (/*any?*/ range, /*DOMString?*/ direction) {
+			// summary:
+			//		Open a new cursor. A cursor is a transient mechanism used to iterate
+			//		over multiple records in the store.
+			// range:
+			//		The key range to use as the cursor's range.
+			// direction:
+			//		The cursor's required direction.
+			// returns:
+			//		A cursorWithValue object.
+			// example:
+			//		| var cursor = store.openCursor();
+			//		| while( cursor && cursor.value ) {
+			//		|       ...
+			//		|     cursor.continue();
+			//		| };
+			// tag:
+			//		Public
+
+			// If there's only argument test if it is the 'direction'...
+			if (arguments.length == 1 && isDirection(arguments[0])) {
+				direction = arguments[0];
+				range = undef;
+			} else {
+				assertKey( this, range );
+			}
+			if (!(range instanceof KeyRange)) {
+				if (range != undef) {
+					range = KeyRange.only( range );
+				} else {
+					range = null;
 				}
 			}
 			var cursor = new Cursor( this, range, direction, true );
@@ -633,14 +686,18 @@ define(["dojo/_base/lang",
 			this._records    = [];
 			this._updates    = 0;
 
-			this.caseSensitive = !!indexOptions.caseSensitive;
-			this.multiEntry    = !!indexOptions.multiEntry;
-			this.unique        = !!indexOptions.unique;
-			this.name          = name;
-			this.keyPath       = keyPath;
-			this.store         = store;
-			this.type          = "index";
-			this.queryEngine   = QueryEngine;
+			this.multiEntry  = !!indexOptions.multiEntry;
+			this.rangeSort   = !!indexOptions.rangeSort;
+			this.unique      = !!indexOptions.unique;
+			this.uppercase   = !!indexOptions.uppercase;
+			this.name        = name;
+			this.keyPath     = keyPath;
+			this.store       = store;
+			this.type        = "index";
+			this.queryEngine = QueryEngine;
+
+			Lib.writable( this, "keyPath, name, store, type, uppercase, multiEntry, unique", false );
+			Lib.protect( this );
 
 			var async = !!indexOptions.async;
 			var index = this;
@@ -655,10 +712,6 @@ define(["dojo/_base/lang",
 			} else {
 				indexStore( index, store, index._indexReady );
 			}
-
-			Lib.enumerate( this, "_add, _clear, _destroy, _remove", false);
-			Lib.enumerate( this, "_indexReady, _updates", false);
-			Lib.writable( this, "keyPath, name, store, type", false );
 
 		} else {
 			throw new StoreError( "SyntaxError", "constructor" );

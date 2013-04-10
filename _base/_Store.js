@@ -19,6 +19,7 @@ define(["dojo/_base/declare",
 				"./Library",
 				"./Location",
 				"./Keys",
+				"./KeyRange",
 				"./Record",
 				"../error/createError!../error/StoreErrors.json",
 				"../dom/event/Event",
@@ -27,7 +28,8 @@ define(["dojo/_base/declare",
 				"../util/QueryEngine",
 				"../util/shim/Array"						 // ECMA-262 Array shim
 			 ], function (declare, lang, Deferred, Stateful, QueryResults, 
-			               FeatureList, Index, Lib, Location, Keys, Record, createError, 
+			               FeatureList, Index, Lib, Location, Keys, KeyRange, Record,
+			               createError, 
 			               Event, EventTarget, 
 			               DOMStringList, QueryEngine ) {
 	"use strict";
@@ -208,6 +210,14 @@ define(["dojo/_base/declare",
 		//		The transaction the store belongs to.
 		transaction: null,
 		
+		// uppercase: Boolean
+		//		Indicates if the object key is to be stored in all uppercase chars.
+		//		If true, all key string values are converted to uppercase before
+		//		storing the record. The object properties used to extract the key
+		//		are not effected.  Beyond storage, the store does NOT perform any
+		//		automatic key conversion on API parameters. 
+		uppercase: false,
+		
 		// End constructor keyword
 		//=========================================================================
 		
@@ -238,16 +248,17 @@ define(["dojo/_base/declare",
 			// Mixin the keyword arguments.
 			declare.safeMixin( this, kwArgs );
 
+			this._autoIndex  = 1;
 			this._clone      = true;		// Only handout cloned objects
 			this._indexes    = {};
-			this._index      = {};
+			this._index      = {};			// Local record index (used by _Natural only).
 			this._records    = [];
 			this._storeReady = new Deferred();
 
 			this.features    = new FeatureList();
 			this.indexNames  = new DOMStringList();
-			this.idProperty  = this.keyPath;
-			this.keyPath     = this.keyPath || this.idProperty;
+			this.idProperty  = this.keyPath || this.idProperty;
+			this.keyPath     = this.idProperty;
 			this.total       = 0;
 			this.transaction = null;
 			this.type        = "store";
@@ -256,6 +267,7 @@ define(["dojo/_base/declare",
 				this.name = "store_" + uniqueId++;
 			}
 
+			Lib.writable( this, "type", false );
 			Lib.protect( this );	// Hide own private properties.
 
 			this._storeIsReady( this );
@@ -299,7 +311,7 @@ define(["dojo/_base/declare",
 			// keyPath:
 			// tag:
 			//		Private
-			if (!Keys.validPath(keyPath)) {
+			if (keyPath !== null && !Keys.validPath(keyPath)) {
 				throw new StoreError( "TypeError", "keyPathSetter", "invalid keypath: '%{0}'", keyPath );
 			}
 			this.idProperty = this.keyPath = keyPath;
@@ -319,6 +331,25 @@ define(["dojo/_base/declare",
 
 		//===================================================================
 		// Common procedures
+		
+		_assertKey: function (/*Key|KeyRange*/ key,/*String*/ method,/*Boolean?*/ required ) {
+			// summary:
+			// key:
+			// method:
+			//		Name of the calling function.
+			// required:
+			// tag:
+			//		Private
+			if (key != undef) {
+				if (!key instanceof KeyRange && !Keys.validKey(key)) {
+					throw new StoreError( "DataError", method, "invalid key specified");
+				}
+			} else {
+				if (required) {
+					throw new StoreError( "ParameterMissing", method, "key is a required argument");
+				}
+			}
+		},
 		
 		_assertStore: function (/*Store*/ store,/*String*/ method,/*Boolean?*/ readWrite ) {
 			// summary:
@@ -384,6 +415,8 @@ define(["dojo/_base/declare",
 				record.destroy();
 			});
 			this._records = [];
+			this._index   = {};
+			this.total = 0;
 		},
 
 		//===================================================================
@@ -504,6 +537,7 @@ define(["dojo/_base/declare",
 			
 			this._assertStore( this, "clear", true );
 			this._clearRecords();
+			this.dispatchEvent( new Event( "clear" ) );
 		},
 		
 		close: function (/*Boolean?*/ clear) {
@@ -516,6 +550,7 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Public
 
+			this._assertStore( this, "close", true );
 			if (this._storeReady.isFulfilled()) {
 				this._storeReady = new Deferred();
 			}
@@ -602,6 +637,7 @@ define(["dojo/_base/declare",
 			//		Release all memory and mark store as destroyed.
 			// tag:
 			//		Public
+			this._assertStore( this, "destroy", true );
 			this._destroyed = true;
 			this._clearRecords();
 		},
@@ -616,6 +652,8 @@ define(["dojo/_base/declare",
 			//		The object in the store that matches the given key.
 			// tag:
 			//		Public
+			this._assertStore( this, "get", false );
+			this._assertKey( key, "get", true );
 			var record = this._retrieveRecord(key).record;
 			if (record) {
 				return (this._clone ? clone(record.value) : record.value);
@@ -632,7 +670,10 @@ define(["dojo/_base/declare",
 			//		Key value.
 			// tag:
 			//		Public
-			return Keys.keyValue(this.keyPath, object);
+			if (this.keyPath) {
+				var key = Keys.keyValue(this.keyPath, object);
+				return this.uppercase ? Keys.toUpperCase(key) : key;
+			}
 		},
 
 		getRange: function (/*Key|KeyRange*/ keyRange, /*QueryOptions?*/ options) {
@@ -660,7 +701,11 @@ define(["dojo/_base/declare",
 			//		An Index object || undefined
 			// tag:
 			//		Public
-			return this._indexes[name];
+			var index = this._indexes[name];
+			if (index) {
+				return index;
+			}
+			throw new StoreError( "NotFound", "index", "index with name [%{0}] does not exist", name);
 		},
 
 		isItem: function (/*Object*/ object) {
@@ -691,7 +736,6 @@ define(["dojo/_base/declare",
 			//		Public
 			this._assertStore( this, "put", true );
 			if (object) {
-				var options = lang.mixin( {overwrite: true}, options );
 				return this._storeRecord( object, options );
 			}
 			throw new StoreError("DataError", "put");
@@ -754,6 +798,7 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Public
 			this._assertStore( this, "remove", true );
+			this._assertKey( key, "remove", true );
 			return this._deleteKeyRange(key);
 		}
 

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Indexed Memory Store</title>
+    <style type="text/css">
+      @import "../../dijit/themes/claro/claro.css";
+      @import "../../dijit/themes/claro/document.css";
+      @import "../../dijit/tests/css/dijitTests.css";
+    </style>
+
+    <script type="text/javascript">
+      var dojoConfig = {
+            async: true,
+            parseOnLoad: true,
+            isDebug: true,
+            baseUrl: "../../",
+            packages: [
+              { name: "dojo",  location: "dojo" },
+              { name: "dijit", location: "dijit" },
+              { name: "store", location: "Indexedstore" }
+            ]
+      };
+    </script>
+
+    <script type="text/javascript" src="../../dojo/dojo.js"></script>
+    <script type="text/javascript">
+      require([
+        "dojo/_base/declare",
+        "dojo/_base/lang",
+        "dojo/ready",
+        "dijit/ProgressBar",
+        "dijit/form/ComboBox",
+        "dijit/form/TextBox",
+        "store/_base/KeyRange",
+        "store/_base/Keys",
+        "store/Indexed"
+        ], function( declare, lang, ready, ProgressBar, ComboBox, TextBox, KeyRange, Keys, Store ) {
+					var indexes = [
+						{ name:"state", keyPath:"code", options: {uppercase:true} },
+						{ name:"city", keyPath:"city", options: {uppercase:true} }
+					];
+
+
+					var query = function (query, options) {
+						var attr = Object.keys(query)[0];
+						var val  = query[attr].toString().toLowerCase();
+						var res  = [];
+
+						val = val.match(/\w*/)[0];						
+						if (attr) {
+//							val = val.replace(/^[a-z]/, function(c) {return c.toUpperCase();});
+							var index  = this.index(attr);
+							if (index.uppercase) {
+								val = val.toUpperCase();
+							}
+							if (index) {
+								var range  = KeyRange.bound( val, val+"z");
+								res = index.getRange( range, {unique:true} );
+							} else {
+								res = this.queryEngine( query, options )(this._records);
+							}
+						} 
+						res.total = res.length;
+						return res;
+					};
+
+					var data = {state:null, city: null, county: null, zipcode: null, ccb:null};
+					
+					var stateStore = new Store( {url:"../json/us-states.json", keyPath:"state"} );
+					var profile = { indexes: indexes, suppressEvents: true, keyPath:"zip", query: query, progress:true };
+
+					var mainStore = new Store( lang.mixin({url:"../json/us-zipcodes-43k.json", progress: true}, profile)
+																		);
+					var cityStore = new Store (profile);
+					var zipStore  = new Store (profile);
+
+
+					function start ( store ) {
+
+						function updateZip(store, state, city) {
+							var index, zips = [];
+							if (state) {
+								index = store.index("state");
+								zips  = index.getRange(state);
+							} else	if (city) {
+								index = store.index("city");
+								zips  = index.getRange(city);
+							}
+
+							zipStore.load( {data:zips, clear:true}).then( function(store) {
+								var count = store.count();
+								zcb.reset();
+								if (count == 1) {
+									var zip = store.get( KeyRange.bound("","") );
+									zcb.set("hasDownArrow", false);
+									zcb.set("value", zip.zip);
+								} else {
+									zcb.set("placeholder", "Zipcode ("+count+")");
+									zcb.set("hasDownArrow", true);
+								}
+								zcb.set("store", store);
+							});
+						}
+						
+						function updateCities(store, state, zip) {
+							if (state) {
+								var index  = store.index("state");
+								var cities = index.getRange( state );
+								
+								cityStore.load( {data:cities, clear: true} ).then ( function (store) {
+									var count  = store.index("city").count(null, true);
+									ccb.reset();
+									ccb.set("placeholder", "City ("+count+")");
+									ccb.set("store", store);
+
+									updateZip(cityStore, state, null);
+								});
+							}
+						}
+
+						function stateChanged(newValue) {
+							if (newValue) {
+								var state = stateStore.get(newValue);
+								if (!state) {
+									var query = {state: new RegExp(newValue+".*", "i")};
+									state = stateStore.query( query )[0];
+								}
+								if (state) {
+									updateCities(mainStore, state.code, null);
+								}
+							}
+						}
+
+
+						function cityChanged(newValue) {
+							if (newValue) {
+								var index = cityStore.index("city");
+								var city  = index.get(newValue);
+								if (!city) {
+									var query = {city: newValue+"*"};
+									city = cityStore.query( query )[0];
+								}
+								if (city) {
+									ccb.set("value", city.city );
+									ctb.set("value", city.county );
+									updateZip(cityStore, null, city.city);
+								}
+							}
+						}
+
+
+						var scb = new ComboBox( { id:"state-combo", store: stateStore, placeholder:"State",
+																			 searchAttr:"state" }, "state-combo");
+						var ccb = new ComboBox( { id:"city-combo", searchAttr:"city"}, "city-combo");
+						var ctb = new TextBox( {placeholder:"County", disabled: true}, "county" );
+						var zcb = new ComboBox( { id:"zip-combo", searchAttr:"zip"}, "zip-combo");
+						 
+						scb.on("change", stateChanged );
+						ccb.on("change", cityChanged );
+
+					}
+
+					ready( function () {
+						var Progress = new ProgressBar( {style:"width:300px"}, "progress" );
+						mainStore.ready( start,
+												 function (err) {console.error(err);},
+												 function (progress) {
+													 Progress.set("value", progress);
+												 } );
+
+					});
+      });
+    </script>
+
+  </head>
+
+  <body class="claro">
+    <h1 class="DemoTitle">Indexed Memory Store</h1>
+    <div id="progress"></div>
+
+		<input id="state-combo">
+		<input id="city-combo">
+		<input id="county">
+		<input id="zip-combo">
+
+  </body>
+</html>

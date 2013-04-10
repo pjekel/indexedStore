@@ -86,6 +86,7 @@ define(["dojo/_base/declare",
 				throw new StoreError("ConstraintError", "constructor", "addOns 'natural' and 'indexed' are mutual exclusive");
 			}
 			this.features.add("natural");
+			Lib.protect(this);
 		},
 
 		//===================================================================
@@ -167,11 +168,14 @@ define(["dojo/_base/declare",
 			//		An array of unsorted record numbers.
 			// tag:
 			//		Private
-			var recIdx = [], keyValue;
+			var recIdx = [], idxKey, keyVal, recNum;
 			if (keyRange instanceof KeyRange) {
-				for (keyValue in this._index) {
-					if (Keys.inRange( keyValue, key )) {
-						recIdx.push(this._index[keyValue]);
+				for (idxKey in this._index) {
+					// Get the real key, which may be numeric, from the record.
+					recNum = this._index[idxKey];
+					keyVal = this._records[recNum].key;
+					if (Keys.inRange( keyVal, keyRange )) {
+						recIdx.push(recNum);
 					}
 				}
 			}
@@ -237,6 +241,7 @@ define(["dojo/_base/declare",
 				rec = this._records[i];
 				this._index[rec.key] = i;
 			}
+			this.total = max;
 		},
 
 		_retrieveRecord: function (/*any*/ key ) {
@@ -250,12 +255,30 @@ define(["dojo/_base/declare",
 			//		A location object. (see the ./util/Keys module for detais).
 			// tag:
 			//		Private
+			var recNum, max = this._records.length;
 
-			var recNum = (key instanceof KeyRange ? this._getRange(key)[0] : this._index[key]);
-			if (recNum != undef) {
+			if (key != undef) {
+				if (key instanceof KeyRange) {
+					recNum = this._getRange(key)[0];
+					if (recNum == undef) {
+						return new Location( this, max-1, -1, max );
+					}
+				} else {
+					key = this.uppercase ? Keys.toUpperCase(key) : key;
+					recNum = this._index[key];
+					if (recNum == undef) {
+						return new Location( this, max-1, -1, max );
+					}
+					// Make sure we distinguish between string and numeric keys values
+					// (e.g 100 vs "100")
+					var record = this._records[recNum];
+					if (typeof key != typeof record.key) {
+						return new Location( this, max-1, -1, max );
+					}
+				}
 				return new Location( this, recNum-1, recNum, this._records.length );
 			}
-			return new Location( this, this._records.length-1, -1, this._records.length );
+			return new Location( this, max-1, -1, max );
 		},
 
 		_removeFromIndex: function (/*Record*/ record) {
@@ -294,28 +317,30 @@ define(["dojo/_base/declare",
 			var optKey, overwrite = true;
 			
 			if (options) {
-				overwrite = options.overwrite || true;
+				overwrite = "overwrite" in options ? !!options.overwrite : true;
 				optKey    = options.key || options.id || null;
 				before    = options.before ? this._anyToRecord(options.before) : null;
 			}
+
 			// Test if the primary key already exists.
-			var key      = Keys.getKey(this, value, optKey);
-			var locator  = this._retrieveRecord(key);
+			var baseVal  = Keys.getKey(this, value, optKey);
+			var keyVal   = this.uppercase ? Keys.toUpperCase(baseVal) : baseVal;
+			var locator  = this._retrieveRecord(keyVal);
 			var location = {at: locator.eq, from:locator.eq};
 			var curRec   = locator.record;
 			var at       = locator.eq;
 			
 			if (curRec) {
 				if (!overwrite) {
-					throw new StoreError("ConstraintError", "_storeRecord", "record with key [%{0}] already exist", key);
+					throw new StoreError("ConstraintError", "_storeRecord", "record with key [%{0}] already exist", keyVal);
 				}
 				this._removeFromIndex( curRec );
 			}
 
-			value = callback ? callback.call( this, key, value, options) : value;
+			value = callback ? callback.call( this, keyVal, value, options) : value;
 			try {
 				value  = this._clone ? clone(value) : value;
-				newRec = new Record( key, value );
+				newRec = new Record( keyVal, value );
 			} catch(err) {
 				throw new StoreError( "DataCloneError", "_storeRecord" );
 			}
@@ -344,7 +369,7 @@ define(["dojo/_base/declare",
 				this.dispatchEvent( event );
 			}
 			this.total = this._records.length;
-			return key;
+			return keyVal;
 		},
 
 		//=========================================================================
@@ -363,7 +388,8 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Public
 
-			if (key) {
+			this._assertStore( this, "count" );
+			if (key != undef) {
 				if (key instanceof KeyRange) {
 					return this._getRange(key).length;
 				}
@@ -387,19 +413,29 @@ define(["dojo/_base/declare",
 			var results  = [];
 			
 			if (!(keyRange instanceof KeyRange)) {
-				if (keyRange && !Keys.validKey(keyRange)) {
+				if (keyRange) {
+					if (Keys.validKey(keyRange)) {
+						return this.getRange( KeyRange.only( keyRange ), options );
+					}
 					throw new StoreError( "TypeError", "getRange" );
+				} else {
+					results = this._records.map( function (record) {
+						return this._clone ? Lib.clone(record.value) : record.value;
+					}, this);					
 				}
-				return this.getRange( KeyRange.only( keyRange ), options );
 			} else {
-				var results = this._getRange( this, keyRange );
+				// NOTE: _getRange() returns an array of record numbers...
+				var results  = this._getRange( keyRange );
+				var record;
+
 				if (results.length) {
-					results = results.map( function (record) {
+					results = results.map( function (recNum) {
+						record = this._records[recNum];
 						return this._clone ? Lib.clone(record.value) : record.value;
 					}, this);
 				}
 			}
-			if (result.length && paginate) {
+			if (results.length && paginate) {
 				return QueryResults( this.queryEngine(null, options)(results) );
 			} else  {
 				return QueryResults( results );

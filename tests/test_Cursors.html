@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Store Cursors</title>
+    <style type="text/css">
+      @import "../../dijit/themes/claro/claro.css";
+      @import "../../dijit/themes/claro/document.css";
+      @import "../../dijit/tests/css/dijitTests.css";
+    </style>
+
+    <script type="text/javascript">
+      var dojoConfig = {
+            async: true,
+            parseOnLoad: true,
+            isDebug: true,
+            baseUrl: "../../",
+            packages: [
+              { name: "dojo", location: "dojo" },
+              { name: "doh",  location: "util/doh" },
+              { name: "store",location: "indexedStore" }
+            ]
+      };
+    </script>
+
+    <script type="text/javascript" src="../../dojo/dojo.js"></script>
+    <script type="text/javascript">
+      require([
+        "doh/runner",
+        "dojo/_base/declare",
+        "dojo/_base/lang",
+        "dojo/store/util/QueryResults",
+        "dojo/ready",
+        "store/_base/_Store",
+        "store/_base/_Indexed",
+        "store/_base/Keys",
+        "store/_base/KeyRange",
+				"store/error/createError!store/error/StoreErrors.json"
+        ], function( doh, declare, lang, QueryResults, ready,
+											_Store, _Indexed, Keys, KeyRange, createError ) {
+					"use strict";
+					
+					// IMPORTANT:
+					//		Don't change the number of records without updating any of
+					//		the range and count tests.
+					var StoreError = createError("store00");
+					var data = [
+						{ "name":"Root", "parent":[], "hair":"none" },
+						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
+						{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
+						{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
+						{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
+						{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
+						{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },
+						{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
+						{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
+						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
+						{ "name":"Manjula", "age":40, "parent":"Apu", "hair":"brown"}
+					];
+					
+					doh.register("Store Cursors", [
+						{
+							name: "Iterate store, NO key path, NO key generator",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ( {autoIncrement: false, keyPath:null});
+								var keyRange, result, cursor;
+								var max = data.length;
+								var undef;
+								
+								t.is( store.count(), 0 );
+
+								// Insert data into the store, using a custom key
+								data.forEach( function (object, idx) {
+									var key = store.add( object, {key: idx+100} );
+								});
+
+								//==============================================================
+								// Cursor cont() using direction
+
+								// Open a cursor on all records.
+								cursor = store.openCursor();	// Default direction 'next'
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Test if keys values are ascending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont()) {
+										t.t (Keys.cmp(primKey, cursor.primaryKey) < 0);
+										t.t (typeof cursor.primaryKey == "number");
+										primKey = cursor.primaryKey;
+									}
+								}
+								t.is( count, max );
+
+								// Open a cursor on all records.
+								cursor = store.openCursor("nextunique");
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Test if keys values are ascending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont()) {
+										t.t (Keys.cmp(primKey, cursor.primaryKey) < 0);
+										primKey = cursor.primaryKey;
+									}
+								}
+								t.is( count, max );
+
+								// Open a cursor on all records.
+								cursor = store.openCursor("prev");
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Test if keys values are descending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont()) {
+										t.t (Keys.cmp(primKey, cursor.primaryKey) > 0);
+										primKey = cursor.primaryKey;
+									}
+								}
+								t.is( count, max );
+
+								// Open a cursor on all records.
+								cursor = store.openCursor("prevunique");
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Test if keys values are descending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont()) {
+										t.t (Keys.cmp(primKey, cursor.primaryKey) > 0);
+										primKey = cursor.primaryKey;
+									}
+								}
+								t.is( count, max );
+
+
+								//==============================================================
+								// cont() with key
+								
+								cursor = store.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Test if keys values are ascending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont(primKey+2)) {
+										t.t (cursor.primaryKey, primKey+2);
+										primKey = cursor.primaryKey;
+									}
+								}
+
+								//==============================================================
+								// Cursor advance()
+
+								cursor = store.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Advance 2
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.advance(2)) {
+										t.t (cursor.primaryKey, primKey+2);
+										primKey = cursor.primaryKey;
+									}
+								}
+
+								cursor = store.openCursor("prev");
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Advance 2
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.advance(2)) {
+										t.t (cursor.primaryKey, primKey-2);
+										primKey = cursor.primaryKey;
+									}
+								}
+
+								//==============================================================
+								// Cursor using key or key range.
+
+								cursor = store.openCursor(105);
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, 1 );
+
+								keyRange = KeyRange.bound( 103, 109);
+								cursor = store.openCursor(keyRange);
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, 7 );
+
+								for (var count = 0; cursor.value; count++) {
+									cursor.cont();
+								}
+								t.is( count, 7 );
+
+								//==============================================================
+								// Cursor update()
+
+								cursor = store.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								// Test if keys values are ascending...
+								for (var count = 0; cursor.value; count++) {
+									var obj = cursor.value;
+									obj.newProp = true;
+									cursor.update( obj );
+									cursor.cont();
+								}
+								// Test all records have the 'newProp' property and the original
+								// provided key has not changed.
+								// There is no public method to expose the record key therefore
+								// use the store._records property instead.
+								result = store._records;
+								result.forEach( function (record, idx) {
+									t.t( record.value.newProp != undef );
+									t.is( record.key, idx+100 );
+								});
+
+								//==============================================================
+								// Cursor remove()
+
+								cursor = store.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								// Iterate cursor removing all records.
+								for (var count = 0; cursor.value; count++) {
+									cursor.remove();
+									cursor.cont();
+								}
+								t.is( store.count(), 0 );
+
+								// clear the store.
+								store.destroy();
+
+							}
+
+
+						},
+
+
+						{
+							name: "Iterate store, NO key path but with key generator",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ( {autoIncrement: true, keyPath:null});
+								var keyRange, result, cursor;
+								var max = data.length;
+								var undef;
+								
+								t.is( store.count(), 0 );
+
+								// Insert data into the store
+								data.forEach( function (object) {
+									var key = store.add( object );
+								});
+
+								//==============================================================
+								// Cursor cont() using direction
+
+								// Open a cursor on all records.
+								cursor = store.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Test if keys values are ascending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont()) {
+										t.t (Keys.cmp(primKey, cursor.primaryKey) < 0);
+										t.t (typeof cursor.primaryKey == "number");
+										primKey = cursor.primaryKey;
+									}
+								}
+								t.is( count, max );
+
+								// Open a cursor on all records.
+								cursor = store.openCursor("nextunique");
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Test if keys values are ascending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont()) {
+										t.t (Keys.cmp(primKey, cursor.primaryKey) < 0);
+										primKey = cursor.primaryKey;
+									}
+								}
+								t.is( count, max );
+
+								// Open a cursor on all records.
+								cursor = store.openCursor("prev");
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Test if keys values are descending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont()) {
+										t.t (Keys.cmp(primKey, cursor.primaryKey) > 0);
+										primKey = cursor.primaryKey;
+									}
+								}
+								t.is( count, max );
+
+								// Open a cursor on all records.
+								cursor = store.openCursor("prevunique");
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Test if keys values are descending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont()) {
+										t.t (Keys.cmp(primKey, cursor.primaryKey) > 0);
+										primKey = cursor.primaryKey;
+									}
+								}
+								t.is( count, max );
+
+
+								//==============================================================
+								// cont() with key
+								
+								cursor = store.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Test if keys values are ascending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont(primKey+2)) {
+										t.t (cursor.primaryKey, primKey+2);
+										primKey = cursor.primaryKey;
+									}
+								}
+
+								//==============================================================
+								// Cursor advance()
+
+								cursor = store.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Advance 2
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.advance(2)) {
+										t.t (cursor.primaryKey, primKey+2);
+										primKey = cursor.primaryKey;
+									}
+								}
+
+								cursor = store.openCursor("prev");
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Advance 2
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.advance(2)) {
+										t.t (cursor.primaryKey, primKey-2);
+										primKey = cursor.primaryKey;
+									}
+								}
+
+								//==============================================================
+								// Cursor update()
+
+								cursor = store.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								// Test if keys values are ascending...
+								for (var count = 0; cursor.value; count++) {
+									var obj = cursor.value;
+									obj.newProp = true;
+									cursor.update( obj );
+									cursor.cont();
+								}
+								result = store.getRange();
+								result.forEach( function (obj) {
+									t.t( obj.newProp != undef );
+								});
+
+
+								//==============================================================
+								// Cursor remove()
+
+								cursor = store.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								// Iterate cursor removing all records.
+								for (var count = 0; cursor.value; count++) {
+									cursor.remove();
+									cursor.cont();
+								}
+								t.is( store.count(), 0 );
+
+								// clear the store.
+								store.destroy();
+							}
+						},
+						{
+							name: "Iterate store, with key path, no key generator",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ( {keyPath:"name"});
+								var keyRange, result, cursor;
+								var max = data.length;
+								var undef;
+								
+								t.is( store.count(), 0 );
+
+								// Insert data into the store
+								data.forEach( function (object) {
+									var key = store.add( object );
+								});
+
+								// Open a cursor on all records.
+								cursor = store.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Test if keys values are ascending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont()) {
+										t.t (Keys.cmp(primKey, cursor.primaryKey) < 0);
+										t.t (typeof cursor.primaryKey == "string");
+										primKey = cursor.primaryKey;
+									}
+								}
+								t.is( count, max );
+
+								// Open a cursor on all records.
+								cursor = store.openCursor("nextunique");
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Test if keys values are ascending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont()) {
+										t.t (Keys.cmp(primKey, cursor.primaryKey) < 0);
+										primKey = cursor.primaryKey;
+									}
+								}
+								t.is( count, max );
+
+								// Open a cursor on all records.
+								cursor = store.openCursor("prev");
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Test if keys values are descending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont()) {
+										t.t (Keys.cmp(primKey, cursor.primaryKey) > 0);
+										primKey = cursor.primaryKey;
+									}
+								}
+								t.is( count, max );
+
+								// Open a cursor on all records.
+								cursor = store.openCursor("prevunique");
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								var primKey = cursor.primaryKey;
+								
+								// Test if keys values are descending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont()) {
+										t.t (Keys.cmp(primKey, cursor.primaryKey) > 0);
+										primKey = cursor.primaryKey;
+									}
+								}
+								t.is( count, max );
+
+								//==============================================================
+								// Cursor update()
+
+								cursor = store.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								for (var count = 0; cursor.value; count++) {
+									var obj = cursor.value;
+									obj.newProp = true;
+									cursor.update( obj );
+									cursor.cont();
+								}
+								result = store.getRange();
+								result.forEach( function (obj) {
+									t.t( obj.newProp != undef );
+								});
+
+								//==============================================================
+								// Cursor update(), try modifying the key property (not allowed).
+
+								cursor = store.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								for (var count = 0; cursor.value; count++) {
+									var obj = cursor.value;
+									obj.name = "abc";
+									t.e( Error, cursor, "update", [obj] );
+									cursor.cont();
+								}
+								result = store.getRange();
+								result.forEach( function (obj) {
+									t.t( obj.newProp != undef );
+								});
+								// clear the store.
+								store.destroy();
+							}
+						},
+						{
+							name: "Iterate store, with key path, uppercase keys",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ( {keyPath:"name", uppercase: true});
+								var keyRange, result, cursor;
+								var max = data.length;
+								var undef;
+								
+								t.is( store.count(), 0 );
+
+								// Insert data into the store
+								data.forEach( function (object) {
+									var key = store.add( object );
+								});
+
+								//==============================================================
+								// Cursor update()
+
+								cursor = store.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								for (var count = 0; cursor.value; count++) {
+									var obj = cursor.value;
+									obj.newProp = true;
+									cursor.update( obj );
+									cursor.cont();
+								}
+								result = store.getRange();
+								result.forEach( function (obj) {
+									t.t( obj.newProp != undef );
+								});
+
+								//==============================================================
+								// Cursor remove()
+
+								cursor = store.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								t.is( cursor.key, cursor.primaryKey );
+								t.is( cursor.length, max );
+	
+								// Iterate cursor removing all records.
+								for (var count = 0; cursor.value; count++) {
+									cursor.remove();
+									cursor.cont();
+								}
+								t.is( store.count(), 0 );
+
+								// clear the store.
+								store.destroy();
+							}
+						}
+					]);
+
+					ready( function () {
+						doh.run();
+
+					});
+
+
+				}
+      );
+    </script>
+
+  </head>
+
+  <body class="claro">
+    <h1 class="DemoTitle">Store Cursors</h1>
+  </body>
+</html>

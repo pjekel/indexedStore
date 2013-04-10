@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Indexed Memory Store</title>
+    <style type="text/css">
+      @import "../../dijit/themes/claro/claro.css";
+      @import "../../dijit/themes/claro/document.css";
+      @import "../../dijit/tests/css/dijitTests.css";
+    </style>
+
+    <script type="text/javascript">
+      var dojoConfig = {
+            async: true,
+            parseOnLoad: true,
+            isDebug: false,
+            baseUrl: "../../",
+            packages: [
+              { name: "dojo",  location: "dojo" },
+              { name: "store", location: "IDBstore" }
+            ]
+      };
+    </script>
+
+    <script type="text/javascript" src="../../dojo/dojo.js"></script>
+    <script type="text/javascript">
+      require([
+        "dojo/_base/lang",
+        "dojo/ready",
+        "store/_base/KeyRange",
+        "store/Indexed",
+        "store/handler/csvHandler"
+        ], function( lang, ready, KeyRange, Store, csvHandler ) {
+
+					console.log( "Start loading the store....");
+          var store = new Store( { url:"../json/US.csv",
+																	 handleAs:"csv",
+																	 dataHandler:{
+																			handler: csvHandler,
+																			options: {
+																				fieldNames:["zip", "city", "state", "lat", "long"],
+																				trim: true
+																			}
+																	 },
+																	 suppressEvents:true,
+																	 keyPath:"zip"
+																		});
+					function start () {
+						var abc = store;
+						
+						console.log("Store Ready");
+						console.log("Index by state");
+						store.createIndex( "state", "state", {unique:false});
+						console.log("Index ready");
+
+						console.log("Index by city");
+						var index = store.createIndex( "city", "city", {unique:false});
+						index.ready( function () {
+							console.log("Index by city reaDy....");
+							var index  = store.index("city");
+							var keys   = KeyRange.only("Boston");
+							var cursor = index.openCursor( keys );
+							
+							while(cursor.value) {
+								var record = cursor.value;
+								console.log( record.city+" state: "+record.state+" zipcode: "+record.zip );
+								cursor.continue();
+							}
+						});
+
+
+						var westford = store.get("01886");
+
+						console.log("End");
+
+					}
+					
+					store.ready( lang.hitch( store, start ), function (err) {console.error(err);});
+      });
+    </script>
+
+  </head>
+
+  <body class="claro">
+    <h1 class="DemoTitle">Indexed Memory Store</h1>
+  </body>
+</html>

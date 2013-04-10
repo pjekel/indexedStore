@@ -205,7 +205,7 @@ define(["dojo/_base/lang",
 			//		InvalidState
 			// tag:
 			//		Public
-			if (key && !Keys.isValidKey(key)) {
+			if (key && !Keys.validKey(key)) {
 				throw new StoreError("DataError", "cont");
 			}
 			if (gotValue) {
@@ -253,11 +253,21 @@ define(["dojo/_base/lang",
 
 			if (gotValue && !keyCursor) {
 				if (value) {
-					var keyValue = Keys.keyValue( store.keyPath, value );
-					if (!Keys.cmp(primaryKey, keyValue)) {
+					// Test if we need to supply the key or if it can be extracted from
+					// the object. If the latter is the case make sure the primary did
+					// not change.
+					if (Keys.test( store, value ) && store.keyPath) {
+						var keyValue = Keys.keyValue( store.keyPath, value );
+						if (store.uppercase) {
+							keyValue = Keys.toUpperCase( keyValue );
+						}
+						if (Keys.cmp(primaryKey, keyValue)) {
+							throw new StoreError("DataError", "update", "primary key changed");
+						}
 						store.put( value, {overwrite:true} );
 					} else {
-						throw new StoreError("DataError", "update", "primary key changed");
+						// Object has a generated or user defined key therefore re-use same key.
+						store.put( value, {overwrite:true, key: primaryKey} );
 					}
 				}
 			} else {
@@ -368,7 +378,7 @@ define(["dojo/_base/lang",
 				throw new StoreError("InvalidType", "constructor", "Invalid cursor direction.");
 		}
 
-		keyRange = range || KeyRange.bound("", "");
+		keyRange = range || KeyRange.unbound();
 		if (!(keyRange instanceof KeyRange)) {
 			keyRange = KeyRange.only(range);
 		}

@@ -172,34 +172,39 @@ define(["exports",
 		//		Private
 
 		var inline = false;
-		if (store.keyPath || store.keyPath == "") {
+		if (store.keyPath != undef) {
 			if (key) {
 				throw new StoreError("DataError", "getKey", "both keyPath and optional key specified");
 			}
-			key = exports.keyValue(store.keyPath, value);
-			inline = true;
+			if (key = exports.keyValue(store.keyPath, value)) {
+				inline = true;
+			}
 		}
-		
 		if (key) {
 			if (exports.validKey(key)) {
 				if (store.autoIncrement && typeof key == "number") {
-					if (key > store._autoIndex) {
+					if (key >= store._autoIndex) {
 						store._autoIndex = Math.floor(key+1);
 					}
 				}
 			} else {
-				throw new StoreError("TypeError", "hasKey", "invalid key value: [%{0}]", key);
+				throw new StoreError("TypeError", "getKey", "invalid key value: [%{0}]", key);
 			}
 		} else {
 			if (!store.autoIncrement) {
-				throw new StoreError("DataError", "_storeRecord", "unable to obtain or generate a key");
+				throw new StoreError("DataError", "getKey", "unable to obtain or generate a key");
 			}
-			key = store._autoIndex = (store._autoIndex ? store._autoIndex++ : 1);
+			key = store._autoIndex++;
 		}
 		// If the key is out-of-line or was generated AND the store has a key path
-		// assign the new key value to the key path property.
+		// assign the new key value to the key path property assuming 'value' is 
+		// an object or array.
 		if (!inline && store.keyPath) {
-			Lib.setProp( store.keyPath, key, value );
+			if (Lib.isObject(value) || value instanceof Array) {
+				Lib.setProp( store.keyPath, key, value );
+			} else {
+				throw new StoreError("DataError", "getKey", "value must be an object or array");
+			}
 		}
 		return key;
 	},
@@ -224,7 +229,7 @@ define(["exports",
 			if (last >= 0 && (first > -1 && first <= last && first < max)) {
 				this.first  = first;
 				this.last   = max > 0 ? Math.min(last, max-1)  : 0;
-				this.length = Math.max( (last - first), 1 );
+				this.length = (this.last - this.first) + 1;
 				this.record = source._records[first];
 			} else {
 				this.record = null;
@@ -262,16 +267,10 @@ define(["exports",
 		//		Public
 		var keyValue = exports.keyValue( keyPath, value );
 		if (keyValue instanceof Array) {
-			var unique = {};
-			keyValue = keyValue.filter(function(item) {
-				if (item && !unique[item]) {
-					unique[item] = true;
-					return true;
-				}
-			});
-			return keyValue.length ? keyValue : undefined;
+			keyValue = exports.purgeKey( keyValue );
+			return keyValue.length ? keyValue : undef;
 		} else {
-			if (keyValue !== null && keyValue !== undefined) {
+			if (keyValue !== null && keyValue !== undef) {
 				return keyValue;
 			}
 		}
@@ -351,16 +350,35 @@ define(["exports",
 		//		Public
 		var keyValue;
 
-		if (keyPath instanceof Array) {
-			return keyPath.map( function (path) {
-				return exports.keyValue(path,object);
-			});
-		} else if (keyPath != "") {
-			return Lib.getProp(keyPath, object);
-		} else {
-			return object;
+		if (keyPath) {
+			if (keyPath instanceof Array) {
+				return keyPath.map( function (path) {
+					return exports.keyValue(path,object);
+				});
+			} else if (keyPath != "") {
+				return Lib.getProp(keyPath, object);
+			} else {
+				return object;
+			}
 		}
+	};
 
+	exports.purgeKey = function ( keyValue ) {
+		// summary:
+		//		Remove all non-numeric properties and duplicate values from an key
+		//		value arry.
+		// keyValue:
+		// tag:
+		//		Public
+		if (keyValue instanceof Array) {
+			var unique = [];
+			keyValue = keyValue.filter(function(item) {
+				if (item && exports.indexOf(unique,item) == -1) {
+					return unique.push(item);
+				}
+			});
+		}
+		return keyValue;
 	};
 
 	exports.rangeToLocation = function (range) {
@@ -416,6 +434,56 @@ define(["exports",
 		return new Location(source);
 	};
 
+	exports.test = function (/*Store*/ store,/*Object*/ value,/*any?*/ key ) {
+		// summary:
+		//		Test a value to determine if a store operation would succeed given
+		///		the store's use of in-line or out-of-line keys, the availability of
+		//		a key generator and the optional key, if provided.
+		// value:
+		//		JavaScript key:value pairs object.
+		// key:
+		//		Optional, key
+		// returns:
+		//		True if store operation would succeed otherwise false.
+		// tag:
+		//		Private
+
+		if (store.keyPath != undef) {
+			if (key) {
+				return false;		// Can't have key path AND optional key provided.
+			}
+			key = exports.keyValue(store.keyPath, value);
+		}		
+		if (key) {
+			if (!exports.validKey(key)) {
+				return false;		// Key is not a valid key
+			}
+		} else {
+			if (!store.autoIncrement) {
+				return false;		// No key and no key generator
+			}
+		}
+		return true;
+	},
+	
+	exports.toUpperCase = function (/*Key*/ keyValue ) {
+		// summary:
+		//		Convert a key value to uppercase.
+		// keyValue:
+		// tag:
+		//		Public
+		if (keyValue) {
+			if (keyValue instanceof Array) {
+				keyValue = keyValue.map( exports.toUpperCase );
+			} else {
+				if (keyValue.toUpperCase) {
+					keyValue = keyValue.toUpperCase();
+				}
+			}
+		}
+		return keyValue;
+	};
+
 	exports.validKey = function (/*any*/ key) {
 		// summary:
 		//		Valid if key is a valid indexedDB key
@@ -425,7 +493,7 @@ define(["exports",
 		//		Boolean, true if a valid key otherwise false.
 		// tag
 		//		Public
-		if (key) {
+		if (key != undef) {
 			if (key instanceof Array) {
 				return key.every( exports.validKey );
 			}

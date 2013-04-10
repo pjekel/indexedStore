@@ -11,7 +11,7 @@
 
 define(["../error/createError!../error/StoreErrors.json"], function (createError) {
 
-	var StoreError = createError( "indexedStore" );
+	var StoreError = createError( "Library" );
 
 	if (typeof Object.defineProperty != "function") {
 		throw new Error("JavaScript 1.8.5. or higher required to run the Store module");
@@ -95,7 +95,7 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			}
 		},
 
-		getProp: function (/*String*/ propPath,/*Object*/ object,/*Boolean*/ required ) {
+		getProp: function (/*String*/ propPath,/*Object|Array*/ object,/*Boolean*/ required ) {
 			// summary:
 			//		Return property value identified by a dot-separated property propPath
 			// propPath:
@@ -104,13 +104,16 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			//		JavaScript object
 			// tag:
 			//		Private
-			var segm = propPath.split(".");
-			var p, i = 0;
+			if (this.isObject(object) || object instanceof Array) {
+				var segm = propPath.split(".");
+				var p, i = 0;
 
-			while(object && (p = segm[i++])) {
-				object = object[p];
+				while(object && (p = segm[i++])) {
+					object = object[p];
+				}
+				return object;
 			}
-			return object;
+			throw new StoreError("TypeError", "getProp", "paramter 'object' must be an object or array");
 		},
 
 		isEmpty: function (o) {
@@ -130,10 +133,10 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 
 		protect: function (object) {
 			var props = Object.keys(object).filter( function(prop) {	return /^_/.test(prop);} );
-			this.enumerate( object, props, false );
+//			this.enumerate( object, props, false );
 		},
 		
-		setProp: function (/*String*/ propPath,/*any*/ value, /*Object*/ object ) {
+		setProp: function (/*String*/ propPath,/*any*/ value, /*Object|Array*/ object ) {
 			// summary:
 			//		Set the property value
 			// propPath:
@@ -142,18 +145,21 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			// value:
 			// tag:
 			//		Private
-			var segm = propPath.split(".");
-			var prop = segm.pop();
+			if (this.isObject(object) || object instanceof Array) {
+				var segm = propPath.split(".");
+				var prop = segm.pop();
 
-			if (segm.length) {
-				var p, i = 0;
+				if (segm.length) {
+					var p, i = 0;
 
-				while(object && (p = segm[i++])) {
-					object = (p in object) ? object[p] : object[p] = {};
+					while(object && (p = segm[i++])) {
+						object = (p in object) ? object[p] : object[p] = {};
+					}
 				}
+				object[prop] = value;
+				return value;
 			}
-			object[prop] = value;
-			return value;
+			throw new StoreError("TypeError", "setProp", "parameter 'object' must be an object or array");
 		},
 
 		writable: function (/*Object*/ object,/*String|String[]*/ property,/*Boolean*/ value ) {

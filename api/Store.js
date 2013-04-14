@@ -386,7 +386,7 @@ define(["dojo/_base/declare",
 		//		The number of how many results should be returned.
 		// ignoreCase: Boolean?
 		//		Match object properties case insensitive. Default is false.
-		// unique: Boolean?
+		// unique: String?
 	});
 
 	return Store;

@@ -138,6 +138,9 @@ define(["dojo/_base/declare",
 			//				url: String?
 			//			}
 
+			if (this.features.has("hierarchy, CORS")) {
+				throw new StoreError("AccessError", "constructor", "loader module must be installed prior to any extension");
+			}
 			this._loadDeferred = null;
 			this._loadPending  = false;
 
@@ -309,7 +312,7 @@ define(["dojo/_base/declare",
 					data = QueryEngine(store.filter)(data);
 				}
 				try {
-					store.dispatchEvent( new Event ("loadStart") );
+					store.dispatchEvent( new Event ("loadStart", {detail:{store:this}}) );
 					// If loading from a remote source skip cloning...
 					if (defer.url) {
 						store._clone = false;
@@ -321,11 +324,11 @@ define(["dojo/_base/declare",
 							store._loadProgress(max, i, defer);
 						}
 					}
-					store.dispatchEvent( new Event ("loadEnd") );
+					store.dispatchEvent( new Event ("loadEnd", {detail:{store:this}}) );
 					store._loadProgress(100, 100, defer);
 					store._loadSuccess(defer);
 				} catch (err) {
-					store.dispatchEvent( new Event ("loadFailed") );
+					store.dispatchEvent( new Event ("loadFailed", {detail:{store:this}}) );
 					throw err;
 				} finally {
 					store._clone = clone;

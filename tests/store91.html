@@ -20,7 +20,7 @@
 							{ name: "dojo",	location: "dojo" },
 							{ name: "dijit", location: "dijit" },
 							{ name: "cbtree", location: "cbtree" },
-							{ name: "store", location: "store" }
+							{ name: "store", location: "indexedStore" }
 						]
 			};
 		</script>
@@ -50,8 +50,8 @@
 					tree.startup();
 
 					function click( item, node, evt ) {
-						store.removeParent( item,"Marge" );
-						store.addParent( item,"Ned" );
+//						store.removeParent( item,"Marge" );
+//						store.addParent( item,"Ned" );
 					}
 					
 					function checkBoxClick( item, node, evt ) {

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Store Cursors</title>
+    <style type="text/css">
+      @import "../../dijit/themes/claro/claro.css";
+      @import "../../dijit/themes/claro/document.css";
+      @import "../../dijit/tests/css/dijitTests.css";
+    </style>
+
+    <script type="text/javascript">
+      var dojoConfig = {
+            async: true,
+            parseOnLoad: true,
+            isDebug: true,
+            baseUrl: "../../",
+            packages: [
+              { name: "dojo", location: "dojo" },
+              { name: "doh",  location: "util/doh" },
+              { name: "store",location: "indexedStore" }
+            ]
+      };
+    </script>
+
+    <script type="text/javascript" src="../../dojo/dojo.js"></script>
+    <script type="text/javascript">
+      require([
+        "doh/runner",
+        "dojo/_base/declare",
+        "dojo/_base/lang",
+        "dojo/store/util/QueryResults",
+        "dojo/ready",
+        "store/_base/_Store",
+        "store/_base/_Indexed",
+        "store/_base/Keys",
+        "store/_base/KeyRange",
+				"store/error/createError!store/error/StoreErrors.json"
+        ], function( doh, declare, lang, QueryResults, ready,
+											_Store, _Indexed, Keys, KeyRange, createError ) {
+					"use strict";
+					
+					// IMPORTANT:
+					//		Don't change the number of records without updating any of
+					//		the range and count tests.
+					var StoreError = createError("store00");
+					var data = [
+						{ "name":"Root", "parent":[], "hair":"none" },
+						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
+						{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
+						{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
+						{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
+						{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
+						{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },
+						{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
+						{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
+						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
+						{ "name":"Manjula", "age":40, "parent":"Apu", "hair":"brown"}
+					];
+					
+					doh.register("Store and Index Ranges", [
+						{
+							name: "Iterate store, NO key path, NO key generator",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ( {autoIncrement: false, keyPath:null});
+								var keyRange, result, cursor;
+								var max = data.length;
+								var undef;
+								
+								t.is( store.count(), 0 );
+
+								// Insert data into the store, using a custom key
+								data.forEach( function (object, idx) {
+									var key = store.add( object, {key: idx+100} );
+								});
+							}
+						}
+					]);
+
+					ready( function () {
+						doh.run();
+
+					});
+
+				}
+      );
+    </script>
+
+  </head>
+
+  <body class="claro">
+    <h1 class="DemoTitle">Store Cursors</h1>
+  </body>
+</html>

@@ -38,10 +38,12 @@
         "store/_base/_Loader",
         "store/_base/Keys",
         "store/_base/KeyRange",
-				"store/error/createError!store/error/StoreErrors.json"
+				"store/error/createError!store/error/StoreErrors.json",
+				"store/extension/Hierarchy",
+				"store/extension/CORS"
         ], function( doh, declare, lang, QueryResults, promiseAll, ready,
 											_Store, _Indexed, _Natural, _Loader,
-											Keys, KeyRange, createError ) {
+											Keys, KeyRange, createError, Hierarchy, CORS ) {
 					"use strict";
 					
 					// IMPORTANT:
@@ -70,10 +72,25 @@
 					
 					doh.register("Store Loader", [
 						{
+							name: "Invalid store declaration",
+							timeout: 2000,
+							runTest:function (t) {
+								// Loader must come before any extensions
+								var Store = declare( [_Store, _Natural, Hierarchy, _Loader]);
+								try {
+									var store = new Store();
+									t.is(undef, store);		// we should get here....
+								} catch (err) {
+									var abc = err;
+								}
+							}
+						},
+
+						{
 							// No keyPath, autoIncrement enabled. No new property is added to the
 							// object and the key must be numeric (auto incremented)
 							name: "Auto Load Dataset, Natural Store, NO key path",
-							timeout: 1000,
+							timeout: 2000,
 							runTest:function (t) {
 								var Store = declare( [_Store, _Natural, _Loader]);
 								var store = new Store ( {data: data, autoIncrement: true, keyPath:null});
@@ -101,7 +118,7 @@
 							// No keyPath, autoIncrement disabled. This should fail because there
 							// is no way to extract or generate a key for an object.
 							name: "Auto Load Dataset, Natural Store, NO key path, NO key generator",
-							timeout: 1000,
+							timeout: 2000,
 							runTest:function (t) {
 								var Store = declare( [_Store, _Natural, _Loader]);
 								var store = new Store ( {data: data, autoIncrement: false, keyPath:null});
@@ -136,7 +153,7 @@
 							// is added to the object and the record key and property 'id' must
 							// be numeric (auto incremented)
 							name: "Auto Load Dataset, Natural Store, default key path",
-							timeout: 1000,
+							timeout: 2000,
 							runTest:function (t) {
 								var Store = declare( [_Store, _Natural, _Loader]);
 								var store = new Store ( {data: data, autoIncrement: true});
@@ -169,7 +186,7 @@
 							// Named keyPath, autoIncrement enabled. No new property is added
 							// to the object and the key must be a string
 							name: "Auto Load Dataset, Natural Store with key path",
-							timeout: 1000,
+							timeout: 2000,
 							runTest:function (t) {
 								var Store = declare( [_Store, _Natural, _Loader]);
 								var store = new Store ( {data: data, autoIncrement: true, keyPath:"name"});
@@ -200,7 +217,7 @@
 
 						{
 							name: "Auto Load Dataset, Indexed Store, NO key path",
-							timeout: 1000,
+							timeout: 2000,
 							runTest:function (t) {
 								var Store = declare( [_Store, _Indexed, _Loader]);
 								var store = new Store ( {data: data, autoIncrement: true, keyPath:null});
@@ -223,7 +240,7 @@
 
 						{
 							name: "Auto Load Dataset, Indexed Store with key path",
-							timeout: 1000,
+							timeout: 2000,
 							runTest:function (t) {
 								var Store = declare( [_Store, _Indexed, _Loader]);
 								var store = new Store ( {data: data, keyPath:"name"});
@@ -246,7 +263,7 @@
 
 						{
 							name: "Deferred Load Dataset (1), Natural Store, NO key path",
-							timeout: 1000,
+							timeout: 2000,
 							runTest:function (t) {
 								var Store = declare( [_Store, _Natural, _Loader]);
 								var store = new Store ( {autoLoad: false, autoIncrement: true, keyPath:null});
@@ -273,7 +290,7 @@
 
 						{
 							name: "Deferred Load Dataset (2), Natural Store, NO key path",
-							timeout: 1000,
+							timeout: 2000,
 							runTest:function (t) {
 								var Store = declare( [_Store, _Natural, _Loader]);
 								var store = new Store ( {autoLoad: false, autoIncrement: true, keyPath:null});
@@ -298,7 +315,7 @@
 						
 						{
 							name: "Deferred Load Dataset (3), Natural Store, NO key path",
-							timeout: 1000,
+							timeout: 2000,
 							runTest:function (t) {
 								var Store = declare( [_Store, _Natural, _Loader]);
 								var store = new Store ( {autoLoad: false, autoIncrement: true, keyPath:null});
@@ -338,8 +355,34 @@
 						},
 
 						{
+							// Test dispatching of internal 'loadEnd' event
+							name: "Deferred Load Dataset (4), load event",
+							timeout: 2000,
+							runTest:function (t) {
+								var Store = declare( [_Store, _Natural, _Loader]);
+								var store = new Store ( {autoLoad: false, autoIncrement: true, keyPath:null});
+								var defer = new doh.Deferred();
+								var max   = data.length;
+
+								store.on("loadEnd", defer.getTestCallback (
+									function (evt) {
+										var evtStore = evt.detail.store;
+										t.is( store, evtStore );
+										t.is( max, evtStore.count() );
+									})
+								)
+
+								setTimeout( function () {
+									store.load( {data: data} );
+								}, 100);
+								
+								return defer;
+							}
+						},
+						
+						{
 							name: "Auto Load URL, Natural Store, NO key path",
-							timeout: 1000,
+							timeout: 2000,
 							runTest:function (t) {
 								var Store = declare( [_Store, _Natural, _Loader]);
 								var store = new Store ( {url:"../json/Simpsons.json", autoIncrement: true, keyPath:null});
@@ -362,7 +405,7 @@
 
 						{
 							name: "Auto Load URL, Natural Store, with default key path",
-							timeout: 1000,
+							timeout: 2000,
 							runTest:function (t) {
 								var Store = declare( [_Store, _Natural, _Loader]);
 								var store = new Store ( {url:"../json/Simpsons.json", autoIncrement: true});
@@ -385,7 +428,7 @@
 
 						{
 							name: "Auto Load URL, Indexed Store, with key path",
-							timeout: 1000,
+							timeout: 2000,
 							runTest:function (t) {
 								var Store = declare( [_Store, _Natural, _Loader]);
 								var store = new Store ( {url:"../json/Simpsons.json", keyPath:"name"});

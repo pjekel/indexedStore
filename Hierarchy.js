@@ -12,13 +12,13 @@
 define(["dojo/_base/declare",
 				"./_base/_Store",
 				"./_base/_Indexed",
-				"./extension/Loader",
+				"./_base/_Loader",
 				"./extension/Hierarchy"
-			 ], function (declare, _Store, _Indexed, Loader, Hierarchy) {
+			 ], function (declare, _Store, _Indexed, _Loader, Hierarchy) {
 	"use strict";
 	// module:
 	//		store/Hierarchy
 	// summary:
 
-	return declare( [_Store, _Indexed, Loader, Hierarchy] );
+	return declare( [_Store, _Indexed, _Loader, Hierarchy] );
 });

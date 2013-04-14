@@ -119,7 +119,7 @@
 
 								expected = ["Abe", "Apu", "Bart", "Homer", "Jacqueline", "Lisa"];
 								keyRange = KeyRange.bound( ["A"], ["M"] );
-								results  = store.getRange( keyRange, {sort:[{property:"name"}]} );
+								results  = store.getRange( keyRange );
 								results.forEach( function (obj) {
 									t.t( expected.indexOf( obj.name ) != -1 );
 								});
@@ -162,7 +162,7 @@
 
 								expected = ["Abe", "Apu", "Bart", "Homer", "Jacqueline", "Lisa"];
 								keyRange = KeyRange.bound( ["A"], ["M"] );
-								results  = store.getRange( keyRange, {sort:[{property:"name"}]} );
+								results  = store.getRange( keyRange );
 								results.forEach( function (obj) {
 									t.t( expected.indexOf( obj.name ) != -1 );
 								});

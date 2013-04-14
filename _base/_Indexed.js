@@ -18,8 +18,8 @@ define(["dojo/_base/declare",
 				"../_base/Record",
 				"../error/createError!../error/StoreErrors.json",
 				"../dom/event/Event"
-			 ], function (declare, QueryResults, Cursor, Keys, KeyRange, Lib, Record,
-										createError, Event) {
+			 ], function (declare, QueryResults, Cursor, Keys, KeyRange, Lib, 
+										 Record, createError, Event) {
 	"use strict";
 	// module:
 	//		store/_base/_Indexed
@@ -71,6 +71,7 @@ define(["dojo/_base/declare",
 	//	|	});
 	
 	var StoreError = createError( "Indexed" );		// Create the StoreError type.
+	var isObject   = Lib.isObject;
 	var clone      = Lib.clone;										// HTML5 structured clone.
 	var undef;
 	
@@ -84,6 +85,7 @@ define(["dojo/_base/declare",
 				throw new StoreError("ConstraintError", "constructor", "base class 'Natural' and 'Indexed' are mutual exclusive");
 			}
 			this.features.add("indexed");
+			Lib.defProp( this,"indexed", {value:true, writable:false, enumerable: true} );
 			Lib.protect(this);
 		},
 		
@@ -296,47 +298,6 @@ define(["dojo/_base/declare",
 			return this.total;
 		},
 		
-		getRange: function (/*Key|KeyRange*/ keyRange, /*QueryOptions?*/ options) {
-			// summary:
-			//		Retrieve a range of store records.
-			// keyRange:
-			//		A KeyRange object or valid key.
-			// options:
-			//		The optional arguments to apply to the resultset.
-			// returns: dojo/store/api/Store.QueryResults
-			//		The results of the query, extended with iterative methods.
-			// tag:
-			//		Public
-			var paginate = !!(options && (options.sort || options.count || options.start));
-			var results  = [];
-			
-			if (!(keyRange instanceof KeyRange)) {
-				if (keyRange != undef) {
-					if (Keys.validKey(keyRange)) {
-						return this.getRange( KeyRange.only( keyRange ), options );
-					}
-					throw new StoreError( "TypeError", "getRange" );
-				} else {
-					results = this._records.map( function (record) {
-						return this._clone ? Lib.clone(record.value) : record.value;
-					}, this);					
-				}
-			} else {
-				var range = Keys.getRange( this, keyRange );
-				if (range.length) {
-					var results = this._records.slice(range.first, range.last+1);
-					results = results.map( function (record) {
-						return this._clone ? Lib.clone(record.value) : record.value;
-					}, this);
-				}
-			}
-			if (results.length && paginate) {
-				return QueryResults( this.queryEngine(null, options)(results) );
-			} else  {
-				return QueryResults( results );
-			}
-		},
-
 		openCursor: function (/*any?*/ range, /*DOMString?*/ direction) {
 			// summary:
 			//		Open a new cursor. A cursor is a transient mechanism used to iterate
@@ -344,7 +305,8 @@ define(["dojo/_base/declare",
 			// range:
 			//		The key range to use as the cursor's range.
 			// direction:
-			//		The cursor's required direction.
+			//		The cursor's required direction. Valid options are: 'next', 'nextunique',
+			//		'prev' or 'prevunique'.
 			// returns:
 			//		A cursorWithValue object.
 			// example:

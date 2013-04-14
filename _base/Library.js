@@ -12,9 +12,12 @@
 define(["../error/createError!../error/StoreErrors.json"], function (createError) {
 
 	var StoreError = createError( "Library" );
-
+  var definable  = true;
+  var undef;
+  
 	if (typeof Object.defineProperty != "function") {
-		throw new Error("JavaScript 1.8.5. or higher required to run the Store module");
+		definable = false;
+//		throw new Error("JavaScript 1.8.5. or higher required to run the Store module");
 	}	
 
 	var Library = {
@@ -77,6 +80,18 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			console.info( msg );
 		},
 
+		defProp: function (object, prop, desc) {
+			if (definable) {
+				// Can't have 'value' and getter or setter (compatibility mode only).
+				if (desc && "value" in desc && ("set" in desc || "get" in desc)) {
+					delete desc.value;
+				}
+				Object.defineProperty( object, prop, desc );
+			} else {
+				object[prop] = (desc && desc.value != undef) ? desc.value : undef;
+			}
+		},
+
 		enumerate: function (/*Object*/ object,/*String|String[]*/ property,/*Boolean*/ value ) {
 			// summary:
 			// object:
@@ -87,17 +102,29 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 					this.enumerate( object, prop, value );
 				}, this);
 			} else if (/,/.test(property)) {
-				this.enumerate( object, property.split(","), value );
+				this.enumerate( object, property.split(/\s*,\s*/), value );
 			} else if (typeof object[property] == "function") {
 //				Object.defineProperty( object, property, {value: object[property], enumerable:false});
 			} else {
-				Object.defineProperty( object, property.trim(), {enumerable:value});
+				this.defProp( object, property, {enumerable:value});
+			}
+		},
+
+		getObjectClass: function (object) {
+			// summary:
+			// object:
+			// tag:
+			//		Public
+			var strName = Object.prototype.toString.call(object);
+			var matches = strName.match(/\[object\s(\w+)\]/);
+			if (matches && matches.length == 2) {
+				return matches[1];
 			}
 		},
 
 		getProp: function (/*String*/ propPath,/*Object|Array*/ object,/*Boolean*/ required ) {
 			// summary:
-			//		Return property value identified by a dot-separated property propPath
+			//		Return property value identified by a dot-separated property path
 			// propPath:
 			//		A dot (.) separated property name like: feature.attribute.type
 			// object:
@@ -174,9 +201,9 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 						this.writable( object, prop, value );
 					}, this);
 				} else if (/,/.test(property)) {
-					this.writable( object, property.split(","), value );
+					this.writable( object, property.split(/\s*,\s*/), value );
 				} else {
-					Object.defineProperty( object, property.trim(), {writable:value});
+					this.defProp( object, property, {writable:value});
 				}
 			}
 		}

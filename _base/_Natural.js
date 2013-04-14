@@ -73,6 +73,7 @@ define(["dojo/_base/declare",
 	//		operations, the use of them is not recommended on large datasets.
 
 	var StoreError = createError( "_Natural" );			// Create the StoreError type.
+	var isObject   = Lib.isObject;
 	var clone      = Lib.clone;											// HTML5 structured clone.
 	var undef;
 	
@@ -86,6 +87,7 @@ define(["dojo/_base/declare",
 				throw new StoreError("ConstraintError", "constructor", "addOns 'natural' and 'indexed' are mutual exclusive");
 			}
 			this.features.add("natural");
+			Lib.defProp( this,"natural", {value:true, writable:false, enumerable:true} );
 			Lib.protect(this);
 		},
 
@@ -116,7 +118,7 @@ define(["dojo/_base/declare",
 					}
 				}
 			} else {
-				var recIdx = this._getRange(key);
+				var recIdx = this._getRecNum(key);
 				if (recIdx.length) {
 					// Sort the record numbers in descending order.
 					recIdx = recIdx.sort( function (a,b) {return b-a;} );
@@ -158,14 +160,15 @@ define(["dojo/_base/declare",
 			return false;
 		},
 
-		_getRange: function (/*KeyRange*/ keyRange) {
+		_getRecNum: function (/*KeyRange*/ keyRange) {
 			// summary:
-			//		Get a range of records based on the specified key range. Note: on
-			//		large datasets this can be expensive in terms of performance.
+			//		Get a the record numbers of all records within the key range. 
+			//		Note: on large datasets this can be expensive in terms of
+			//		performance.
 			// keyRange:
 			//		Instance of KeyRange
 			// returns:
-			//		An array of unsorted record numbers.
+			//		An array of record numbers.
 			// tag:
 			//		Private
 			var recIdx = [], idxKey, keyVal, recNum;
@@ -259,7 +262,7 @@ define(["dojo/_base/declare",
 
 			if (key != undef) {
 				if (key instanceof KeyRange) {
-					recNum = this._getRange(key)[0];
+					recNum = this._getRecNum(key)[0];
 					if (recNum == undef) {
 						return new Location( this, max-1, -1, max );
 					}
@@ -391,55 +394,11 @@ define(["dojo/_base/declare",
 			this._assertStore( this, "count" );
 			if (key != undef) {
 				if (key instanceof KeyRange) {
-					return this._getRange(key).length;
+					return this._getRecNum(key).length;
 				}
 				return (this.get(key) ? 1 : 0);
 			}
 			return this.total;
-		},
-
-		getRange: function (/*Key|KeyRange*/ keyRange, /*QueryOptions?*/ options) {
-			// summary:
-			//		Retrieve a range of store records.
-			// keyRange:
-			//		A KeyRange object or valid key.
-			// options:
-			//		The optional arguments to apply to the resultset.
-			// returns: dojo/store/api/Store.QueryResults
-			//		The results of the query, extended with iterative methods.
-			// tag:
-			//		Public
-			var paginate = !!(options && (options.sort || options.count || options.start));
-			var results  = [];
-			
-			if (!(keyRange instanceof KeyRange)) {
-				if (keyRange) {
-					if (Keys.validKey(keyRange)) {
-						return this.getRange( KeyRange.only( keyRange ), options );
-					}
-					throw new StoreError( "TypeError", "getRange" );
-				} else {
-					results = this._records.map( function (record) {
-						return this._clone ? Lib.clone(record.value) : record.value;
-					}, this);					
-				}
-			} else {
-				// NOTE: _getRange() returns an array of record numbers...
-				var results  = this._getRange( keyRange );
-				var record;
-
-				if (results.length) {
-					results = results.map( function (recNum) {
-						record = this._records[recNum];
-						return this._clone ? Lib.clone(record.value) : record.value;
-					}, this);
-				}
-			}
-			if (results.length && paginate) {
-				return QueryResults( this.queryEngine(null, options)(results) );
-			} else  {
-				return QueryResults( results );
-			}
 		},
 
 		toString: function () {

@@ -2,7 +2,7 @@
 // Copyright (c) 2013, Peter Jekel
 // All rights reserved.
 //
-//	The indexedDB implementation is released under to following two licenses:
+//	The indexedStore is released under to following two licenses:
 //
 //	1 - The "New" BSD License			 (http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
 //	2 - The Academic Free License	 (http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
@@ -250,32 +250,6 @@ define(["exports",
 		return new Range(source, first, last);		// return a range object
 	};
 
-	exports.indexKeyValue = function (/*String|String[]*/  keyPath, /*Object*/ value ) {
-		// summary:
-		//		Extract the index key value from an object. If the index key is an array
-		//		any invalid keys and/or duplicate elements are removed
-		// keyPath:
-		//		A key path is a DOMString that defines how to extract a key from a value.
-		//		A valid key path is either the empty string, a JavaScript identifier, or
-		//		multiple JavaScript identifiers separated by periods. (Note that spaces
-		//		are not allowed within a key path.)
-		// value:
-		//		Object to extract the key value from.
-		// returns:
-		//		Any.
-		// tag:
-		//		Public
-		var keyValue = exports.keyValue( keyPath, value );
-		if (keyValue instanceof Array) {
-			keyValue = exports.purgeKey( keyValue );
-			return keyValue.length ? keyValue : undef;
-		} else {
-			if (keyValue !== null && keyValue !== undef) {
-				return keyValue;
-			}
-		}
-	};
-
 	exports.indexOf = function (/*Key[]*/ keyArray,/*Key*/ key) {
 		// summary:
 		//		Returns the first index at which a given element can be found in an
@@ -335,7 +309,7 @@ define(["exports",
 
 	exports.keyValue = function (/*String|String[]*/ keyPath,/*object*/ object ) {
 		// summary:
-		//		Extract the (primary) key value from an object using a key path.
+		//		Extract the key value from an object using a key path.
 		// keyPath:
 		//		A key path is a DOMString that defines how to extract a key from a value.
 		//		A valid key path is either the empty string, a JavaScript identifier, or
@@ -344,13 +318,12 @@ define(["exports",
 		// object:
 		//		Object to extract the key value from.
 		// returns:
-		//		Any. The value returned may or may not be a valid key. (see also 
-		//		validKey() and indexKeyalue() )
+		//		Any. The value returned may or may not be a valid key.
 		// tag:
 		//		Public
 		var keyValue;
 
-		if (keyPath) {
+		if (keyPath != undef) {
 			if (keyPath instanceof Array) {
 				return keyPath.map( function (path) {
 					return exports.keyValue(path,object);
@@ -366,8 +339,9 @@ define(["exports",
 	exports.purgeKey = function ( keyValue ) {
 		// summary:
 		//		Remove all non-numeric properties and duplicate values from an key
-		//		value arry.
+		//		value array.
 		// keyValue:
+		//		Key value array to purge.
 		// tag:
 		//		Public
 		if (keyValue instanceof Array) {
@@ -434,6 +408,21 @@ define(["exports",
 		return new Location(source);
 	};
 
+	exports.sort = function (/*Array*/ keys, /*Boolean*/ ascending) {
+		// summary:
+		// keys:
+		// ascending:
+		// tag:
+		//		Public
+		if (keys instanceof Array) {
+			ascending = (ascending != undef ? !!ascending : true);
+			keys.sort( function (kA, kB) {
+				return ( ascending ? exports.cmp(kA,kB) : exports.cmp(kB,kA) );
+			});
+		}
+		return keys;
+	};
+
 	exports.test = function (/*Store*/ store,/*Object*/ value,/*any?*/ key ) {
 		// summary:
 		//		Test a value to determine if a store operation would succeed given
@@ -497,7 +486,7 @@ define(["exports",
 			if (key instanceof Array) {
 				return key.every( exports.validKey );
 			}
-			return (typeof key === "string" ||
+			return (key instanceof String || typeof key === "string" ||
 							 typeof key === "number" ||
 							 key instanceof Date);
 		}

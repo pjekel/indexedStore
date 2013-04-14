@@ -1,24 +1,40 @@
 //
-// Copyright (c) 2012-2013, Peter Jekel
+// Copyright (c) 2013, Peter Jekel
 // All rights reserved.
 //
-//	The Checkbox Tree (cbtree) is released under to following three licenses:
+//	The IndexedStore is released under to following three licenses:
 //
-//	1 - BSD 2-Clause								(http://thejekels.com/cbtree/LICENSE)
-//	2 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	3 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
 define(["../_base/Record",
-				"../_base/Cursor",
-				"../error/createError!../error/StoreErrors.json"
-			 ], function(Record, Cursor, createError) {
+				"../_base/Library",
+				"../error/createError!../error/StoreErrors.json",
+				"./Sorter",
+				"./shim/Array"
+			 ], function(Record, Lib, createError, Sorter) {
 		"use strict";
 	// module:
-	//		cbtree/util/QueryEngine
+	//		store/util/QueryEngine
 
-	var StoreError = createError("QueryEngine");		// Create the StoreError type.
+	var StoreError  = createError("QueryEngine");		// Create the StoreError type.
+	var getObjClass = Lib.getObjectClass;
 	
+	function anyOf(/*any*/ valueA, /*any[]*/ valueB, /*Boolean*/ ignoreCase ) {
+		// summary:
+		//		Test if valueA matches any of valueB values.
+		// valueA:
+		//		Value to match agains all entries in valueB.
+		// valueB:
+		//		Array of allowed values
+		// ignoreCase:
+		//		If true perform case insensitive value matching.
+		return valueB.some( function (value) {
+			return match( valueA, value, ignoreCase );
+		});
+	}
+
 	function contains(/*any[]*/ valueA, /*any|any[]*/ valueB, /*Boolean?*/ ignoreCase) {
 		// summary:
 		//		Test if an array contains specific value(s) or if array valueA valueB
@@ -43,13 +59,13 @@ define(["../_base/Record",
 			}
 			if (valueB instanceof Array) {
 				return valueB.every( function (value) {
-					value = value.toLowerCase ? value.toLowerCase() : value;
+					value = (ignoreCase && value.toLowerCase) ? value.toLowerCase() : value;
 					return contains(valueA, value, ignoreCase);
 				});
 			}
 			if (ignoreCase) {
 				return valueA.some( function (value) {
-					value  = value.toLowerCase ? value.toLowerCase() : value;
+					value  = (ignoreCase && value.toLowerCase) ? value.toLowerCase() : value;
 					return (value == valueB);
 				});
 			}
@@ -58,7 +74,7 @@ define(["../_base/Record",
 		return false;
 	}
 
-	function getProp ( path, object ) {
+	function getProp (/*String*/ path,/*Object*/ object ) {
 		// summary:
 		//		Return property value identified by a dot-separated property path
 		// path:
@@ -69,7 +85,7 @@ define(["../_base/Record",
 		var p, i = 0;
 
 		while(object && (p = segm[i++])) {
-			object = (p in object ? object[p] : undefined);
+			object = object[p];
 		}
 		return object;
 	}
@@ -80,11 +96,9 @@ define(["../_base/Record",
 		//		otherwise false.
 		// query:
 		//		JavaScript key:value pairs object.
-		if (query) {
-			for(var key in query) {
-				if (/\./.test(key)) {
-					return true;
-				}
+		for(var key in query) {
+			if (/\./.test(key)) {
+				return true;
 			}
 		}
 		return false;
@@ -131,20 +145,6 @@ define(["../_base/Record",
 		return false;
 	}
 
-	function anyOf(/*any*/ valueA, /*any[]*/ valueB, /*Boolean*/ ignoreCase ) {
-		// summary:
-		//		Test if valueA matches any of valueB values.
-		// valueA:
-		//		Value to match agains all entries in valueB.
-		// valueB:
-		//		Array of allowed values
-		// ignoreCase:
-		//		If true perform case insensitive value matching.
-		return valueB.some( function (value) {
-			return match( valueA, value, ignoreCase );
-		});
-	}
-
 	var QueryEngine = function (/*Object|Function|String*/ query, /*Store.QueryOptions?*/options) {
 		// summary:
 		//		Query engine that matches using filter functions, named filter functions
@@ -187,16 +187,16 @@ define(["../_base/Record",
 		//	|	 return myStore;
 		//	| });
 
-		var ignoreCase  = options && !!options.ignoreCase;
-		var hasDotPath  = false;
-		var queryFunc   = null;
+		var ignoreCase = options && !!options.ignoreCase;
+		var hasDotPath = false;
+		var queryFunc  = null;
 		
 		// Create matching query function. If no query is specified only pagination
 		// options will be applied to a dataset.
 		if (query) {
-			switch (typeof query) {
-				case "undefined":
-				case "object":
+			switch ( getObjClass(query) ) {
+				case "Array":
+				case "Object":
 					// Test query object for dot-separated property names.
 					hasDotPath = hasPropertyPath(query);
 					queryFunc  = function (object) {
@@ -216,14 +216,14 @@ define(["../_base/Record",
 						return true;
 					};
 					break;
-				case "string":
+				case "String":
 					// named query
 					if (!this[query] || typeof this[query] != "function") {
 						throw new StoreError( "MethodMissing", "QueryEngine", "No filter function " + query + " was found in store");
 					}
 					queryFunc = this[query];
 					break;
-				case "function":
+				case "Function":
 					queryFunc = query;
 					break;
 				default:
@@ -231,91 +231,71 @@ define(["../_base/Record",
 			} /*end switch() */
 		}
 		
-		function filter( filterFunc, data, queryKeys ) {
+		function uniqueness(/*Object[]*/ data,/*Object*/ options) {
 			// summary:
-			// filterFunc:
 			// data:
-			//		An array of objects or Records or a Cursor on which the query is
-			//		performed.
-			// returns:
-			//		An array of objects matching the query.
+			// options:
 			// tag:
 			//		Private
-			var objects = data;
-			var results = [];
-			
 			if (data) {
-				if (data instanceof Cursor) {
-					objects = data.slice();
+				var unique = options.unique;
+				if (typeof unique == "string") {
+					unique = unique.split(/\s*,\s/);
 				}
-				objects.forEach( function(object) {
-					if (object instanceof Record) {
-						if (queryKeys) {
-							if (filterFunc( object )) {
-								results.push(object.value);
-							}
-						} else {
-							if (filterFunc(object.value)) {
-								results.push(object.value);
-							}
-						}
-					} else {
-						if (filterFunc(object)) {
-							results.push(object);
-						}
-					}
-				}, this);
+				if (unique instanceof Array) {
+					var key, keys = {};
+					var results = data.filter( function (object) {
+						key = unique.map( function (prop) {
+							return getProp(prop, object);
+						});
+						return keys[key] ? false  : keys[key] = true;
+					});
+					return results;
+				}
 			}
-			return results;
-		} /* end filter() */
+			return data;
+		}
 
-		function execute(/*(Object|Record)[] | Cursor*/ data, /*Boolean*/ queryKeys) {
+		function execute(/*(Object|Record)[]*/ data, /*Boolean?*/ queryKeys) {
 			// summary:
-			//		Execute the query on	a set of data and apply pagination	to the
-			//		query result.	This function is returned as the result of a call to
+			//		Execute the query on a set of objects and apply pagination to the
+			//		query result. This function is returned as the result of a call to
 			//		function QueryEngine(). The QueryEngine method provides the closure
 			//		for this execute() function.
 			// data:
-			//		An array of objects or Records or a Cursor on which the query is
-			//		performed.
+			//		An array of objects or Records on which the query is performed.
 			// returns:
 			//		An array of objects matching the query.
 			// tag:
 			//		Private
 			"use strict";
-			var data     = data || [];  // Make sure we always return something
-			var sortSet  = options && options.sort;
-			var results  = queryFunc ? filter(queryFunc, data, queryKeys) : data;
-			var sortFunc = sortSet;
-
-			if (sortSet) {
-				if (typeof sortFunc != "function") {
-					sortFunc = function (a, b) {
-						var i, sort, prop, valA, valB;
-
-						for(i=0; sort = sortSet[i]; i++) {
-							prop = sort.property || sort.attribute;
-							valA = getProp(prop,a);
-							valB = getProp(prop,b);
-
-							if (sort.ignoreCase) {
-								valA = (valA && valA.toLowerCase) ? valA.toLowerCase() : valA;
-								valB = (valB && valB.toLowerCase) ? valB.toLowerCase() : valB;
-							}
-							if (valA != valB) {
-								return (!!sort.descending == (valA == null || valA > valB)) ? -1 : 1;
-							}
+			var paginate  = options && (options.start || options.count || options.sort);
+			var unique    = options && options.unique;
+			var queryKeys = queryKeys || false;
+			var data      = data || [];
+			var results   = [];
+			
+			if (data && queryFunc) {
+				data.forEach( function (obj) {
+					if (obj instanceof Record) {
+						if (queryFunc( queryKeys ? obj : obj.value )) {
+							results.push(obj.value);
 						}
-						return 0;
+					} else {
+						if (queryFunc(obj)) {
+							results.push(obj);
+						}
 					}
-				}
-				results.sort( sortFunc );
+				});
+			} else {
+				results = data;
 			}
-			// Paginate the query result
-			if (options && (options.start || options.count)) {
-				var total = results.length;
-				results = results.slice(options.start || 0, (options.start || 0) + (options.count || Infinity));
-				results.total = total;
+			if (!!unique) {
+				results = uniqueness(results, options);
+			}
+			results.total = results.length;
+			if (!!paginate) {
+				results = Sorter( results, options );
 			}
 			return results;
 		} /* end execute() */

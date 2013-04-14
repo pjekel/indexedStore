@@ -53,12 +53,20 @@ define ([], function () {
 			return false;
 		};
 		
-		this.has = function(/*String*/ name ) {
+		this.has = function(/*String|String[]*/ name ) {
 			// summary:
 			//		Returns true if a given string is part of the DOMStringList otherwise
 			//		false
+			// name:
+			//		A feature name, a comma separated list of feature names or an array
+			//		of feature names.
 			// tag:
 			//		Public
+			if (name instanceof Array) {
+				return name.some( this.has );
+			} else if (/,/.test(name)) {
+				return this.has( name.split(/\s*,\s*/));
+			}
 			return features[name] || false;
 		};
 

@@ -14,8 +14,9 @@ define(["dojo/_base/declare",
 				"dojo/store/util/QueryResults",
 				"../_base/Keys",
 				"../_base/Library",
+				"../_base/Range",
 				"../error/createError!../error/StoreErrors.json"
-			 ], function (declare, lang, QueryResults, Keys, Lib, createError) {
+			 ], function (declare, lang, QueryResults, Keys, Lib, Range, createError) {
 
 	var StoreError = createError( "Hierarchy" );		// Create the StoreError type.
 	var isObject   = Lib.isObject;
@@ -50,7 +51,7 @@ define(["dojo/_base/declare",
 		//		The cbtree Models tests for the presence of this property in order to
 		//		determine if it has to set the parent property of an object or if the
 		//		store will handle it.
-		hierarchical: true,
+		hierarchical: null,
 
 		//=========================================================================
 		// constructor
@@ -58,12 +59,16 @@ define(["dojo/_base/declare",
 		constructor: function (kwArgs) {
 			if (this.features.has("indexed") || this.features.has("natural")) {
 				// create the parents index
+
 				this.createIndex( 
 					C_INDEXNAME, 
 					this.parentProperty, 
 					{ unique:false, multiEntry:true}
 				);
+
+				Lib.defProp( this, "hierarchical", {value:true, writable:false, enumerable:true} );
 				this.features.add("hierarchy");
+
 			} else {
 				throw new StoreError( "MethodMissing", "constructor", "base class '_natural' or '_indexed' must be loaded first");
 			}
@@ -128,7 +133,7 @@ define(["dojo/_base/declare",
 							parentIds.push(parent);
 						}						
 					} else {
-						throw StoreError("DataError", "_getParentKeys", "parent id is an invalid key");
+						throw new StoreError("DataError", "_getParentKeys", "parent id is an invalid key");
 					}
 				}, this);
 			}
@@ -147,14 +152,16 @@ define(["dojo/_base/declare",
 			//		Private
 
 			if (data instanceof Array && this.multiParented == "auto") {
-				// Detect the multi parent mode.
-				this.multiParented = data.some( function (object) {
-					return (object[this.parentProperty] instanceof Array);
-				}, this);
-				if (this.multiParented) {
-					data.forEach( function (value) {
-						this._setParentType(value, value[this.parentProperty]);
+				if (data.length > 0) {
+					// Detect the multi parent mode.
+					this.multiParented = data.some( function (object) {
+						return (object[this.parentProperty] instanceof Array);
 					}, this);
+					if (this.multiParented) {
+						data.forEach( function (value) {
+							this._setParentType(value, value[this.parentProperty]);
+						}, this);
+					}
 				}
 			}
 			// Load the store
@@ -212,7 +219,7 @@ define(["dojo/_base/declare",
 			value[this.parentProperty] = parents;
 		},
 
-		_storeOrder: function (/*Cursor*/ cursor) {
+		_storeOrder: function (/*Range*/ range) {
 			// summary:
 			//		Retrieve the records associated with the cursor in store (natural)
 			//		order.
@@ -223,11 +230,11 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Private
 			var loc, temp = [];
-			while (cursor.primaryKey) {
-				loc = this._retrieveRecord(cursor.primaryKey);
-				temp[loc.eq] = cursor.value;
-				cursor.cont();
-			}
+
+			range.forEach( function (key) {
+				loc = this._retrieveRecord( key );
+				temp[loc.eq] = loc.record;
+			}, this);
 			return temp.filter( function() {return true;} );
 		},
 
@@ -304,19 +311,27 @@ define(["dojo/_base/declare",
 				var identity = this.getIdentity(parent);
 				if (identity) {
 					var index  = this.index(C_INDEXNAME);
-					var cursor = index.openCursor( identity );
-					var query  = {};
-					var dataSet;
+					var range, keys, query = {};
+					
+					// Depending on if this is an indexed or natural store we either fetch
+					// the records directly using the 'parents' index, or simply get the
+					// primary keys and fetch the records locally preserving the store
+					// order. (NOTE: indexes are ALWAYS in ascending order).
 
+					if (this.indexed) {
+						range = Range( index, identity, "next", true, false );
+					} else {
+						keys  = Range( index, identity, "next", true, true );
+						range = this._storeOrder( keys );
+					}
 					query[this.parentProperty] = identity;
-					dataSet = !this.features.indexed ? this._storeOrder(cursor) : cursor;
 					// Call the query() method so the result can be made observable.
-					return this.query( query, options, dataSet );
+					return this.query( query, options, range );
 				} else {
 					return QueryResults([]);
 				}
 			}
-			throw StoreError( "DataError", "getChildren");
+			throw new StoreError( "DataError", "getChildren");
 		},
 
 		getParents: function (/*Object*/ child) {
@@ -340,7 +355,7 @@ define(["dojo/_base/declare",
 				}, this);
 				return parents;
 			}
-			throw StoreError( "DataError", "getParents");
+			throw new StoreError( "DataError", "getParents");
 		},
 
 		hasChildren: function(/*Object*/ parent) {
@@ -354,7 +369,7 @@ define(["dojo/_base/declare",
 				var index = this.index(C_INDEXNAME);
 				return Boolean( index.get(this.getIdentity(parent)) );
 			}
-			throw StoreError( "DataError", "hasChildren");
+			throw new StoreError( "DataError", "hasChildren");
 		},
 
 		put: function (/*Object*/ object,/*PutDirectives?*/ options) {
@@ -377,7 +392,7 @@ define(["dojo/_base/declare",
 			throw new StoreError("DataError", "put");
 		},
 
-		query: function (/*Object*/ query,/*QueryOptions?*/ options /*((Object|Rceord)[] | Cursor)? _dataSet */) {
+		query: function (/*Object*/ query,/*QueryOptions?*/ options /*((Object|Rceord)[])? _dataSet */) {
 			// summary:
 			//		Queries the store for objects.
 			// query: Object

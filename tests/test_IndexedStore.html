@@ -263,10 +263,10 @@
 								keyRange = KeyRange.bound("Abe", "Homer");
 								// Should return Abe, Apu, Bart and Homer
 								var expect = ["Abe", "Apu", "Bart","Homer"];
-								result = store.getRange( keyRange, {sort:[{property:"name"}]} );
+								result = store.getRange( keyRange );
 								t.is( result.total, 4);
 								result.forEach( function (obj, idx) {
-									t.is( expect[idx], store.getIdentity(obj));
+									t.t( expect.indexOf(store.getIdentity(obj)) != -1);
 								});
 								// Remove some records
 								t.t( store.remove("Bart"));
@@ -314,10 +314,10 @@
 								keyRange = KeyRange.bound("ABE", "HOMER");
 								// Should return Abe, Apu, Bart and Homer
 								var expect = ["ABE", "APU", "BART","HOMER"];
-								result = store.getRange( keyRange, {sort:[{property:"name"}]} );
+								result = store.getRange( keyRange );
 								t.is( result.total, 4);
 								result.forEach( function (obj, idx) {
-									t.is( expect[idx], store.getIdentity(obj));
+									t.t( expect.indexOf(store.getIdentity(obj)) != -1);
 								});
 								// Remove some records
 								t.t( store.remove("BART"));

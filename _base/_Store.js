@@ -20,6 +20,7 @@ define(["dojo/_base/declare",
 				"./Location",
 				"./Keys",
 				"./KeyRange",
+				"./Range",
 				"./Record",
 				"../error/createError!../error/StoreErrors.json",
 				"../dom/event/Event",
@@ -28,9 +29,8 @@ define(["dojo/_base/declare",
 				"../util/QueryEngine",
 				"../util/shim/Array"						 // ECMA-262 Array shim
 			 ], function (declare, lang, Deferred, Stateful, QueryResults, 
-			               FeatureList, Index, Lib, Location, Keys, KeyRange, Record,
-			               createError, 
-			               Event, EventTarget, 
+			               FeatureList, Index, Lib, Location, Keys, KeyRange, 
+			               Range, Record, createError, Event, EventTarget, 
 			               DOMStringList, QueryEngine ) {
 	"use strict";
 	// module:
@@ -676,19 +676,25 @@ define(["dojo/_base/declare",
 			}
 		},
 
-		getRange: function (/*Key|KeyRange*/ keyRange, /*QueryOptions?*/ options) {
+		getRange: function (/*Key|KeyRange?*/ keyRange,/*String*/ direction) {
 			// summary:
 			//		Retrieve a range of store records.
 			// keyRange:
-			//		A KeyRange object or a valid key.
-			// options:
-			//		The optional arguments to apply to the resultset.
+			//		A KeyRange object or valid key.
+			// direction:
+			//		The range required direction. Valid options are: 'next', 'nextunique',
+			//		'prev' or 'prevunique'.
 			// returns: dojo/store/api/Store.QueryResults
 			//		The results of the query, extended with iterative methods.
 			// tag:
 			//		Public
 
-			AbstractOnly("getRange");
+			if (/^next|^prev/.test(arguments[0])) {
+				direction = arguments[0];
+				keyRange  = undef;
+			}
+			var results  = Range( this, keyRange, direction, false, false );
+			return QueryResults( results );
 		},
 
 		index: function (name){

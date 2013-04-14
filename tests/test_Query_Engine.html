@@ -31,20 +31,13 @@
         "dojo/_base/lang",
         "dojo/store/util/QueryResults",
         "dojo/ready",
-        "store/_base/_Store",
-        "store/_base/_Indexed",
-        "store/_base/_Loader",
-        "store/_base/Keys",
-        "store/_base/KeyRange",
-				"store/error/createError!store/error/StoreErrors.json"
-        ], function( doh, declare, lang, QueryResults, ready,
-											_Store, _Indexed, _Loader, Keys, KeyRange, createError ) {
+        "store/util/QueryEngine",
+        "store/util/Sorter",
+        "store/_base/Range"
+        ], function( doh, declare, lang, QueryResults, ready, QueryEngine,
+											Sorter, Range ) {
 					"use strict";
 					
-					// IMPORTANT:
-					//		Don't change the number of records without updating any of
-					//		the range and count tests.
-					var StoreError = createError("store");
 					var data = [
 						{ "name":"Root", "parent":[], "hair":"none" },
 						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
@@ -54,31 +47,296 @@
 						{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },
 						{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
 						{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
+
 						{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Bart", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Bart", "age":11, "parent":["Homer","Marge"], "hair":"blond" },
+
 						{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },
 						{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },
 						{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },
 						{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
 						{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
 						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
-						{ "name":"Manjula", "age":40, "parent":"Apu", "hair":"brown"}
+						{ "name":"Manjula", "age":40, "parent":["Apu"], "hair":"brown"}
 					];
+					var undef;
 					
-					doh.register("Query Engine", [
+					doh.register("Sorter & Query Engine", [
 						{
-							name: "Load Dataset, NO key path",
+							name: "Nullable and invalid parameters",
 							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader]);
-								var store = new Store ( {autoIncrement: true, keyPath:null});
+								var result, func = {sort: Sorter, query: QueryEngine};
+								
+								result = Sorter();
+								t.is( 0,result.length);
+								result = Sorter(null);
+								t.is( 0,result.length);
+								result = Sorter(null, null);
+								t.is( 0,result.length);
+
+								// base types are not a sortable object....
+								t.e( Error, func, "sort", [5]);
+								t.e( Error, func, "sort", ["some plain text"]);
+
+								t.t (!!QueryEngine());
+								result = QueryEngine()();
+								t.is( 0, result.total);
+
+								// call QueryEngine with invalid parameters
+								t.e( Error, func, "query", [5]);
+								t.e( Error, func, "query", ["Not-a-Function-name"]);
+
+								// Not very useful but allowed...
+								t.t( !!QueryEngine([5,6,7]) );
+
 							}
 						},
+
 						{
-							name: "Load Dataset, with key path",
+							name: "Sorter Data ascending and descending",
 							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader]);
-								var store = new Store ( { keyPath:"name"});
+								// Sort ascending (default)
+								var options = {sort:[{property:"name"}]};
+								var results = Sorter( data, options);
+
+								t.is( 18, results.total );
+								t.is( 18, results.length );
+
+								var name = results[0].name;
+								results.forEach( function (record) {
+									t.t (record.name >= name);
+									name = record.name;
+								});
+
+								// Sort descending
+								options = {sort:[{property:"name", descending:true}]};
+								results = Sorter( data, options);
+
+								t.is( 18, results.total );
+								t.is( 18, results.length );
+
+								name = results[0].name;
+								results.forEach( function (record) {
+									t.t (record.name <= name);
+									name = record.name;
+								});
+
+							}
+						},
+
+						{
+							name: "Sorter on multiple properties",
+							runTest:function (t) {
+								// Sort ascending (default)
+								var options = {sort:[{property:"name"},{property:"age"}]};
+								var results = Sorter( data, options);
+								var max = data.length;
+
+								t.is( max, results.total );
+								t.is( max, results.length );
+
+								var name = results[0].name;
+								var age  = results[0].age;
+								
+								results.forEach( function (record) {
+									t.t (record.name >= name);
+									if (record.name == name) {
+										t.t (record.age >= age);
+									}
+									name = record.name;
+									age  = record.age;
+								});
+
+								// Sort name descending
+								options = {sort:[{property:"name", descending:true}, {property:"age"}]};
+								results = Sorter( data, options);
+
+								t.is( max, results.total );
+								t.is( max, results.length );
+
+								name = results[0].name;
+								age  = results[0].age;
+
+								results.forEach( function (record) {
+									t.t (record.name <= name);
+									if (record.name == name) {
+										t.t (record.age >= age);
+									}
+									name = record.name;
+									age  = record.age;
+								});
+
+								// Sort name and age descending
+								options = {sort:[{property:"name", descending:true}, {property:"age", descending:true}]};
+								results = Sorter( data, options);
+
+								t.is( max, results.total );
+								t.is( max, results.length );
+
+								name = results[0].name;
+								age  = results[0].age;
+
+								results.forEach( function (record) {
+									t.t (record.name <= name);
+									if (record.name == name) {
+										t.t (record.age <= age);
+									}
+									name = record.name;
+									age  = record.age;
+								});
+
+							}
+						},
+
+						{
+							name: "Query Engine Basic properties",
+							runTest:function (t) {
+								var result, query, opts;
+								var max = data.length;
+
+								var result = QueryEngine()(data);
+								t.is( max, result.total );
+
+								var result = QueryEngine(null, {count:5})(data);
+								t.is( max, result.total );
+								t.is( 5, result.length );
+								
+								// Correct case
+								var result = QueryEngine({name:"Bart"})(data);
+								t.is( 3, result.total );
+								t.is( 3, result.length );
+
+								// Wrong case
+								var result = QueryEngine({name:"bart"})(data);
+								t.is( 0, result.total );
+								
+								// ignore case
+								var result = QueryEngine({name:"bart"}, {ignoreCase:true})(data);
+								t.is( 3, result.total );
+								t.is( 3, result.length );
+								
+								// Select multiple names using an array
+								var result = QueryEngine({name:["Bart","Lisa", "Maggie"]})(data);
+								t.is( 5, result.total );
+								t.is( 5, result.length );
+							}
+						},
+
+						{
+							name: "Query Engine Array properties",
+							runTest:function (t) {
+								var result, query, opts;
+								var max = data.length;
+
+								// Query array property containing a value.
+								var result = QueryEngine({parent:"Homer"})(data);
+								t.is( 5, result.total );
+								t.is( 5, result.length );
+
+								// Query array property containing all values, this is Ok as
+								// it matches ['Homer', 'Marge']
+								var result = QueryEngine({parent:["Homer"]})(data);
+								t.is( 5, result.total );
+								t.is( 5, result.length );
+
+								// Query array property containing all values, this is Ok as
+								// it matches ['Homer', 'Marge']
+								var result = QueryEngine({parent:["Homer","Marge"]})(data);
+								t.is( 5, result.total );
+								t.is( 5, result.length );
+
+								// Query array property containing all values. This should fail
+								// as there is no object with ALL 3 parents....
+								var result = QueryEngine({parent:["Homer","Marge","Apu"]})(data);
+								t.is( 0, result.total );
+								t.is( 0, result.length );
+
+								// Query array property containing all values. This should be Ok
+								// RegEx /ge/ will match 'Marge' -> ['Homer','Marge']
+								var result = QueryEngine({parent:["Homer",/ge/]})(data);
+								t.is( 5, result.total );
+								t.is( 5, result.length );
+
+								// Query array property containing all values. This should fail
+								// as there is no object with a parent property containing 
+								// lowercase 'marge'.
+								var result = QueryEngine({parent:["Homer","marge"]})(data);
+								t.is( 0, result.total );
+								t.is( 0, result.length );
+
+								// Query array property containing all values, This should be Ok.
+								// as the case is ignored. -> ['Homer','Marge']
+								var result = QueryEngine({parent:["Homer","marge"]},{ignoreCase:true})(data);
+								t.is( 5, result.total );
+								t.is( 5, result.length );
+							}
+						},
+
+						{
+							name: "Query Engine, property uniqueness",
+							runTest:function (t) {
+								var result, query, opts;
+								var max = data.length;
+
+								var result = QueryEngine(null, {unique:"name"})(data);
+								t.is( max-2, result.total );
+								t.is( max-2, result.length );
+							}
+						},
+
+						{
+							name: "Query Engine, property with Function",
+							runTest:function (t) {
+								var result, query, opts;
+								var max = data.length;
+
+								// Get all object whose name contains a lowercase 'a' and whose
+								// age property is between 30 and 60. Sort the final result by
+								// age.
+								var result = QueryEngine({
+									name:/a/, 
+									age: function (value, key, obj) {
+										return (value >= 30 && value <= 60);
+									}
+								}, {sort:[{property:"age"}]})(data);
+								t.is( 4, result.length );
+							}
+						},
+
+						{
+							name: "Query Engine Pagination",
+							runTest:function (t) {
+								var result, query, opts;
+								var max = data.length;
+
+								var query  = { name:/a/i};
+								var opts   = { start:3, count:4 };
+								var result = QueryEngine( query, opts)(data);
+
+								t.is( 13, result.total );
+								t.is( 4, result.length );
+
+								//===========================================================
+								// Sort and paginate
+								
+								var query  = { name:/a/i};
+								var opts   = {sort:[{property:"name"}], start:3, count:4};
+								var result = QueryEngine( query, opts)(data);
+
+								t.is( 13, result.total );
+								t.is( 4, result.length );
+
+								var name = result[0].name;
+								result.forEach( function (record) {
+									t.t (record.name >= name);
+									name = record.name;
+								});
+
 							}
 						}
+
+
 					]);
 
 					ready( function () {

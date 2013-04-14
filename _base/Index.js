@@ -14,11 +14,15 @@ define(["dojo/_base/lang",
 			  "./Keys",
 			  "./KeyRange",
 			  "./Library",
+				"./Range",
 			  "./Record",
+			  "../dom/event/Event",
+			  "../dom/event/EventTarget",
 				"../error/createError!../error/StoreErrors.json",
 				"../util/QueryEngine",
 			 ], function (lang, Deferred, QueryResults, Cursor, Keys, KeyRange, 
-										 Lib, Record, createError, QueryEngine) {
+										 Lib, Range, Record, Event, EventTarget,
+										 createError, QueryEngine) {
 	"use strict";
 
 	//module:
@@ -35,13 +39,21 @@ define(["dojo/_base/lang",
 	var IDBIndexOptions = { unique: false, 
 	                        multiEntry: false, 
 	                        uppercase: false, 
-	                        rangeSort: true, 
 	                        async: false };
 
 	var StoreError = createError( "Index" );		// Create the StoreError type.
 	var isObject = Lib.isObject;
 	var debug = dojo.config.isDebug || false;
 	var undef;
+	
+	function isDirection( direction ) {
+		switch (direction) {
+			case "next": case "nextunique":
+			case "prev": case "prevunique":
+				return true;
+		}
+		return false;
+	}
 	
 	function Index (/*Store*/ store, /*DOMString*/ name, /*any*/ keyPath, /*Object*/ optionalParameters) {
 		// summary:
@@ -111,6 +123,34 @@ define(["dojo/_base/lang",
 			index._updates++;
 		}
 
+		function indexStore( store, index, defer ) {
+			// summary:
+			//		Index all existing store records.
+			// store:
+			//		Store.
+			// index:
+			//		The IDBIndex in which the keys are stored.
+			// tag:
+			//		Private
+			var records = store._records;
+			var count = 0, dup, i;
+			try {
+				if (debug) {Lib.debug("Start building index ["+index.name+"]");}
+				index.loading = true;
+				index._clear();
+				records.forEach( index._add, index );
+				count = sortDuplicates( index );
+				if (debug) {Lib.debug("End building index ["+index.name+"], "+index._records.length+" unique, "+count+" total");}
+				defer.resolve(index);		// Index is ready.
+			} catch(err) {
+				var error = new StoreError( err, "indexStore" );
+				defer.reject(error);
+				throw error;
+			} finally {
+				delete index.loading;
+			}
+		}
+
 		function isDirection( value ) {
 			switch (value) {
 				case "next":
@@ -161,10 +201,7 @@ define(["dojo/_base/lang",
 			if (!index.unique && index._updates) {
 				records.forEach( function (record) {
 					if ((dup = record.value.length) > 1) {
-						record.value.sort( 
-							function (a,b) { 
-								return Keys.cmp(a,b); 
-							});
+						Keys.sort( record.value );
 					}
 					count += dup;
 				});
@@ -172,34 +209,6 @@ define(["dojo/_base/lang",
 				count = records.length;
 			}
 			return count;
-		}
-
-		function indexStore( index, store, defer ) {
-			// summary:
-			//		Index all existing store records.
-			// index:
-			//		The IDBIndex in which the keys are stored.
-			// store:
-			//		The IDBObjectStore to index.
-			// tag:
-			//		Private
-			var records = store._records, i;
-			var count = 0, dup;
-			try {
-				if (debug) {Lib.debug("Start building index ["+index.name+"]");}
-				index.loading = true;
-				index._clear();
-				records.forEach( index._add, index );
-				count = sortDuplicates( index );
-				if (debug) {Lib.debug("End building index ["+index.name+"], "+index._records.length+" unique, "+count+" total");}
-				defer.resolve(index);		// Index is ready.
-			} catch(err) {
-				var error = new StoreError( err, "indexStore" );
-				defer.reject(error);
-				throw error;
-			} finally {
-				delete index.loading;
-			}
 		}
 
 		//=========================================================================
@@ -281,26 +290,27 @@ define(["dojo/_base/lang",
 			}
 
 			if (storeRecord instanceof Record) {
-				var indexKey = Keys.indexKeyValue( this.keyPath, storeRecord.value );
+				var indexKey = Keys.keyValue( this.keyPath, storeRecord.value );
 				if (indexKey) {
-					if (index.uppercase) {
-						indexKey = Keys.toUpperCase( indexKey );
+					if (this.multiEntry && indexKey instanceof Array) {
+						// Remove duplicate elements and invalid key values.
+						indexKey = Keys.purgeKey( indexKey );
 					}
-					if (!hasKey(this, indexKey) || !this.unique) {
-						if (this.multiEntry) {
-							if (indexKey instanceof Array) {
-								// Add an index record for each array element.
+					if (Keys.validKey(indexKey)) {
+						indexKey = index.uppercase ? Keys.toUpperCase( indexKey ) : indexKey;
+						if (!hasKey(this, indexKey) || !this.unique) {
+							if (this.multiEntry && indexKey instanceof Array) {
 								indexKey.forEach( function(key) {
 									addIndexRecord( this, key, storeRecord.key );
 								}, this);
 								return;
 							}
+							// Add a single index record.
+							addIndexRecord( this, indexKey, storeRecord.key );
+						} else {
+							throw new StoreError("ConstraintError", "_add", "Key [%{0}] already exist in index [%{1}]", 
+																	indexKey, this.name);
 						}
-						// Add a single index record.
-						addIndexRecord( this, indexKey, storeRecord.key );
-					} else {
-						throw new StoreError("ConstraintError", "_add", "Key [%{0}] already exist in index [%{1}]", 
-																indexKey, this.name);
 					}
 				}
 			}
@@ -332,7 +342,7 @@ define(["dojo/_base/lang",
 			//		Store record whose index record(s) are to be deleted.
 			// tag:
 			//		Private
-			var indexKey   = Keys.indexKeyValue( this.keyPath, storeRecord.value );
+			var indexKey   = Keys.keyValue( this.keyPath, storeRecord.value );
 			var storeKey   = storeRecord.key;
 			var candidates = [];
 			var location;
@@ -344,6 +354,7 @@ define(["dojo/_base/lang",
 				}
 				// First, based on the index key(s) collect all candidate index records.
 				if (indexKey instanceof Array && this.multiEntry) {
+					indexKey = Keys.purgeKey(indexKey);
 					indexKey.forEach( function (key) {
 						location = Keys.search(this, key);
 						if (location.record) {
@@ -464,70 +475,65 @@ define(["dojo/_base/lang",
 			return retrieveIndexValue( this, key );
 		};
 
-		this.getRange = function (/*Key|KeyRange*/ keyRange,/*Boolean?*/ keyValue, /*QueryOptions?*/ options) {
+		this.getRange = function (/*Key|KeyRange?*/ keyRange,/*String?*/ direction, /*Boolean?*/ duplicates) {
 			// summary:
 			//		Retrieve a range of store records.
 			// keyRange:
 			//		A KeyRange object or a valid key.
-			// keyValue:
-			//		If true the index record value, that is, the primary key(s) of
-			//		the referenced store are returned. Otherwise the store records
-			//		are returned.
+			// direction:
 			// options:
 			//		Optional pagination arguments to apply to the resultset.
 			// returns: dojo/store/util/QueryResults
 			//		The range results, extended with iterative methods.
 			// tag:
 			//		Public
-			
-			if (arguments.length > 1) {
-				// handle optional arguments first.
-				if (isObject(arguments[1])) {
-					options  = arguments[1];
-					keyValue = false;
+
+			if (arguments.length) {
+				if (isDirection(arguments[0])) {
+					direction  = arguments[0];
+					duplicates = arguments[1];
+					keyRange   = undef;
+				} else if (typeof arguments[0] == "boolean") {
+					duplicates = arguments[0];
+					direction  = "next";
+					keyRange   = undef;					
+				} else if (typeof arguments[1] == "boolean") {
+					duplicates = arguments[1];
+					direction  = "next";
 				}
 			}
-	
-			var paginate = !!(options && (options.sort || options.count || options.start));
-			var unique   = this.unique || ((options && options.unique) || false);
-			var results  = [], keys = [];
-			
-			if (!(keyRange instanceof KeyRange)) {
-				if (keyRange && !Keys.validKey(keyRange)) {
-					throw new StoreError( "TypeError", "getRange" );
-				}
-				keyRange = KeyRange.only( this.uppercase ? Keys.toUpperCase(keyRange) : keyRange );
-				return this.getRange( keyRange, keyValue, options );
-			} else {
-				var range = Keys.getRange( this, keyRange );
-				if (range.length) {
-					var records = this._records.slice(range.first, range.last+1);
-					records.forEach( function (record) {
-						keys = keys.concat( unique ? record.value[0] : record.value );
-					});
-					// Remove all duplicate keys
-					if (range.length > 1) {
-						keys = Keys.purgeKey(keys);
-						if (this.rangeSort) {
-							keys = keys.sort( function (a,b) {
-																	return Keys.cmp(a,b);
-																});
-						}
-					}
-					if (!keyValue) {
-						keys.forEach( function (key) {
-							results.push( this.store.get( key ) );
-						}, this);
-					} else {
-						results = keys;
-					}
+			var results = Range( this, keyRange, direction, duplicates, false );
+			return QueryResults( results );
+		};
+
+		this.getKeyRange = function (/*Key|KeyRange?*/ keyRange,/*String?*/ direction,/*Boolean*/ duplicates) {
+			// summary:
+			//		Retrieve a range of store records.
+			// keyRange:
+			//		A KeyRange object or a valid key.
+			// direction:
+			// duplicates:
+			// returns: dojo/store/util/QueryResults
+			//		The range results, extended with iterative methods.
+			// tag:
+			//		Public
+
+			if (arguments.length) {
+				if (isDirection(arguments[0])) {
+					direction  = arguments[0];
+					duplicates = arguments[1];
+					keyRange   = undef;
+				} else if (typeof arguments[0] == "boolean") {
+					duplicates = arguments[0];
+					direction  = "next";
+					keyRange   = undef;					
+				} else if (typeof arguments[1] == "boolean") {
+					duplicates = arguments[1];
+					direction  = "next";
 				}
 			}
-			if (results.length && paginate) {
-				return QueryResults( this.queryEngine(null, options)(results) );
-			} else  {
-				return QueryResults( results );
-			}
+			var results = Range( this, keyRange, direction, duplicates, true );
+			return QueryResults( results );
 		};
 
 		this.openCursor = function (/*any?*/ range, /*DOMString?*/ direction) {
@@ -591,7 +597,7 @@ define(["dojo/_base/lang",
 				direction = arguments[0];
 				range = undef;
 			} else {
-				assertKey( this, range );
+				assert( this, range );
 			}
 			if (!(range instanceof KeyRange)) {
 				if (range != undef) {
@@ -622,7 +628,7 @@ define(["dojo/_base/lang",
 				results = this.queryEngine(query, options)(this._records, true);
 				if (results.length) {
 					results.forEach( function (primKeys) {
-						if (options.unique) {
+						if (options.nextUnique) {
 							keys.push(primKeys[0]);						
 						} else {
 							primKeys.forEach( function (key) {
@@ -675,8 +681,7 @@ define(["dojo/_base/lang",
 		//=========================================================================
 
 		if (typeof name === "string" && keyPath && store) {
-			var indexOptions   = lang.mixin( IDBIndexOptions, optionalParameters || {});
-
+			var indexOptions = lang.mixin( Lib.clone(IDBIndexOptions), optionalParameters || {});
 			// If keyPath is and Array and the multiEntry property is true throw an
 			// exception of type NotSupportedError.
 			if (keyPath instanceof Array && !!indexOptions.multiEntry) {
@@ -687,7 +692,6 @@ define(["dojo/_base/lang",
 			this._updates    = 0;
 
 			this.multiEntry  = !!indexOptions.multiEntry;
-			this.rangeSort   = !!indexOptions.rangeSort;
 			this.unique      = !!indexOptions.unique;
 			this.uppercase   = !!indexOptions.uppercase;
 			this.name        = name;
@@ -707,10 +711,10 @@ define(["dojo/_base/lang",
 
 			if (async) {
 				setTimeout( function () {
-					indexStore( index, store, index._indexReady );
+					indexStore( store, index, index._indexReady );
 				}, 0);
 			} else {
-				indexStore( index, store, index._indexReady );
+				indexStore( store, index, index._indexReady );
 			}
 
 		} else {
@@ -718,6 +722,9 @@ define(["dojo/_base/lang",
 		}
 
 	} /* end StoreIndex */
+
+	Index.prototype = new EventTarget();
+	Index.prototype.constructor = Index;
 
 	return Index;
 

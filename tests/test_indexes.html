@@ -38,18 +38,16 @@
         "store/_base/Index",		// for instanceof only...
         "store/_base/Keys",
         "store/_base/KeyRange",
-				"store/error/createError!store/error/StoreErrors.json",
 				"store/util/QueryEngine",
 				"store/_base/Range"
         ], function( doh, declare, lang, promiseAll, QueryResults, ready,
 											_Store, _Indexed, _Loader, Index,
-											Keys, KeyRange, createError, QueryEngine, Range ) {
+											Keys, KeyRange, QueryEngine, Range ) {
 					"use strict";
 					
 					// IMPORTANT:
 					//		Don't change the number of records without updating any of
 					//		the range and count tests.
-					var StoreError = createError("store");
 					var data = [
 						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },							//  1
 						{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },						//  2
@@ -67,6 +65,7 @@
 						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },						// 14
 						{ "name":"Manjula", "age":40, "parent":["Apu"], "hair":"brown"}						// 15
 					];
+					var undef;
 					
 					doh.register("Store Indexes", [
 						{
@@ -101,8 +100,8 @@
 								
 								store.deleteIndex( index.name );
 								t.is( 0, store.indexNames.length);
+								t.is( undef, store.index("name"));
 								t.e( Error, index, "count" );
-								t.e( Error, store, "index", ["name"] );
 
 							}
 						},
@@ -139,8 +138,8 @@
 								
 								store.deleteIndex( index.name );
 								t.is( 0, store.indexNames.length );
+								t.is( undef, store.index("name"));
 								t.e( Error, index, "count" );
-								t.e( Error, store, "index", ["name"] );
 
 								store.destroy();
 							}
@@ -471,6 +470,37 @@
 						},
 
 						{
+							name: "Remove Data - Multiple Indexes, multiEntry",
+							runTest:function (t) {
+								var indexes = [
+									{name:"parent", keyPath:"parent", options:{unique: false, multiEntry: true}},
+									{name:"name", keyPath:"name", options:{unique: false}},
+								];
+								var Store = declare( [_Store, _Indexed, _Loader]);
+								var store = new Store ( {data: data, keyPath:"name", indexes: indexes});
+								var results, keyRange;
+								
+								// Test DOMStringList length and content
+								t.is( 2, store.indexNames.length);
+								t.t ( store.indexNames.contains("parent"));
+								t.t ( store.indexNames.contains("name"));
+
+								// fetch index and test properties
+								var pIndex = store.index("parent");
+								var nIndex = store.index("name");
+
+								t.t( !!store.get("Homer"));
+								t.t( !!pIndex.get("Homer"));
+								t.t( !!nIndex.get("Homer"));
+
+								t.t( !!store.remove("Homer"));
+								t.f( !!store.get("Homer"));
+								
+								store.destroy();
+							}
+						},
+
+						{
 							name: "Destroy Store",
 							runTest:function (t) {
 								var indexes = {name:"name", keyPath:"name", options:{unique:false}};
@@ -489,6 +519,7 @@
 
 								t.e( Error, store, "count" );
 								t.e( Error, index, "count" );
+
 							}
 						},
 						

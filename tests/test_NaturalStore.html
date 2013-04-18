@@ -34,16 +34,14 @@
         "store/_base/_Store",
         "store/_base/_Natural",
         "store/_base/KeyRange",
-				"store/error/createError!store/error/StoreErrors.json",
 				"store/util/Sorter"
         ], function( doh, declare, lang, QueryResults, ready,
-											_Store, _Natural, KeyRange, createError, Sorter ) {
+											_Store, _Natural, KeyRange, Sorter ) {
 					"use strict";
 					
 					// IMPORTANT:
 					//		Don't change the number of records without updating any of
 					//		the range and count tests.
-					var StoreError = createError("store00");
 					var data = [
 						{ "name":"Root", "parent":[], "hair":"none" },
 						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
@@ -128,23 +126,13 @@
 								t.f( !!store.get("1") );		// This should not.
 								t.f( !!store.get(max+1) );
 
-								// Remove some records
-								t.t( store.remove(5));
-								t.f( !!store.get(5) );
-
-								keyRange = KeyRange.bound(7,9)
-								t.t( store.remove(keyRange ));
-
-								t.f( !!store.get(7) );
-								t.f( !!store.get(8) );
-								t.f( !!store.get(9) );
-
 								// clear the store.
 								store.clear();
 								t.is( 0, store.count() );
 								store.destroy();
 							}
 						},
+
 						{
 							name: "Insert Data - (No keyPath & key generator)",
 							runTest:function (t) {
@@ -176,12 +164,6 @@
 								// Argument required test
 								t.e( Error, store, "get", null );
 								
-								// Remove some records
-								keyRange = KeyRange.bound(5,9)
-								t.t( store.remove(keyRange ));
-								t.f( !!store.get(5) );
-								t.f( !!store.get(9) );
-
 								// clear the store.
 								store.destroy();
 							}
@@ -213,17 +195,6 @@
 
 								// identity
 								t.is( 1, store.getIdentity( store.get(1) ));
-
-								// Remove some records
-								t.t( store.remove(5));
-								t.f( !!store.get(5) );
-
-								keyRange = KeyRange.bound(7,9)
-								t.t( store.remove(keyRange ));
-
-								t.f( !!store.get(7) );
-								t.f( !!store.get(8) );
-								t.f( !!store.get(9) );
 
 								// clear the store.
 								store.destroy();
@@ -271,12 +242,6 @@
 								result.forEach( function (obj, idx) {
 									t.t( expect.indexOf(store.getIdentity(obj)) != -1);
 								});
-								// Remove some records
-								t.t( store.remove("Bart"));
-								t.t( store.remove("Ned"));
-								t.f( !!store.get("Bart") );
-								t.f( !!store.get("Ned") );
-
 								// clear the store.
 								store.destroy();
 							}
@@ -322,12 +287,6 @@
 								result.forEach( function (obj, idx) {
 									t.t( expect.indexOf(store.getIdentity(obj)) != -1);
 								});
-								// Remove some records
-								t.t( store.remove("BART"));
-								t.t( store.remove("NED"));
-								t.f( !!store.get("BART") );
-								t.f( !!store.get("NED") );
-
 								// clear the store.
 								store.destroy();
 							}
@@ -399,6 +358,36 @@
 								store.destroy();
 							}
 						},
+
+						{
+							name: "Insert data, mixed keys",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Natural]);
+								var store = new Store ({keyPath:null});
+								var date  = new Date();
+								
+								store.add( {name:"Homer"}, {key:10} );
+								store.add( {name:"Bart"}, {key:""} );				// The Empty String
+								store.add( {name:"Lisa"}, {key:"Lisa"} );
+								store.add( {name:"Maggie"}, {key: date} );
+								store.add( {name:"Todd"}, {key: [1,2,3]} );
+
+								var obj = store.get(10);
+								t.t ( !!obj && obj.name == "Homer");
+								var obj = store.get("");
+								t.t ( !!obj && obj.name == "Bart");
+								var obj = store.get("Lisa");
+								t.t ( !!obj && obj.name == "Lisa");
+								var obj = store.get(date);
+								t.t ( !!obj && obj.name == "Maggie");
+								var obj = store.get([1,2,3]);
+								t.t ( !!obj && obj.name == "Todd");
+								
+								// destroy store.
+								store.destroy();
+							}
+						},
+						
 						{
 							name: "Count records",
 							runTest:function (t) {
@@ -491,7 +480,73 @@
 								// destroy store.
 								store.destroy();
 							}
+						},
+
+						{
+							name: "Removing data, No keyPath, Key generator",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Natural]);
+								var store = new Store ( {autoIncrement: false, keyPath: null});
+								var keyRange, result;
+								var max = data.length;
+								
+								// Insert data into the store
+								data.forEach( function (object, idx) {
+									var key = store.add( object, {key: idx+1} );
+									t.t( typeof key == "number" );
+								});
+
+								// Remove some records
+								t.t( store.remove(5));
+								t.f( !!store.get(5) );
+
+								keyRange = KeyRange.bound(7,9)
+								t.t( store.remove(keyRange ));
+
+								t.f( !!store.get(7) );
+								t.f( !!store.get(8) );
+								t.f( !!store.get(9) );
+
+								t.is(max-4, store.count());
+
+								store.destroy();
+							}
+						},
+
+						{
+							name: "Removing data, KeyPath",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Natural]);
+								var store = new Store ( {keyPath:"name"});
+								var keyRange, result;
+								var max = data.length;
+								
+								// Insert data into the store
+								data.forEach( function (object) {
+									var key = store.add( object );
+								});
+
+								// store.remove()	-> Error: key required
+								t.e( Error, store, "remove" );
+
+								t.t( store.remove("Bart"));
+								t.t( store.remove("Ned"));
+								t.f( !!store.get("Bart") );
+								t.f( !!store.get("Ned") );
+
+								// Range includes: Patty, Rod, Root, Selma
+								keyRange = KeyRange.bound("Patty","Selma");
+								t.t( store.remove(keyRange));
+								t.f( !!store.get("Patty") );
+								t.f( !!store.get("Selma") );
+
+								t.is(max-6, store.count());
+
+								// destroy store.
+								store.destroy();
+							}
 						}
+
 					]);
 
 					ready( function () {

@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Store Cursors</title>
+    <title>Store Ranges</title>
     <style type="text/css">
       @import "../../dijit/themes/claro/claro.css";
       @import "../../dijit/themes/claro/document.css";
@@ -34,16 +34,14 @@
         "store/_base/_Store",
         "store/_base/_Indexed",
         "store/_base/Keys",
-        "store/_base/KeyRange",
-				"store/error/createError!store/error/StoreErrors.json"
+        "store/_base/KeyRange"
         ], function( doh, declare, lang, QueryResults, ready,
-											_Store, _Indexed, Keys, KeyRange, createError ) {
+											_Store, _Indexed, Keys, KeyRange ) {
 					"use strict";
 					
 					// IMPORTANT:
 					//		Don't change the number of records without updating any of
 					//		the range and count tests.
-					var StoreError = createError("store00");
 					var data = [
 						{ "name":"Root", "parent":[], "hair":"none" },
 						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
@@ -62,8 +60,32 @@
 						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
 						{ "name":"Manjula", "age":40, "parent":"Apu", "hair":"brown"}
 					];
+					var undef;
 					
 					doh.register("Store and Index Ranges", [
+						{
+							name: "Key Range Properties",
+							runTest:function (t) {
+								var keyRange, range;
+
+								keyRange = KeyRange.only("a");
+								t.is ("a", keyRange.lower);
+								t.is ("a", keyRange.upper);
+								
+								t.e( Error, KeyRange, "only", [] );
+								t.e( Error, KeyRange, "only", [null] );
+								t.e( Error, KeyRange, "lowerBound", [] );
+								t.e( Error, KeyRange, "lowerBound", [null] );
+								t.e( Error, KeyRange, "upperBound", [] );
+								t.e( Error, KeyRange, "upperBound", [null] );
+								t.e( Error, KeyRange, "bound", [] );
+								t.e( Error, KeyRange, "bound", [null] );
+								t.e( Error, KeyRange, "bound", ["a"] );
+								t.e( Error, KeyRange, "bound", [undef,"a"] );
+								t.e( Error, KeyRange, "bound", ["a",0] );			// String > Number
+							}
+						},
+						
 						{
 							name: "Iterate store, NO key path, NO key generator",
 							runTest:function (t) {
@@ -79,8 +101,56 @@
 								data.forEach( function (object, idx) {
 									var key = store.add( object, {key: idx+100} );
 								});
+
+								keyRange = KeyRange.bound(1,2);
+								store.get( keyRange );
+								
+								store.destroy();
+							}
+						},
+						
+						{
+							name: "Store with mixed keys",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ({keyPath:null});
+								var date  = new Date();
+								var keyRange, range;
+								
+								store.add( {name:"Bart"}, {key:""} );
+								store.add( {name:"Lisa"}, {key:"Lisa"} );
+								store.add( {name:"Marge"}, {key:"Marge"} );
+								store.add( {name:"Maggie"}, {key: date} );
+								store.add( {name:"Todd"}, {key: [1]} );
+								store.add( {name:"Rod"}, {key: [2]} );
+								store.add( {name:"Homer"}, {key:10} );
+								store.add( {name:"Abe"}, {key:0} );
+
+								// Test record order: Number > Date > String > Array
+								var range = store.getRange();
+								t.is( 8,range.length );
+								t.is("Abe", range[0].name);
+								t.is("Homer", range[1].name);
+								t.is("Maggie", range[2].name);
+								t.is("Bart", range[3].name);
+								t.is("Lisa", range[4].name);
+								t.is("Marge", range[5].name);
+								t.is("Todd", range[6].name);
+								t.is("Rod", range[7].name);
+
+								keyRange = KeyRange.bound("",[]);
+								var range = store.getRange(keyRange);
+								t.is( 3,range.length );
+								t.is("Bart", range[0].name);
+								t.is("Lisa", range[1].name);
+								t.is("Marge", range[2].name);
+
+								store.destroy();
 							}
 						}
+						
+
+
 					]);
 
 					ready( function () {
@@ -95,6 +165,6 @@
   </head>
 
   <body class="claro">
-    <h1 class="DemoTitle">Store Cursors</h1>
+    <h1 class="DemoTitle">Store Ranges</h1>
   </body>
 </html>

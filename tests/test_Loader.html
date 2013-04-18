@@ -68,6 +68,25 @@
 						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
 						{ "name":"Manjula", "age":40, "parent":"Apu", "hair":"brown"}
 					];
+
+					var data_error = [
+						{ "name":"Root", "parent":[], "hair":"none" },
+						{ "name":"Root", "age":65, "parent":["Root"], "hair":"none" },
+						{ "name":"Root", "age":65, "parent":["Root"], "hair":"none" },
+						{ "name":"Root", "age":63, "parent":["Root"], "hair":"none" },
+						{ "name":"Root", "age":42, "parent":["Abe","Mona"], "hair":"none" },
+						{ "name":"Root", "age":35, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Root", "age":40, "parent":["Root"], "hair":"none" },
+						{ "name":"Root", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Root", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Root", "age":2, "parent":["Homer","Marge"], "hair":"black" },
+						{ "name":"Root", "age":37, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Root", "age":38, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Root", "age":9, "parent":["Ned"], "hair":"blond" },
+						{ "name":"Root", "age":8, "parent":["Ned"], "hair":"blond" },
+						{ "name":"Root", "age":40, "parent":["Root"], "hair":"black" },
+						{ "name":"Root", "age":40, "parent":"Apu", "hair":"brown"}
+					];
 					var undef;
 					
 					doh.register("Store Loader", [
@@ -446,6 +465,30 @@
 									}
 								);
 								return defer;
+							}
+						},
+
+						{
+							name: "Load error limit test",
+							timeout: 1000,
+							runTest:function (t) {
+								var Store = declare( [_Store, _Natural, _Loader]);
+								var store = new Store ( {autoLoad: false, keyPath:"name", maxErrors: 5});
+								var defer = new doh.Deferred();
+
+								// Try to load the faulty dataset (all same name -> too many Constraint errors)
+								var request = store.load( {data:data_error});
+								request.then( function() {
+										defer.errback(
+											new StoreError("InvalidAccess", "loader", "Unexpect result, store shouldn't load.")
+										);
+									},
+									defer.getTestCallback( 
+										function (err) {
+											t.is( "DataError", err.name );
+										}
+									)
+								);
 							}
 						}
 

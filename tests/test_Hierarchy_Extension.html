@@ -38,14 +38,12 @@
         "store/_base/Keys",
         "store/_base/KeyRange",
         "store/_base/Range",
-				"store/error/createError!store/error/StoreErrors.json",
 				"store/extension/Hierarchy"
         ], function( doh, declare, lang, QueryResults, ready,
 											_Store, _Indexed, _Loader, _Natural, Keys, KeyRange, 
-											Range, createError,	Hierarchy ) {
+											Range, Hierarchy ) {
 					"use strict";
 					
-					var StoreError = createError("store");
 					// IMPORTANT:
 					//		Don't change the number of records without updating any of
 					//		the range and count tests.
@@ -78,6 +76,8 @@
 								var Store = declare( [_Store, _Indexed, Hierarchy]);
 								var store = new Store ({autoIncrement:true});
 
+								t.t(store.features.has("hierarchy"));
+								
 								// Test for default values.
 								t.t(store.name != "" || store.name == null);
 								t.is(true, store.autoIncrement);
@@ -327,6 +327,84 @@
 								return defer;
 							}
 						},
+
+						{
+							name: "Get Parents",
+							timeout: 1000,
+							runTest: function (t) {
+								var Store = declare( [_Store, _Natural, _Loader, Hierarchy]);
+								var store = new Store ({data:data, keyPath:"name"});
+								var defer = new doh.Deferred();
+								var max   = data.length;
+
+								store.ready(
+									defer.getTestCallback( 
+										function (store) {
+											var results = store.getRange();		// Get all records
+
+											results.forEach( function (obj) {
+												var parentsProp = obj["parent"];
+												var parents = store.getParents(obj);
+												t.is( parentsProp.length, parents.length );
+												parents.forEach( function (parent) {
+													var key = store.getIdentity(parent);
+													t.t( Keys.indexOf(parentsProp, key) !=  -1);
+												});
+											});
+
+											store.destroy();
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}
+								);
+								return defer;
+							}
+						},
+
+						{
+							name: "Remove Parents",
+							timeout: 1000,
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy]);
+								var store = new Store ({data:data, keyPath:"name"});
+								var defer = new doh.Deferred();
+								var max   = data.length;
+
+								store.ready(
+									defer.getTestCallback( 
+										function (store) {
+											var results = store.getRange();		// Get all records
+											var index   = store.index("parents");
+
+											results.forEach( function (obj) {
+												var parentsProp = obj["parent"];
+												if (parentsProp.length > 1) {
+													var parent   = parentsProp[parentsProp.length-1];
+													var oldChild = index.getKeyRange(parent);
+													var objKey   = store.getIdentity(obj);
+													t.t( store.removeParent(obj, parent));
+
+													var curChild = index.getKeyRange(parent);
+													if (curChild.length) {
+														t.t( Keys.indexOf(oldChild,objKey) != -1);
+														t.t( Keys.indexOf(curChild,objKey) == -1);
+													}
+												}
+											});
+
+
+											store.destroy();
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}
+								);
+								return defer;
+							}
+						}
 
 					]);
 

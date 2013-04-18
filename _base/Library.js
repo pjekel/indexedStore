@@ -1,12 +1,11 @@
 //
-// Copyright (c) 2012-2013, Peter Jekel
+// Copyright (c) 2013, Peter Jekel
 // All rights reserved.
 //
-//	The Checkbox Tree (cbtree) is released under to following three licenses:
+//	The IndexedStore is released under to following two licenses:
 //
-//	1 - BSD 2-Clause								(http://thejekels.com/cbtree/LICENSE)
-//	2 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	3 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
 define(["../error/createError!../error/StoreErrors.json"], function (createError) {
@@ -122,7 +121,7 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			}
 		},
 
-		getProp: function (/*String*/ propPath,/*Object|Array*/ object,/*Boolean*/ required ) {
+		getProp: function (/*String*/ propPath,/*Object|Array*/ object ) {
 			// summary:
 			//		Return property value identified by a dot-separated property path
 			// propPath:
@@ -143,6 +142,15 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			throw new StoreError("TypeError", "getProp", "paramter 'object' must be an object or array");
 		},
 
+		isDirection: function ( direction ) {
+			switch (direction) {
+				case "next": case "nextunique":
+				case "prev": case "prevunique":
+					return true;
+			}
+			return false;
+		},
+	
 		isEmpty: function (o) {
 			// summary:
 			//		Return true if object is empty otherwise false.

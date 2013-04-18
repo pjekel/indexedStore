@@ -2,10 +2,10 @@
 // Copyright (c) 2013, Peter Jekel
 // All rights reserved.
 //
-//	The indexedStore is released under to following two licenses:
+//	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License			 (http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License	 (http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
 define(["exports", 
@@ -63,6 +63,12 @@ define(["exports",
 		//		Second valid indexedDB key.
 		// returns:
 		//		-1, 0 or 1
+		// NOTE:
+		//		When comparing dates the time portion of the date objects is ignored.
+		//		If the time is relevant call cmp() as follows:
+		//
+		//			cmp( date1.getTime(), date2.getTime() )
+		//
 		// tag:
 		//		Public.
 
@@ -71,13 +77,13 @@ define(["exports",
 		var keyB = key2 != undef ? key2 : null;
 
 		// Explicitly test for null so comparing the 'empty string' works correct.
-		if (keyA !== null && keyB !== null) {
+		if (keyA != null && keyB != null) {
 			if (keyA instanceof Array || keyB instanceof Array) {
 				if (!(keyA instanceof Array)) return -1;
 				if (!(keyB instanceof Array)) return 1;
 				return cmpAry( keyA, keyB );	// Perform deep array comparison.
 			}
-			if (typeof keyA === typeof keyB) {
+			if (typeof keyA == typeof keyB) {
 				if (keyA < keyB) return -1;
 				if (keyA > keyB) return 1;
 				return 0;
@@ -118,44 +124,39 @@ define(["exports",
 		//		last record.
 		// tag:
 		//		Public
-		var records = source._records;
+		var records = source ? source._records : [];
 		var max     = records.length;
+
+		if (key == undef) {
+			return type == "lower" ? 0 : max;
+		}
+		
+		var entry = exports.search(source, key);
+		var index = entry.eq >= 0 ? entry.eq : entry.gt;
 		var result;
-
-		if (key) {
-			var entry = exports.search(source, key);
-			var index = entry.eq >= 0 ? entry.eq : entry.gt;
-			for( ; index < max; index++) {
-				result = exports.cmp( key, records[index].key );
-				switch (type) {
-					case "lower":
-						if (result == 0 && !open) {
-							return index;
-						}
-						if (result < 0) {
-							return index;
-						}
-						continue;
-
-					case "upper":
-						if (result == 0 && open) {
-								return index-1;
-						}
-						if (result < 0) {
-							return index-1;
-						}
-						continue;
-				}
-			}
-			return max;
-		} else {
+		for( ; index < max; index++) {
+			result = exports.cmp( key, records[index].key );
 			switch (type) {
 				case "lower":
-					return 0;
+					if (result == 0 && !open) {
+						return index;
+					}
+					if (result < 0) {
+						return index;
+					}
+					continue;
+
 				case "upper":
-					return max;
+					if (result == 0 && open) {
+							return index-1;
+					}
+					if (result < 0) {
+						return index-1;
+					}
+					continue;
 			}
 		}
+		return max;
 	};
 
 	exports.getKey = function (/*Store*/ store,/*Object*/ value,/*any?*/ key ) {
@@ -173,14 +174,14 @@ define(["exports",
 
 		var inline = false;
 		if (store.keyPath != undef) {
-			if (key) {
+			if (key != undef) {
 				throw new StoreError("DataError", "getKey", "both keyPath and optional key specified");
 			}
 			if (key = exports.keyValue(store.keyPath, value)) {
 				inline = true;
 			}
 		}
-		if (key) {
+		if (key != undef) {
 			if (exports.validKey(key)) {
 				if (store.autoIncrement && typeof key == "number") {
 					if (key >= store._autoIndex) {
@@ -188,7 +189,7 @@ define(["exports",
 					}
 				}
 			} else {
-				throw new StoreError("TypeError", "getKey", "invalid key value: [%{0}]", key);
+				throw new StoreError("DataError", "getKey", "invalid key value: [%{0}]", key);
 			}
 		} else {
 			if (!store.autoIncrement) {
@@ -221,9 +222,10 @@ define(["exports",
 		// tag:
 		//		Public
 
-		function Range (source, first, last) {
-			// Compose a Range object.
-			var max  = source ? source._records.length : 0;
+		function Range (/*Index|Store*/ source,/*Number*/ first,/*Number*/ last) {
+			// summary:
+			// 		Compose a Range object.
+			var max  = source._records.length;
 			var last = Math.min(last, max);
 			
 			if (last >= 0 && (first > -1 && first <= last && first < max)) {
@@ -240,38 +242,45 @@ define(["exports",
 			this.source = source;
 		}
 
-		var records = source ? source._records : null;
-		var first = -1, last = -1;
+		if (source) {
+			var records = source._records;
+			var first = -1, last = -1;
 
-		if (keyRange && records.length) {
-			first = exports.boundary( source, keyRange.lower, "lower", keyRange.lowerOpen);
-			last  = exports.boundary( source, keyRange.upper, "upper", keyRange.upperOpen);
+			if (keyRange && records.length) {
+				first = exports.boundary( source, keyRange.lower, "lower", keyRange.lowerOpen);
+				last  = exports.boundary( source, keyRange.upper, "upper", keyRange.upperOpen);
+			}
+			return new Range(source, first, last);		// return a range object
 		}
-		return new Range(source, first, last);		// return a range object
+		throw new StoreError("ParameterError", "getRange");
 	};
 
-	exports.indexOf = function (/*Key[]*/ keyArray,/*Key*/ key) {
+	exports.indexOf = function (/*Key[]*/ keyArray,/*Key*/ key,/*Number?*/ fromIndex) {
 		// summary:
-		//		Returns the first index at which a given element can be found in an
-		//		array of keys, or -1 if it is not present.
+		//		Returns the first index at which a given key can be found in the key
+		//		array, or -1 if it is not present.
 		// keyArray:
-		//		Array to search in.
+		//		Array to search.
 		// key:
 		//		Key to locate in the array.
+		// fromIndex:
+		//		The location in keyArray to start the search from. fromIndex can be
+		//		an integer between 0 and the length of keyArray. The default is 0.
 		// returns:
-		//		First index if found otherwise -1.
+		//		If found the zero based location otherwise -1.
 		// tag:
 		//		Public
-		var index = -1;
-		if (key && keyArray instanceof Array) {
-			keyArray.some( function(aryKey, idx) {
-				if (!exports.cmp(key, aryKey)) {
-					index = idx;
-					return true;
+		var idx = Number(fromIndex) || 0;
+		
+		if (key != undef && keyArray instanceof Array) {
+			var max = keyArray.length;
+			for(; idx < max; idx++) {
+				if (!exports.cmp(key, keyArray[idx])) {
+					return idx;
 				}
-			});
+			}
 		}
-		return index;
+		return -1;
 	};
 	
 	exports.inRange = function (/*any*/ key, /*KeyRange*/ keyRange) {
@@ -294,13 +303,14 @@ define(["exports",
 		//		Public
 
 		if (exports.validKey(key)) {
-			var lwKey = keyRange.lower || "";
-			var upKey = keyRange.upper || "";
-			var lower = exports.cmp(lwKey, key);
-			var upper = exports.cmp(upKey, key);
+			if (keyRange.lower == undef && keyRange.upper == undef) {
+				return true;
+			}
+			var lower = keyRange.lower != undef ? exports.cmp(keyRange.lower, key) : -1;
+			var upper = keyRange.upper != undef ? exports.cmp(keyRange.upper, key) : 1;
 
-			if ( ((lwKey == "" || lower < 0) || (lower == 0 && !keyRange.lowerOpen)) &&
-					 ((upKey == "" || upper > 0) || (upper == 0 && !keyRange.upperOpen)) ) {
+			if ( ((keyRange.lower == undef || lower < 0) || (lower == 0 && !keyRange.lowerOpen)) &&
+					 ((keyRange.upper == undef || upper > 0) || (upper == 0 && !keyRange.upperOpen)) ) {
 				return true;
 			}
 		}
@@ -336,39 +346,28 @@ define(["exports",
 		}
 	};
 
-	exports.purgeKey = function ( keyValue ) {
+	exports.purgeKey = function (/*Key||Key[]*/ keyValue ) {
 		// summary:
-		//		Remove all non-numeric properties and duplicate values from an key
-		//		value array.
+		//		If keyValue is an array, remove all invalid and duplicate	key values.
 		// keyValue:
-		//		Key value array to purge.
+		//		Key value or key value array.
+		// returns:
+		//		keyValue purged.
 		// tag:
 		//		Public
 		if (keyValue instanceof Array) {
-			var unique = [];
-			keyValue = keyValue.filter(function(item) {
-				if (item && exports.indexOf(unique,item) == -1) {
-					return unique.push(item);
+			var max = keyValue.length, i = 0, key;
+			while ( i < max ) {
+				key = keyValue[i];
+				if (!exports.validKey(key) || exports.indexOf(keyValue, key) != i) {
+					keyValue.splice(i,1);
+					max--;
+				} else{
+					i++;
 				}
-			});
+			}
 		}
 		return keyValue;
-	};
-
-	exports.rangeToLocation = function (range) {
-		// summary:
-		//		Convert a range object to a location object. The location of the first
-		//		record in the range is returned.
-		// range:
-		//		The Range object to be converted.
-		// tag:
-		//		Public
-
-		if (range && range.record) {
-			// return the location of the first record.
-			return exports.search( range.source, range.record.key );
-		}
-		return new Location (range.source);
 	};
 
 	exports.search = function search (/*Index|Store*/ source, /*any*/ key ) {
@@ -385,33 +384,41 @@ define(["exports",
 		//		Public
 		var records = source._records;
 
-		if (records && records.length) {
-			var lb = 0, ub = records.length;		// Set boundaries
-			var idx, rc;
+		if (key != undef) {
+			if (records && records.length) {
+				var lb = 0, ub = records.length;		// Set boundaries
+				var idx, rc;
 
-			do {
-				idx = lb + Math.floor((ub-lb)/2);
-				rc  = exports.cmp( key, records[idx].key )
-				switch (rc) {
-					case 0:
-						return new Location( source, idx-1, idx, idx+1 );
-					case 1:
-						lb = idx + 1;
-						break;
-					case -1:
-						ub = idx;
-						break;
-				}
-			} while (lb < ub);
-			return new Location( source, (rc < 0 ? idx-1 : idx), -1, (rc < 0 ? idx : idx + 1));
+				do {
+					idx = lb + Math.floor((ub-lb)/2);
+					rc  = exports.cmp( key, records[idx].key )
+					switch (rc) {
+						case 0:
+							return new Location( source, idx-1, idx, idx+1 );
+						case 1:
+							lb = idx + 1;
+							break;
+						case -1:
+							ub = idx;
+							break;
+					}
+				} while (lb < ub);
+				return new Location( source, (rc < 0 ? idx-1 : idx), -1, (rc < 0 ? idx : idx + 1));
+			}
 		}
 		return new Location(source);
 	};
 
 	exports.sort = function (/*Array*/ keys, /*Boolean*/ ascending) {
 		// summary:
+		//		Sort an array of keys. If keys are an array a deep array comparison
+		//		is performed. In accordance with the W3C IndexedDB specs, the rule:
+		//		(Array > String > Date > Number) is applied while sorting keys.
 		// keys:
+		//		Array of keys.
 		// ascending:
+		//		If true, the keys are sorted in ascending order otherwise the	keys
+		//		are sorted in descending order.
 		// tag:
 		//		Public
 		if (keys instanceof Array) {
@@ -433,7 +440,7 @@ define(["exports",
 		// key:
 		//		Optional, key
 		// returns:
-		//		True if store operation would succeed otherwise false.
+		//		Boolean true if store operation would succeed otherwise false.
 		// tag:
 		//		Private
 
@@ -455,12 +462,13 @@ define(["exports",
 		return true;
 	},
 	
-	exports.toUpperCase = function (/*Key*/ keyValue ) {
+	exports.toUpperCase = function (/*Key*/ key ) {
 		// summary:
 		//		Convert a key value to uppercase.
 		// keyValue:
 		// tag:
 		//		Public
+		var keyValue = Lib.clone(key);
 		if (keyValue) {
 			if (keyValue instanceof Array) {
 				keyValue = keyValue.map( exports.toUpperCase );
@@ -487,8 +495,8 @@ define(["exports",
 				return key.every( exports.validKey );
 			}
 			return (key instanceof String || typeof key === "string" ||
-							 typeof key === "number" ||
-							 key instanceof Date);
+							 (typeof key === "number" && !isNaN(key)) ||
+							 (key instanceof Date && !isNaN(key.getTime())));
 		}
 		return false;
 	};
@@ -506,21 +514,24 @@ define(["exports",
 		
 		function splitPath (keyPath) {
 			if (typeof keyPath == "string") {
-				var properties = keyPath.split(".");
-				return properties.every( function (prop) {
-					return (/^[_$A-Za-z]/.test(prop) && !/\s/.test(prop));
-				});
+				if (keyPath != "") {
+					var properties = keyPath.split(".");
+					return properties.every( function (prop) {
+						return (/^[_$A-Za-z]/.test(prop) && !/\s/.test(prop));
+					});
+				}
+				return true;
 			}
 			return false;
 		}
 		
-		if (keyPath != "") {
+		if (keyPath != undef) {
 			if (keyPath instanceof Array) {
 				return keyPath.every( splitPath );
 			}
 			return splitPath(keyPath);
 		}
-		return true;
+		return false;
 	};
 
 	return exports;

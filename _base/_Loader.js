@@ -1,12 +1,11 @@
 //
-// Copyright (c) 2012-2013, Peter Jekel
+// Copyright (c) 2013, Peter Jekel
 // All rights reserved.
 //
-//	The Checkbox Tree (cbtree) is released under to following three licenses:
+//	The IndexedStore is released under to following two licenses:
 //
-//	1 - BSD 2-Clause								(http://thejekels.com/cbtree/LICENSE)
-//	2 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	3 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
 define(["dojo/_base/declare",
@@ -16,12 +15,13 @@ define(["dojo/_base/declare",
 				"dojo/Stateful",
 				"dojo/request/handlers",
 				"dojo/store/util/QueryResults",
+				"../_base/Keys",
 				"../_base/Library",
 				"../dom/event/Event",
 				"../error/createError!../error/StoreErrors.json",
 				"../util/QueryEngine"
 			 ], function (declare, lang, Deferred, request, Stateful, handlers,
-										 QueryResults, Lib, Event, createError, QueryEngine) {
+										 QueryResults, Keys, Lib, Event, createError, QueryEngine) {
 	
 	// module:
 	//		store/_base/_Loader
@@ -106,6 +106,11 @@ define(["dojo/_base/declare",
 		//		the handleAs property defaults to "json".
 		handleAs: null,
 
+		// maxErrors: Number
+		//		The maximum number of data errors that may occur before a load request
+		//		is aborted.
+		maxErrors: 50,
+		
 		// progress: Boolean
 		//		If true, the loader reports progress.
 		progress: false,
@@ -303,7 +308,7 @@ define(["dojo/_base/declare",
 			var max   = data.length;
 			var clone = this._clone;
 			var store = this;
-			var i;
+			var key, i, errors = 0;
 
 			if (debug) {Lib.debug( "Start loading store" );	}
 			
@@ -318,11 +323,26 @@ define(["dojo/_base/declare",
 						store._clone = false;
 					}
 					for (i = 0; i < max; i++) {
-						store._storeRecord( data[i] );
-						// Report progress every 500 records.
-						if (store.progress && !(i % 500)) {
-							store._loadProgress(max, i, defer);
+						try {
+							store._storeRecord( data[i] );
+							// Report progress every 500 records.
+							if (store.progress && !(i % 500)) {
+								store._loadProgress(max, i, defer);
+							}
+						} catch(err) {
+							if (store.maxErrors > 0 && errors++ < store.maxErrors) {
+								// Don't keep pounding the console, display the first 25 errors....
+								if (errors < 25) {
+									key = Keys.getKey( store, data[i] );
+									console.warn("Failed to add object #"+i+", key: ["+key+"]: "+err.name);
+								}
+							} else {
+								throw new StoreError("DataError", "_loadData", "error limit exceeded");
+							}
 						}
+					}
+					if (errors >= 25) {
+						console.warn( errors - 25, " more objects failed.");
 					}
 					store.dispatchEvent( new Event ("loadEnd", {detail:{store:this}}) );
 					store._loadProgress(100, 100, defer);

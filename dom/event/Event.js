@@ -1,12 +1,13 @@
 //
-// Copyright (c) 2012, Peter Jekel
+// Copyright (c) 2012-2013, Peter Jekel
 // All rights reserved.
 //
-//	The indexedDB implementation is released under to following two licenses:
+//	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License			 (http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License	 (http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
+
 define(["dojo/_base/lang",
 				"../../error/createError!../../error/StoreErrors.json"
 			 ], function(lang, createError){
@@ -52,38 +53,6 @@ define(["dojo/_base/lang",
 
 		defineProperty (this, "date", {writable:false});
 		defineProperty (this, "isTrusted", {writable:false});
-
-		this.dispatch = function (/*EventTarget*/ target, /*EventTargets[]?*/ propagationPath) {
-			// summary:
-			//		Dispatch an event at a specific event target. If the target parameter
-			//		is omitted the current target of the event ('this') is used. The event
-			//		target MUST have a DOM Level 3 style dispatchEvent method.
-			// target:
-			//		The event target.
-			// propagationPath:
-			//		The event propagation path.
-			//
-			// NOTE:
-			//		This method is not part of the DOM specification and provided for
-			//		convenience only to allow:
-			//
-			//			new Event("myType").dispatch(target);
-			//
-			// tag:
-			//		Public
-			var target = target || this.target;
-
-			if (target) {
-				// Make sure the target has an event dispatcher.
-				if (target.dispatchEvent) {
-					target.dispatchEvent( this, propagationPath );
-				} else {
-					throw new StoreError("MethodMissing", "dispatch", "Event target has no event dispatcher.");
-				}
-			} else {
-				throw new StoreError( "Parameter", "dispatch", "no target for event");
-			}
-		}
 
 		this.initEvent = function (type, bubbles, cancelable, detail) {
 			// summary:

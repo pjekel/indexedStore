@@ -1,12 +1,11 @@
 //
-// Copyright (c) 2012-2013, Peter Jekel
+// Copyright (c) 2013, Peter Jekel
 // All rights reserved.
 //
-//	The Checkbox Tree (cbtree) is released under to following three licenses:
+//	The IndexedStore is released under to following two licenses:
 //
-//	1 - BSD 2-Clause								(http://thejekels.com/cbtree/LICENSE)
-//	2 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	3 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
 define(["dojo/_base/declare",
@@ -94,7 +93,7 @@ define(["dojo/_base/declare",
 		//===================================================================
 		// IndexedDB procedures
 
-		_deleteKeyRange: function (/*any*/ key ) {
+		_deleteKeyRange: function (/*KeyRange|Key*/ key ) {
 			// summary:
 			//		Remove all records from store whose key is in the key range.
 			// key:
@@ -106,33 +105,30 @@ define(["dojo/_base/declare",
 			//		Private
 
 			var deleted = false;
-			var event, record;
+			var record;
 			
 			if( !(key instanceof KeyRange)) {
 				var locator = this._retrieveRecord(key);
 				if (locator.record) {
-					event   = new Event("delete", {detail:{item: locator.record.value}});
 					deleted = this._deleteRecord( locator.record, locator.eq );
-					if (deleted) {
-						this.dispatchEvent(event);
-					}
 				}
 			} else {
-				var recIdx = this._getRecNum(key);
-				if (recIdx.length) {
+				var range = this._getInRange(key);
+				if (range.length) {
 					// Sort the record numbers in descending order.
-					recIdx = recIdx.sort( function (a,b) {return b-a;} );
-					recIdx.forEach( function (index) {
-						record = this._records.splice( index, 1 )[0];
-						event  = new Event("delete", {detail:{item: record.value, at:-1, from:index}});
-						record.destroy();
-						this.dispatchEvent(event);
+					range = range.sort( function (a,b) {return b-a;} );
+					range.forEach( function (index) {
+						record = this._records[index];
+						this._deleteRecord( record, index );
 						deleted = true;
+
 					}, this );
-					this._reindex();	// re-index once.
 				}
 			}
-			return !!deleted;
+			if (deleted) {
+				this._reindex();
+			}
+			return deleted;
 		},
 
 		_deleteRecord: function (/*Record*/ record, /*Number*/ recNum ) {
@@ -144,25 +140,28 @@ define(["dojo/_base/declare",
 			//		Record number (index).
 			// tag:
 			//		Private
-			if (record && typeof recNum == "number") {
-				try {
-					this._removeFromIndex(record);
-				} catch (err) {
-					throw new StoreError( err, "_deleteRecord" );
-				} finally {
-					// Make sure we destroy the real store record and not a clone.
-					record = this._records.splice( recNum, 1 )[0];
-					record.destroy();
-					this._reindex();
-					return true;
+
+			try {
+				this._removeFromIndex(record);
+				return true;
+			} catch (err) {
+				throw new StoreError( err, "_deleteRecord" );
+			} finally {
+				// Make sure we destroy the real store record and not a clone.
+				var record = this._records.splice( recNum, 1 )[0];
+				var value  = record.value;
+				record.destroy();
+				if (!this.suppressEvents) {
+					var event  = new Event("delete", {detail:{item: value, at:-1, from:recNum}});
+					this.dispatchEvent(event);
 				}
 			}
 			return false;
 		},
 
-		_getRecNum: function (/*KeyRange*/ keyRange) {
+		_getInRange: function (/*KeyRange*/ keyRange) {
 			// summary:
-			//		Get a the record numbers of all records within the key range. 
+			//		Get the record numbers of all records within the key range. 
 			//		Note: on large datasets this can be expensive in terms of
 			//		performance.
 			// keyRange:
@@ -255,14 +254,14 @@ define(["dojo/_base/declare",
 			//		Key identifying the record to be retrieved. The key arguments can also
 			//		be an KeyRange.
 			// returns:
-			//		A location object. (see the ./util/Keys module for detais).
+			//		A location object. (see the ./_base/Location module for detais).
 			// tag:
 			//		Private
 			var recNum, max = this._records.length;
 
 			if (key != undef) {
 				if (key instanceof KeyRange) {
-					recNum = this._getRecNum(key)[0];
+					recNum = this._getInRange(key)[0];
 					if (recNum == undef) {
 						return new Location( this, max-1, -1, max );
 					}
@@ -316,13 +315,20 @@ define(["dojo/_base/declare",
 			//		Record key.
 			// tag:
 			//		Private
-			var curRec, newRec, event, before;
-			var optKey, overwrite = true;
+			var curRec, newRec, event, before, cb, at, i;
+			var optKey, overwrite = false;
 			
 			if (options) {
-				overwrite = "overwrite" in options ? !!options.overwrite : true;
-				optKey    = options.key || options.id || null;
-				before    = options.before ? this._anyToRecord(options.before) : null;
+				overwrite = "overwrite" in options ? !!options.overwrite : false;
+				optKey    = options.key != undef ? options.key : (options.id != undef ? options.id : null);
+				before    = options.before || null;
+				
+				if (before) {
+					if (isObject(before)) {
+						before = this.getIdentity(before);
+					}
+					before = this._retrieveRecord(before);
+				}
 			}
 
 			// Test if the primary key already exists.
@@ -331,7 +337,7 @@ define(["dojo/_base/declare",
 			var locator  = this._retrieveRecord(keyVal);
 			var location = {at: locator.eq, from:locator.eq};
 			var curRec   = locator.record;
-			var at       = locator.eq;
+			var curAt    = locator.eq;
 			
 			if (curRec) {
 				if (!overwrite) {
@@ -339,8 +345,12 @@ define(["dojo/_base/declare",
 				}
 				this._removeFromIndex( curRec );
 			}
-
-			value = callback ? callback.call( this, keyVal, value, options) : value;
+			// Check if any extension added a callback.
+			if (cb = this._callback) {
+				for (i = 0; i < cb.length; i++) {
+					cb[i].call(this, keyVal, curAt, value, (curRec ? curRec.value : null), options);
+				}
+			}
 			try {
 				value  = this._clone ? clone(value) : value;
 				newRec = new Record( keyVal, value );
@@ -349,10 +359,10 @@ define(["dojo/_base/declare",
 			}
 
 			if (before && before.record) {
-				this._moveRecord(newRec, at, before.eq);
+				this._moveRecord(newRec, curAt, before.eq);
 				location.at = before.eq;
 			} else {
-				at = curRec ? at : this._records.length;
+				at = curRec ? curAt : this._records.length;
 				if (curRec) {
 					this._records[at] = newRec;
 				} else {
@@ -394,7 +404,7 @@ define(["dojo/_base/declare",
 			this._assertStore( this, "count" );
 			if (key != undef) {
 				if (key instanceof KeyRange) {
-					return this._getRecNum(key).length;
+					return this._getInRange(key).length;
 				}
 				return (this.get(key) ? 1 : 0);
 			}

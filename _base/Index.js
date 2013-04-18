@@ -1,12 +1,13 @@
 //
-// Copyright (c) 2012, Peter Jekel
+// Copyright (c) 2013, Peter Jekel
 // All rights reserved.
 //
-//	The indexedDB implementation is released under to following two licenses:
+//	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License			 (http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License	 (http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
+
 define(["dojo/_base/lang",
 				"dojo/Deferred",
 				"dojo/store/util/QueryResults",
@@ -45,15 +46,6 @@ define(["dojo/_base/lang",
 	var isObject = Lib.isObject;
 	var debug = dojo.config.isDebug || false;
 	var undef;
-	
-	function isDirection( direction ) {
-		switch (direction) {
-			case "next": case "nextunique":
-			case "prev": case "prevunique":
-				return true;
-		}
-		return false;
-	}
 	
 	function Index (/*Store*/ store, /*DOMString*/ name, /*any*/ keyPath, /*Object*/ optionalParameters) {
 		// summary:
@@ -149,17 +141,6 @@ define(["dojo/_base/lang",
 			} finally {
 				delete index.loading;
 			}
-		}
-
-		function isDirection( value ) {
-			switch (value) {
-				case "next":
-				case "nextunique":
-				case "prev":
-				case "prevunique":
-					return true;
-			}
-			return false;
 		}
 
 		function onStoreEvent (evt) {
@@ -489,7 +470,7 @@ define(["dojo/_base/lang",
 			//		Public
 
 			if (arguments.length) {
-				if (isDirection(arguments[0])) {
+				if (Lib.isDirection(arguments[0])) {
 					direction  = arguments[0];
 					duplicates = arguments[1];
 					keyRange   = undef;
@@ -519,7 +500,7 @@ define(["dojo/_base/lang",
 			//		Public
 
 			if (arguments.length) {
-				if (isDirection(arguments[0])) {
+				if (Lib.isDirection(arguments[0])) {
 					direction  = arguments[0];
 					duplicates = arguments[1];
 					keyRange   = undef;
@@ -556,18 +537,11 @@ define(["dojo/_base/lang",
 			//		Public
 
 			// If there's only argument test if it is the 'direction'...
-			if (arguments.length == 1 && isDirection(arguments[0])) {
+			if (Lib.isDirection(arguments[0])) {
 				direction = arguments[0];
 				range = undef;
 			} else {
 				assertKey( this, range );
-			}
-			if (!(range instanceof KeyRange)) {
-				if (range != undef) {
-					range = KeyRange.only( range );
-				} else {
-					range = null;
-				}
 			}
 			var cursor = new Cursor( this, range, direction, false );
 			return cursor;
@@ -593,18 +567,11 @@ define(["dojo/_base/lang",
 			//		Public
 
 			// If there's only argument test if it is the 'direction'...
-			if (arguments.length == 1 && isDirection(arguments[0])) {
+			if (Lib.isDirection(arguments[0])) {
 				direction = arguments[0];
 				range = undef;
 			} else {
 				assert( this, range );
-			}
-			if (!(range instanceof KeyRange)) {
-				if (range != undef) {
-					range = KeyRange.only( range );
-				} else {
-					range = null;
-				}
 			}
 			var cursor = new Cursor( this, range, direction, true );
 			return cursor;

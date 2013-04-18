@@ -1,12 +1,11 @@
 //
-// Copyright (c) 2012-2013, Peter Jekel
+// Copyright (c) 2013, Peter Jekel
 // All rights reserved.
 //
-//	The Checkbox Tree (cbtree) is released under to following three licenses:
+//	The IndexedStore is released under to following two licenses:
 //
-//	1 - BSD 2-Clause								(http://thejekels.com/cbtree/LICENSE)
-//	2 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	3 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
 define(["dojo/_base/declare",
@@ -15,11 +14,12 @@ define(["dojo/_base/declare",
 				"../_base/Keys",
 				"../_base/KeyRange",
 				"../_base/Library",
+				"../_base/Location",
 				"../_base/Record",
 				"../error/createError!../error/StoreErrors.json",
 				"../dom/event/Event"
 			 ], function (declare, QueryResults, Cursor, Keys, KeyRange, Lib, 
-										 Record, createError, Event) {
+										 Location, Record, createError, Event) {
 	"use strict";
 	// module:
 	//		store/_base/_Indexed
@@ -81,7 +81,7 @@ define(["dojo/_base/declare",
 		// Constructor
 
 		constructor: function () {
-			if (this.features.has("indexed")) {
+			if (this.features.has("natural")) {
 				throw new StoreError("ConstraintError", "constructor", "base class 'Natural' and 'Indexed' are mutual exclusive");
 			}
 			this.features.add("indexed");
@@ -100,21 +100,15 @@ define(["dojo/_base/declare",
 			//		be an KeyRange.
 			// tag:
 			//		Private
-			var deleted = false;
+			var i, deleted = false;
 
 			if( !(key instanceof KeyRange)) {
 				key = KeyRange.only(key);
 			}
 			var range = Keys.getRange( this, key );
 			if (range.record) {
-				var event, i;
-				
 				for (i=range.last; i >= range.first; i--) {
-					event   = new Event("delete", {detail:{item: this._records[i].value}});
 					deleted = this._deleteRecord( this._records[i], i );
-					if (deleted) {
-						this.dispatchEvent(event);
-					}
 				}
 			}
 			return !!deleted;
@@ -129,20 +123,22 @@ define(["dojo/_base/declare",
 			//		Record number (index).
 			// tag:
 			//		Private
-			var name, index;
+			try {
+				this._removeFromIndex( record );
+				return true;
+			} catch (err) {
+				throw new StoreError( err, "_deleteRecord" );
+			} finally {
+				// Make sure we destroy the real store record and not a clone.
+				var record = this._records.splice( recNum, 1 )[0];
+				var value  = record.value;
+				record.destroy();
 
-			if (record && typeof recNum == "number") {
-				try {
-					this._removeFromIndex( record );
-				} catch (err) {
-					throw new StoreError( err, "_deleteRecord" );
-				} finally {
-					// Make sure we destroy the real store record and not a clone.
-					record = this._records.splice( recNum, 1 )[0];
-					record.destroy();
-					this.total = this._records.length;
-					return true;
+				if (!this.suppressEvents) {
+					var event = new Event("delete", {detail:{item: value}});
+					this.dispatchEvent(event);
 				}
+				this.total = this._records.length;
 			}
 			return false;
 		},
@@ -183,8 +179,15 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Private
 			if (key instanceof KeyRange) {
-				return Keys.rangeToLocation( Keys.getRange(this, key) );
+				var range = Keys.getRange(this, key);
+				var first = range.first;
+				if (range.record) {
+					return new Location( this, first-1, first, first+1 );
+				} else {
+					return new Location( this );
+				}
 			}
+			key = this.uppercase ? Keys.toUpperCase(key) : key;
 			return Keys.search(this, key);
 		},
 
@@ -221,12 +224,12 @@ define(["dojo/_base/declare",
 			//		Record key.
 			// tag:
 			//		Private
-			var curRec, newRec, event;
-			var optKey, overwrite = true;
+			var curRec, newRec, event, cb, i, at;
+			var optKey, overwrite = false;
 			
 			if (options) {
-				overwrite = "overwrite" in options ? !!options.overwrite : true;
-				optKey    = options.key || options.id || null;
+				overwrite = "overwrite" in options ? !!options.overwrite : false;
+				optKey    = options.key != undef ? options.key : (options.id != undef ? options.id : null);
 			}
 
 			// Test if the primary key already exists.
@@ -234,16 +237,25 @@ define(["dojo/_base/declare",
 			var keyVal  = this.uppercase ? Keys.toUpperCase(baseVal) : baseVal;
 			var locator = this._retrieveRecord(keyVal);
 			var curRec  = locator.record;
-			var at      = locator.eq;
+			var curAt   = locator.eq;
 			
 			if (curRec) {
 				if (!overwrite) {
 					throw new StoreError("ConstraintError", "_storeRecord", "record with key [%{0}] already exist", keyVal);
 				}
 				this._removeFromIndex( curRec );
+			} else {
+				if (this.defaultProperties) {
+					this._applyDefaults( value );
+				}
 			}
 
-			value = callback ? callback.call( this, keyVal, value, options) : value;
+			// Check if any extension added a callback.
+			if (cb = this._callback) {
+				for (i = 0; i < cb.length; i++) {
+					cb[i].call(this, keyVal, curAt, value, (curRec ? curRec.value : null), options);
+				}
+			}
 			try {
 				value  = this._clone ? clone(value) : value;
 				newRec = new Record( keyVal, value );
@@ -251,7 +263,7 @@ define(["dojo/_base/declare",
 				throw new StoreError( "DataCloneError", "_storeRecord" );
 			}
 
-			at = curRec ? at : locator.gt;
+			at = curRec ? curAt : locator.gt;
 			// Index the record first in case an error occurs.
 			this._indexRecord( newRec );
 			if (curRec) {
@@ -320,24 +332,9 @@ define(["dojo/_base/declare",
 
 			this._assertKey( range, "openCursor", false );
 			// If there's only argument test if it is the 'direction'...
-			if (arguments.length == 1) {
-				switch(arguments[0]) {
-					case "next": 
-					case "nextunique": 
-					case "prev": 
-					case "prevunique":
-						direction = arguments[0];
-						range = undef;
-						break;
-				}
-			}
-
-			if (!(range instanceof KeyRange)) {
-				if (range != undef) {
-					range = KeyRange.only( range );
-				} else {
-					range = null;
-				}
+			if (Lib.isDirection(arguments[0])) {
+				direction = arguments[0];
+				range = undef;
 			}
 			var cursor  = new Cursor( this, range, direction, false );
 			return cursor;

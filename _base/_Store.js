@@ -1,12 +1,11 @@
 //
-// Copyright (c) 2012-2013, Peter Jekel
+// Copyright (c) 2013, Peter Jekel
 // All rights reserved.
 //
-//	The IndexedStore is released under to following three licenses:
+//	The IndexedStore is released under to following two licenses:
 //
-//	1 - BSD 2-Clause								(http://thejekels.com/cbtree/LICENSE)
-//	2 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	3 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
 define(["dojo/_base/declare",
@@ -28,7 +27,7 @@ define(["dojo/_base/declare",
 				"../dom/string/DOMStringList",
 				"../util/QueryEngine",
 				"../util/shim/Array"						 // ECMA-262 Array shim
-			 ], function (declare, lang, Deferred, Stateful, QueryResults, 
+			 ], function (declare, lang, Deferred, Stateful, QueryResults,
 			               FeatureList, Index, Lib, Location, Keys, KeyRange, 
 			               Range, Record, createError, Event, EventTarget, 
 			               DOMStringList, QueryEngine ) {
@@ -39,11 +38,12 @@ define(["dojo/_base/declare",
 	//		Abstract base class for the indexed store. This base class implements
 	//		the majority of both the dojo/store/api/Store API and the IndexedDB
 	//		IDBObjectStoreSync interface (http://www.w3.org/TR/IndexedDB/).
-	//		Two additional base classes are provided to build a fully functional
+	//		Three additional base classes are provided to build a fully functional
 	//		object store, they are:
 	//
 	//			1 - store/_base/_Indexed
 	//			2 - store/_base/_Natural
+	//			3 - store/_base/_Loader
 	//
 	//		_Indexed class
 	//			The base class _Indexed will organize all store records in a binary
@@ -57,6 +57,11 @@ define(["dojo/_base/declare",
 	//			This class provides support for the dojo/store/api/Store PutDirective
 	//			property 'before' but does not support cursors, only the query engine.
 	// 
+	//		_Loader:
+	//			The base class _loader adds the ability to load the store with either
+	//			in memory objects or objects retrieved using a URL. In addition, it
+	//			adds support for custom data handlers.
+	// 
 	//		The _Indexed or _Natural base classes have no effect on the store's
 	//		ability to create indexes, they merely determine the internal data
 	//		structure. Indexes are handled separate from the object store itself.
@@ -65,15 +70,10 @@ define(["dojo/_base/declare",
 	//		of extensions which will allow you to enhance the store capabilities.
 	//		Currently the following extensions are available:
 	//
-	//			- Loader
 	//			- Hierarchy
 	//			- Ancestry
 	//			- CORS
 	//
-	//		Loader:
-	//			The loader extension adds the ability to load the store with either
-	//			in memory objects or objects retrieved using a URL. In addition, it
-	//			adds support for custom data handlers.
 	//		Hierarchy:
 	//			The Hierarchy extension adds support for the dojo/store/api/Store
 	//			PutDirective 'parent'. Both single and multi parented objects are
@@ -131,9 +131,9 @@ define(["dojo/_base/declare",
 	//	|	require(["dojo/_base/declare",
 	//	|	         "store/_base/_Store",
 	//	|	         "store/_base/_Indexed",
-	//	|	         "store/extension/Loader",
+	//	|	         "store/_base/_Loader",
 	//	|	         "store/extension/Hierarchy",
-	//	|	        ], function (declare, _Store, _Indexed, Loader, Hierarchy) {
+	//	|	        ], function (declare, _Store, _Indexed, _Loader, Hierarchy) {
 	//	|	  var store = declare([_Store, _Indexed, Loader, Hierarchy]);
 	//	|	  var myStore = new store( {url:"../data/Simpsons.json", keyPath:"name"} );
 	//	|	                       ...
@@ -300,19 +300,19 @@ define(["dojo/_base/declare",
 							throw new StoreError( "PropertyMissing", "indexSetter", "Required property 'name' or 'keyPath' missing" );
 						}
 					} else {
-						throw new StoreError( "TypeError", "indexSetter", "index property is not a valid object" );
+						throw new StoreError( "DataError", "indexSetter", "index property is not a valid object" );
 					}
 				}, this);
 			}
 		},
 		
-		_keyPathSetter: function (keyPath ) {
+		_keyPathSetter: function (keyPath) {
 			// summary:
 			// keyPath:
 			// tag:
 			//		Private
 			if (keyPath !== null && !Keys.validPath(keyPath)) {
-				throw new StoreError( "TypeError", "keyPathSetter", "invalid keypath: '%{0}'", keyPath );
+				throw new StoreError( "DataError", "keyPathSetter", "invalid keypath: '%{0}'", keyPath );
 			}
 			this.idProperty = this.keyPath = keyPath;
 		},
@@ -329,9 +329,55 @@ define(["dojo/_base/declare",
 			}
 		},
 
+		_strictSetter: function (value) {
+			this.strict = !!value;
+		},
+
 		//===================================================================
 		// Common procedures
 		
+		_addCallback: function ( callback ) {
+			// summary:
+			//		Add a callback to the store's _storeRecord() procedure. The callback
+			//		is called just before the object is written to the store.  The use
+			//		of callbacks is intented for store extension.
+			// callback:
+			//		Callback function with the following signature:
+			//			callback( key, 				// object key
+			//								at, 				// current record index
+			//								newValue,		// new object value
+			//								oldValue,		// old object value
+			//								options			// any add() or put() options.
+			//							)
+			// NOTE: Callbacks MUST NOT alter any object properties that are part of
+			//       object's primary key.
+			// tag:
+			//		Private
+			if (typeof callback  == "function") {
+				if (!this._callback) {
+					this._callback = [callback];
+				} else {
+					this._callback.push(callback);
+				}
+			}
+		},
+		
+		_applyDefaults: function (/*Object*/ object) {
+			// summary:
+			//		 Add missing default properties.
+			// object:
+			//		Store object.
+			// tag:
+			//		Private
+			var prop;
+			
+			for (prop in this.defaultProperties) {
+				if (Lib.getProp(prop, object) == undef) {
+					Lib.setProp(prop, this.defaultProperties[prop], object);
+				}
+			}
+		},
+
 		_assertKey: function (/*Key|KeyRange*/ key,/*String*/ method,/*Boolean?*/ required ) {
 			// summary:
 			// key:
@@ -370,37 +416,6 @@ define(["dojo/_base/declare",
 			}
 		},
 
-		_anyToObject: function (any) {
-			// summary:
-			// any:
-			// returns:
-			//		An object
-			// tag:
-			//		Private
-			var location = this._anyToRecord(any);
-			if (location.record) {
-				return location.record.value;
-			}
-		},
-		
-		_anyToRecord: function (any) {
-			// summary:
-			// any:
-			// returns:
-			//		A location object
-			// tag:
-			//		Private
-			var key = any;
-			if (any) {
-				if (isObject(any)) {
-					key = this.getIdentity(any);
-				}
-				return this._retrieveRecord( key );				
-			}
-			// If 'any' is nothing than return the end of the array.
-			return new Location( this, this._records.length-1, -1, this._records.length );
-		},
-		
 		_clearRecords: function () {
 			// summary:
 			//		Remove all records from the store and all indexes.
@@ -434,33 +449,6 @@ define(["dojo/_base/declare",
 			//		Private
 
 			AbstractOnly("_deleteKeyRange");
-		},
-
-		_deleteRecord: function (/*Record*/ record, /*Number*/ recNum ) {
-			// summary:
-			//		Delete a single record from the store.
-			// recnum:
-			//		Record number (index).
-			// returns:
-			//		true on successful completion otherwise false
-			// tag:
-			//		Private
-
-			AbstractOnly("_deleteRecord");
-		},
-
-		_indexRecord: function (/*Record*/ record,/*Number?*/ recNum) {
-			// summary:
-			//		Add the record to each store index. If any of the indexes throws an
-			//		exception reverse the index operation and re-throw the error.
-			// record:
-			//		Record to index.
-			// recNum:
-			//		record number.
-			// tag:
-			//		Private
-
-			AbstractOnly("_indexRecord");
 		},
 
 		_retrieveRecord: function (/*any*/ key ) {
@@ -521,12 +509,12 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Public
 
-			this._assertStore( this, "add", true );
 			if (object) {
-				var options = lang.mixin( options, {overwrite: false} );
+				this._assertStore( this, "add", true );
+				options = lang.mixin( options, {overwrite: false} );
 				return this._storeRecord( object, options );
 			}
-			throw new StoreError("DataError", "add");
+			throw new StoreError( "DataError", "add" );
 		},
 
 		clear: function () {
@@ -609,7 +597,7 @@ define(["dojo/_base/declare",
 				}
 				throw new StoreError("ConstraintError", "createIndex", "index with name %{0} already exist", name);
 			} 
-			throw new StoreError("DataError", "createIndex");
+			throw new StoreError("DataError", "createIndex", "name or key path missing");
 		},
 
 		deleteIndex: function (/*DOMString*/ name) {
@@ -693,7 +681,7 @@ define(["dojo/_base/declare",
 				direction = arguments[0];
 				keyRange  = undef;
 			}
-			var results  = Range( this, keyRange, direction, false, false );
+			var results = Range( this, keyRange, direction, false, false );
 			return QueryResults( results );
 		},
 
@@ -711,7 +699,6 @@ define(["dojo/_base/declare",
 			if (index) {
 				return index;
 			}
-			throw new StoreError( "NotFound", "index", "index with name [%{0}] does not exist", name);
 		},
 
 		isItem: function (/*Object*/ object) {
@@ -740,8 +727,9 @@ define(["dojo/_base/declare",
 			//		String or Number
 			// tag:
 			//		Public
-			this._assertStore( this, "put", true );
 			if (object) {
+				this._assertStore( this, "put", true );
+				options = lang.mixin( {overwrite: true}, options );
 				return this._storeRecord( object, options );
 			}
 			throw new StoreError("DataError", "put");

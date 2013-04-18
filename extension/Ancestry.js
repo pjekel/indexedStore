@@ -1,13 +1,13 @@
 //
-// Copyright (c) 2010-2013, Peter Jekel
+// Copyright (c) 2013, Peter Jekel
 // All rights reserved.
 //
-//	The Checkbox Tree (cbtree) is released under to following three licenses:
+//	The IndexedStore is released under to following two licenses:
 //
-//	1 - BSD 2-Clause								(http://thejekels.com/cbtree/LICENSE)
-//	2 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	3 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
+
 define(["dojo/_base/declare",
 				"../_base/Keys",
 				"../_base/Library",
@@ -33,7 +33,9 @@ define(["dojo/_base/declare",
 	//		and many more....
 
 	var StoreError = createError("Ancestry");		// Create the StoreError 
-
+	var isObject   = Lib.isObject;
+	var undef;
+	
 	var Ancestry = {
 		// summary:
 		//		The Ancestry object is a collection of functions adding additional
@@ -43,10 +45,33 @@ define(["dojo/_base/declare",
 			if (this.features.has("hierarchy")) {
 				this.features.add("ancestry");
 			} else {
-				throw new StoreError( "MethodMissing", "constructor", "extension 'hierarchy' must be loaded first");
+				throw new StoreError( "MethodMissing", "constructor", "hierarchy extension required");
 			}
 		},
 		
+		//=========================================================================
+		// Private methods
+
+		_anyToObject: function (/*Object|Key*/ any) {
+			// summary:
+			// any:
+			// returns:
+			//		An Object | undefined
+			// tag:
+			//		Private
+			if (isObject(any)) {
+				return any;
+			}
+			if (Keys.validKey(any)) {
+				var loc = this._retrieveRecord(any);
+				var rec = loc.record || {};
+				return rec.value;
+			}
+		},
+
+		//=========================================================================
+		// Public methods
+
 		analyze: function (/*Number*/ maxCount ) {
 			// summary:
 			//		Analyze the store hierarchy and report any broken links.
@@ -105,6 +130,7 @@ define(["dojo/_base/declare",
 			function _getAncestors (store, item) {
 				store.getParents(item).forEach( function (parent) {
 					var key = store.getIdentity(parent);
+					// Skip duplicates....
 					if (Keys.indexOf(keyList, key) == -1) {
 						ancestors.push(parent);
 						keyList.push(key);
@@ -138,7 +164,7 @@ define(["dojo/_base/declare",
 			//		Public
 
 			function _getDescendants (store, item) {
-				store.getChildren( store._anyToObject(item) ).forEach( function (child) {
+				store.getChildren(item).forEach( function (child) {
 					var key = store.getIdentity(child);
 					if (Keys.indexOf(keyList, key) == -1) {
 						descendants.push(child);

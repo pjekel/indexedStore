@@ -1,22 +1,22 @@
 //
-// Copyright (c) 2012-2013, Peter Jekel
+// Copyright (c) 2013, Peter Jekel
 // All rights reserved.
 //
-//	The Checkbox Tree (cbtree) is released under to following three licenses:
+//	The IndexedStore is released under to following two licenses:
 //
-//	1 - BSD 2-Clause								(http://thejekels.com/cbtree/LICENSE)
-//	2 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	3 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
 define(["dojo/_base/declare",
 				"dojo/_base/lang",
 				"dojo/store/util/QueryResults",
+				"dojo/aspect",
 				"../_base/Keys",
 				"../_base/Library",
 				"../_base/Range",
 				"../error/createError!../error/StoreErrors.json"
-			 ], function (declare, lang, QueryResults, Keys, Lib, Range, createError) {
+			 ], function (declare, lang, QueryResults, aspect, Keys, Lib, Range, createError) {
 
 	var StoreError = createError( "Hierarchy" );		// Create the StoreError type.
 	var isObject   = Lib.isObject;
@@ -51,24 +51,24 @@ define(["dojo/_base/declare",
 		//		The cbtree Models tests for the presence of this property in order to
 		//		determine if it has to set the parent property of an object or if the
 		//		store will handle it.
-		hierarchical: null,
+		hierarchical: true,
 
 		//=========================================================================
 		// constructor
 		
 		constructor: function (kwArgs) {
 			if (this.features.has("indexed") || this.features.has("natural")) {
-				// create the parents index
+				var store = this;
+				this._addCallback( this._processParents );		// Add callback to the store.
 
-				this.createIndex( 
-					C_INDEXNAME, 
-					this.parentProperty, 
-					{ unique:false, multiEntry:true}
-				);
+				// Explicitly set the parentProperty before we create the index. We can't
+				// post create the index as the optional Loader gets started first, that
+				// is, before the parents index gets created.
 
-				Lib.defProp( this, "hierarchical", {value:true, writable:false, enumerable:true} );
+				this.set("parentProperty", this.parentProperty );
+				this.createIndex( C_INDEXNAME, this.parentProperty, { unique:false, multiEntry:true});
+
 				this.features.add("hierarchy");
-
 			} else {
 				throw new StoreError( "MethodMissing", "constructor", "base class '_natural' or '_indexed' must be loaded first");
 			}
@@ -79,12 +79,27 @@ define(["dojo/_base/declare",
 
 		_parentPropertySetter: function (keyPath) {
 			// summary:
-			//		Hook for set("parentProperty", ...). The parent property is a key path
-			//		but NOT an array of key paths.
+			//		Hook for set("parentProperty", ...). The parent property is a key
+			//		path but NOT an array of key paths. The 'parentProperty' property
+			//		is only updated if the 'parents' index hasn't been created yet.
 			// keyPath:
 			//		A valid key path.
 			// tag:
 			//		Private
+
+			// Depnding on the strict mode the store function index() may throw an
+			// exception of type 'NotFoundError' or return undefined. So, account
+			// for both responses.
+			try {
+				if (this.index(C_INDEXNAME)) {
+					return;
+				}
+			} catch(err) {
+				if (err.name != "NotFoundError") {
+					throw err;
+				}
+				// It's Ok, just continue. Anything else is an error.
+			}
 			if (keyPath instanceof Array || !Keys.validPath(keyPath)) {
 				throw new StoreError( "TypeError", "_parentPropertySetter", "invalid keypath: '%{0}'", keyPath );
 			}
@@ -129,7 +144,7 @@ define(["dojo/_base/declare",
 					}
 					if (Keys.validKey(parent)) {
 						// Make sure we don't parent ourself or return duplicates.
-						if (Keys.cmp(parent,key) && parentIds.indexOf(parent) == -1) {
+						if (Keys.cmp(parent,key) && Keys.indexOf(parentIds, parent) == -1) {
 							parentIds.push(parent);
 						}						
 					} else {
@@ -168,7 +183,7 @@ define(["dojo/_base/declare",
 			this.inherited(arguments);
 		},
 
-		_processOptions: function (key, value, options) {
+		_processParents: function (key, at, newValue, oldValue, options) {
 			// summary:
 			//		Process any optional PutDirectives. This function is called as a 
 			//		callback just before the record is stored, therefore do not alter
@@ -182,18 +197,15 @@ define(["dojo/_base/declare",
 			//		new value.
 			// tag:
 			//		Private, callback
-			var parents = value[this.parentProperty];
-			if (options) {
-				if (options.parent) {
-					parents = this._getParentKeys(key, options.parent);				
-				}
+			var parents = newValue[this.parentProperty];
+			if (options && options.parent) {
+				parents = this._getParentKeys(key, options.parent);				
 			}
 			// Convert the 'parent' property to the correct format.
-			this._setParentType(value, parents);
-			return value;
+			this._setParentType(newValue, parents);
 		},
 
-		_setParentType: function (value, parents) {
+		_setParentType: function (/*Object*/ value,/*Key|Key[]*/ parents) {
 			// summary:
 			//		Convert the parent(s) from a single value to an array or vice versa
 			//		depending on the value of the store multiParented property.
@@ -241,26 +253,6 @@ define(["dojo/_base/declare",
 		//=========================================================================
 		// Public cbtree/store/api/store API methods
 
-		add: function (/*Object*/ object,/*PutDirectives?*/ options) {
-			// summary:
-			//		Creates an object, throws an error if the object already exists
-			// object:
-			//		The object to store.
-			// options:
-			//		Additional metadata for storing the data.	Includes an "id"
-			//		property if a specific id is to be used.
-			// returns:
-			//		Object key
-			// tag:
-			//		Public
-			this._assertStore( this, "add", true );
-			if (object) {
-				var options = lang.mixin( options, {overwrite: false} );
-				return this._storeRecord( object, options, this._processOptions );
-			}
-			throw new StoreError("DataError", "add");
-		},
-
 		addParent: function(/*Object*/ child,/*any*/ parents) {
 			// summary:
 			//		Add parent(s) to the list of parents of child.
@@ -272,25 +264,28 @@ define(["dojo/_base/declare",
 			// returns:
 			//		true if parent key(s) were successfully added otherwise false.
 
-			var childId = this.getIdentity(child);
-			var newKeys = this._getParentKeys(childId, parents);
-			if (newKeys.length) {
-				var oldKeys = this._getParentArray(child);
-				var curKeys = oldKeys.slice();
-				newKeys.forEach( function (key) {
-					// key can be an array therefore use Keys.indexOf().
-					if (Keys.indexOf(curKeys,key) == -1) {
-						curKeys.unshift(key);
+			if (isObject(child)) {
+				var newKeys = this._getParentKeys( this.getIdentity(child), parents );
+				if (newKeys.length) {
+					var oldKeys = this._getParentArray(child);
+					var newKeys = oldKeys.slice();
+					var options = {};
+					newKeys.forEach( function (key) {
+						// key can be an array therefore use Keys.indexOf().
+						if (Keys.indexOf(newKeys,key) == -1) {
+							newKeys.unshift(key);
+						}
+					});
+					// If the parents changed go update the store.
+					if (Keys.cmp(oldKeys, newKeys)) {
+						options[this.parentProperty] = newKeys;
+						this.put(child, options);
+						return true;
 					}
-				});
-				// If the parents changed go update the store.
-				if (Keys.cmp(oldKeys, curKeys)) {
-					this._setParentType(child, curKeys);
-					this.put(child);
-					return true;
 				}
+				return false;
 			}
-			return false;
+			throw new StoreError( "DataError", "addParent");
 		},
 
 		getChildren: function (/*Object*/ parent, /*Store.QueryOptions?*/ options) {
@@ -372,26 +367,6 @@ define(["dojo/_base/declare",
 			throw new StoreError( "DataError", "hasChildren");
 		},
 
-		put: function (/*Object*/ object,/*PutDirectives?*/ options) {
-			// summary:
-			//		Stores an object
-			// object:
-			//		The object to store.
-			// options:
-			//		Additional metadata for storing the data.
-			// returns:
-			//		String or Number
-			// tag:
-			//		Public
-
-			this._assertStore( this, "put", true );
-			if (object) {
-				var options = lang.mixin( {overwrite: true}, options );
-				return this._storeRecord( object, options, this._processOptions );
-			}
-			throw new StoreError("DataError", "put");
-		},
-
 		query: function (/*Object*/ query,/*QueryOptions?*/ options /*((Object|Rceord)[])? _dataSet */) {
 			// summary:
 			//		Queries the store for objects.
@@ -407,7 +382,8 @@ define(["dojo/_base/declare",
 
 			var _dataSet = (arguments.length == 3 ?	arguments[2] : null);
 			var data     = _dataSet || this._records;
-
+			var store    = this;
+			
 			return QueryResults( this.queryEngine(query, options)(data) );
 		},
 
@@ -422,24 +398,27 @@ define(["dojo/_base/declare",
 			// returns:
 			//		true if the parent key(s) were successfully removed otherwise false.
 
-			var childId = this.getIdentity(child);
-			var remKeys = this._getParentKeys(childId, parents);
-			if (remKeys.length) {
-				var oldKeys = this._getParentArray(child);
-				var curKeys = oldKeys.slice();
-				curKeys = curKeys.filter( function (key) {
-					return (Keys.indexOf(remKeys, key) == -1);
-				});
-				// If the parents changed go update the store.
-				if (Keys.cmp(oldKeys, curKeys)) {
-					this._setParentType(child, curKeys);
-					this.put(child);
-					return true;
+			if (isObject(child)) {
+				var remKeys = this._getParentKeys( this.getIdentity(child), parents );
+				if (remKeys.length) {
+					var oldKeys = this._getParentArray(child);
+					var newKeys = oldKeys.slice();
+					var options = {};
+					newKeys = newKeys.filter( function (key) {
+						// key can be an array therefore use Keys.indexOf().
+						return (Keys.indexOf(remKeys, key) == -1);
+					});
+					// If the parents changed go update the store.
+					if (Keys.cmp(oldKeys, newKeys)) {
+						options[this.parentProperty] = newKeys;
+						this.put(child, options);
+						return true;
+					}
 				}
+				return false;
 			}
-			return false;
+			throw new StoreError( "DataError", "addParent");
 		}
-
 	};	/* end Hierarch {} */
 	
 	return declare( null, Hierarchy );

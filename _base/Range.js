@@ -1,3 +1,13 @@
+//
+// Copyright (c) 2013, Peter Jekel
+// All rights reserved.
+//
+//	The IndexedStore is released under to following two licenses:
+//
+//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//
+
 define(["./Keys",
 				"./KeyRange",
 				"./Library",
@@ -8,15 +18,6 @@ define(["./Keys",
 	var isObject = Lib.isObject;
 	var clone    = Lib.clone;
 	var undef;
-	
-	function isDirection( direction ) {
-		switch (direction) {
-			case "next": case "nextunique":
-			case "prev": case "prevunique":
-				return true;
-		}
-		return false;
-	}
 	
 	function Range(/*Store|Index*/ source,/*Key|KeyRange*/ keyRange,/*String*/ direction,
 									/*Boolean*/ duplicates, /*Boolean*/ keysOnly) {
@@ -58,7 +59,7 @@ define(["./Keys",
 					keyRange = KeyRange.unbound();
 				}
 			}			
-			if (!isDirection( direction )) {
+			if (!Lib.isDirection( direction )) {
 				throw new StoreError( "TypeError", "constructor", "invalid direction");
 			}
 			var records, value, range, keys = [];
@@ -100,7 +101,7 @@ define(["./Keys",
 			results.keyRange = keysOnly;
 			return results;
 		} else {
-			throw new StoreError("DataError", "Range");
+			throw new StoreError("DataError", "constructor", "invalid source specified");
 		}
 	}	/* end Range() */
 

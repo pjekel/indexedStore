@@ -1,18 +1,20 @@
 //
-// Copyright (c) 2012, Peter Jekel
+// Copyright (c) 2013, Peter Jekel
 // All rights reserved.
 //
-//	The indexedDB implementation is released under to following two licenses:
+//	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License			 (http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License	 (http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
+
 define(["dojo/_base/lang",
 				"./Keys",
 				"./KeyRange",
 				"./Library",
+				"./Location",
 				"../error/createError!../error/StoreErrors.json"
-			], function(lang, Keys, KeyRange, Lib, createError){
+			], function(lang, Keys, KeyRange, Lib, Location, createError){
 	"use strict";
 
 	// module:
@@ -35,9 +37,9 @@ define(["dojo/_base/lang",
 	//
 	
 	// Requires JavaScript 1.8.5
-	var defineProperty = Object.defineProperty;
 	var StoreError = createError( "Cursor" );		// Create the CBTError type.
 	var clone      = Lib.clone;									// HTML5 structure clone.
+	var defProp    = Lib.defProp;
 	var undef;
 
 	function Cursor (/*Store|Index*/ source,/*KeyRange*/ range, /*String*/ direction,
@@ -72,11 +74,13 @@ define(["dojo/_base/lang",
 			if (source._destroyed || source._beingDestroyed) {
 				throw new StoreError("InvalidState", "assertSource");
 			}
+			return true;
 		}
 
 		function loadCursor(source, keyRange, direction) {
 			// summary:
 			//		Load the cursor. This function is called once for each cursor.
+			//		Effectively it returns the first record in range.
 			// tag:
 			//		Private
 			var records = source._records;
@@ -90,22 +94,22 @@ define(["dojo/_base/lang",
 				switch (direction) {
 					case "next":
 					case "nextunique":
-						keyLoc = Keys.rangeToLocation( range );
+						keyLoc = new Location( source, first-1, first, first+1 );
 						break;
 					case "prev":
-						keyLoc = Keys.search( source, records[last].key );
+						keyLoc = new Location( source, last-1, last, last+1 );
 						if (index && !source.unique) {
 							var storeKeys = keyLoc.record.value;
 							keyLoc.position = storeKeys.length - 1;
 						}
 						break;
 					case "prevunique":
-						keyLoc = Keys.search( source, records[last].key );
+						keyLoc = new Location( source, last-1, last, last+1 );
 						break;
 				}
 			} else {
 				// make sure keyLoc is a location object.
-				keyLoc = Keys.rangeToLocation(range);
+				keyLoc = new Location( source );
 			}
 			length = range.length;
 			return keyLoc;
@@ -166,11 +170,12 @@ define(["dojo/_base/lang",
 			//		Private
 			var result;
 			
-			assertSource( source );
-			gotValue = false;
-			do {
-				result = iterateCursor( cursor, key );
-			} while (--count > 0 && result);
+			if (assertSource( source )) {
+				gotValue = false;
+				do {
+					result = iterateCursor( cursor, key );
+				} while (--count > 0 && result);
+			}
 			return result;
 		}
 
@@ -187,10 +192,12 @@ define(["dojo/_base/lang",
 			if (gotValue) {
 				if (count && (typeof count == "number" && count > 0)) {
 					return !!advanceCursor(this, null, count);
+				} else {
+					throw new StoreError("DataError", "advance", "invalid count parameter" );
 				}
-				throw new StoreError("DataError", "advance", "invalid count parameter" );
+			} else {
+				throw new StoreError("InvalidState", "advance");
 			}
-			throw new StoreError("InvalidState", "advance");
 		}
 
 		// dojo buildsystem doesn't allow 'this.continue' therefore we use 'this.cont'
@@ -327,8 +334,8 @@ define(["dojo/_base/lang",
 			throw new StoreError("NotSupported", "slice", "operation is not supported on a key cursor" );
 		}
 
-		defineProperty( this, "forEach", {enumerable: false});
-		defineProperty( this, "slice", {enumerable: false});
+		defProp( this, "forEach", {enumerable: false});
+		defProp( this, "slice", {enumerable: false});
 
 		//=========================================================================
 
@@ -337,24 +344,24 @@ define(["dojo/_base/lang",
 		var store       = source;
 		var gotValue    = false;
 		var index       = false;
+		var keyRange		= range;
 		var length      = 0;
 
 		var primaryKey;
 		var currentKey;
 		var currentVal;
 		var locator;
-		var keyRange;
 
 		// Make properties read-only...
-		defineProperty( this, "primaryKey", {get: function () { return primaryKey; },	enumerable: true});
-		defineProperty( this, "direction", {get: function () { return direction; },	enumerable: true});
-		defineProperty( this, "source", {get: function () { return source; }, enumerable: true});
-		defineProperty( this, "key", {get: function () { return currentKey; },	enumerable: true});
-		defineProperty( this, "length", {get: function () { return length; },	enumerable: true});
+		defProp( this, "primaryKey", {get: function () { return primaryKey; },	enumerable: true});
+		defProp( this, "direction", {get: function () { return direction; },	enumerable: true});
+		defProp( this, "source", {get: function () { return source; }, enumerable: true});
+		defProp( this, "key", {get: function () { return currentKey; },	enumerable: true});
+		defProp( this, "length", {get: function () { return length; },	enumerable: true});
 
 		// Implement IDBCursorWithValue
 		if (!keyCursor) {
-			defineProperty( this, "value", {get: function () { return currentVal; }, enumerable: true});
+			defProp( this, "value", {get: function () { return currentVal; }, enumerable: true});
 		}
 
 		switch( source.type ) {
@@ -368,19 +375,19 @@ define(["dojo/_base/lang",
 				throw new StoreError("NotSupported", "constructor", "Unknown source type" );
 		}
 		
-		switch (direction) {
-			case "next":
-			case "nextunique":
-			case "prev":
-			case "prevunique":
-				break;
-			default:
-				throw new StoreError("InvalidType", "constructor", "Invalid cursor direction.");
+		if (!Lib.isDirection(direction)) {
+			throw new StoreError("InvalidType", "constructor", "Invalid cursor direction.");
 		}
 
-		keyRange = range || KeyRange.unbound();
 		if (!(keyRange instanceof KeyRange)) {
-			keyRange = KeyRange.only(range);
+			if (keyRange != undef) {
+				if (!Keys.validKey(keyRange)) {
+					throw new StoreError( "TypeError", "constructor", "invalid keyRange");
+				}
+				keyRange = KeyRange.only( source.uppercase ? Keys.toUpperCase(keyRange) : keyRange );
+			} else {
+				keyRange = KeyRange.unbound();
+			}
 		}
 
 		iterateCursor( this );		// Go load the cursor.

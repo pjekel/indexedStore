@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Keys</title>
+    <style type="text/css">
+      @import "../../dijit/themes/claro/claro.css";
+      @import "../../dijit/themes/claro/document.css";
+      @import "../../dijit/tests/css/dijitTests.css";
+    </style>
+
+    <script type="text/javascript">
+      var dojoConfig = {
+            async: true,
+            parseOnLoad: true,
+            isDebug: true,
+            baseUrl: "../../",
+            packages: [
+              { name: "dojo", location: "dojo" },
+              { name: "doh",  location: "util/doh" },
+              { name: "store",location: "indexedStore" }
+            ]
+      };
+    </script>
+
+    <script type="text/javascript" src="../../dojo/dojo.js"></script>
+    <script type="text/javascript">
+
+			// Run the keys tests before any other tests as most other store functions
+			// rely on keys functionality.  If any of the key tests fail it is likely
+			// the other tests will fail too....
+
+      require([
+        "doh/runner",
+        "dojo/ready",
+        "store/_base/Keys",
+        "store/_base/KeyRange"
+        ], function( doh, ready,	Keys, KeyRange ) {
+					"use strict";
+					
+					// All records are sorted in ascending key order....
+					var estr = "The Empty String";
+					var records = [
+						{key: "", value: { name:estr }}	,										//  0
+						{key: "Abe", value: { name:"Abe" }},								//  1
+						{key: "Apu", value: { name:"Apu" }},								//  2
+						{key: "Bart", value: { name:"Bart" }},							//  3
+						{key: "Homer", value: { name:"Homer" }},						//  4
+						{key: "Jacqueline", value: { name:"Jacqueline" }},	//  5
+						{key: "Lisa", value: { name:"Lisa" }},							//  6
+						{key: "Maggie", value: { name:"Maggie" }},					//  7
+						{key: "Manjula", value: { name:"Manjula"}},					//  8
+						{key: "Marge", value: { name:"Marge" }},						//  9
+						{key: "Mona", value: { name:"Mona" }},							// 10
+						{key: "Ned", value: { name:"Ned" }},								// 11
+						{key: "Patty", value: { name:"Patty" }},						// 12
+						{key: "Rod", value: { name:"Rod" }},								// 13
+						{key: "Selma", value: { name:"Selma" }},						// 14
+						{key: "Todd", value: { name:"Todd" }}								// 15
+					];
+
+					var store  = { _records: records };
+					var length = records.length;
+					var undef;
+
+					var boundary  = Keys.boundary;
+					var compare   = Keys.cmp;
+					var getRange  = Keys.getRange;
+					var inRange   = Keys.inRange;
+					var purge     = Keys.purgeKey;
+					var search    = Keys.search;
+					var validKey  = Keys.validKey;
+					var validPath = Keys.validPath;
+					
+					doh.register("Keys", [
+						{
+							name: "Valid Key Path",
+							runTest:function (t) {
+								
+								t.f (validPath(null));
+								t.f (validPath(undef));
+								t.f (validPath(123));
+
+								t.t (validPath("name"));
+								t.t (validPath("$name"));
+								t.t (validPath("_name"));
+								t.t (validPath("address.city"));
+								t.t (validPath("city.street.number"));
+								t.t (validPath(["name","address.city","city.street.number"]));
+
+								t.f (validPath("city. street. number"));		// No spaces allowed
+								t.f (validPath("12city"));									// invalid identifier
+								t.f (validPath(["name",["address.city","city.street.number"]]));	// No nested arrays allowed.
+
+							}
+						},
+						
+						{
+							name: "Valid Keys",
+							runTest:function (t) {
+								var date = new Date();
+								var invd = new Date();
+								
+								invd.setTime("Hammertime");	// create an invalid date
+								
+								// undefined and null are invalid keys, so are invalid dates.
+								t.f (validKey(undef));
+								t.f (validKey(null));
+								t.f (validKey(invd));
+
+								t.t (validKey("abc"));
+								t.t (validKey(123));
+								t.t (validKey(date));
+
+								t.t (validKey( [] ));				// Empty array is a valid key.
+								t.t (validKey( ["a"] ));
+								t.t (validKey( [1,2,3] ));
+								t.t (validKey( ["a",2,"b"] ));
+								t.t (validKey( ["a",date,1] ));
+
+								// Key arrays containing invalid key values..
+								t.f (validKey( ["a", null] ));
+								t.f (validKey( ["a", undef] ));
+
+							}
+						},
+						
+						{
+							// Test if all key functions fully support 'The Empty' string as
+							// a valid argument.
+							name: "The 'Empty String'",
+							runTest:function (t) {
+								var date = new Date();
+								var keyRange, range, loc;
+								
+								t.t (validPath(""));					// The Empty String is a valid path.
+								t.t (validKey(""));						// The Empty String is a valid key
+
+								// Comparison
+								t.is(-1, compare("",[]))
+								t.is( 1, compare([],""))
+								t.is( 0, compare("",""))
+								t.is(-1, compare("","abc"))
+								t.is( 1, compare("abc",""))
+								t.is( 1, compare("",0))
+								t.is(-1, compare(0,""))
+								t.is( 1, compare("", date))
+								t.is(-1, compare(date,""))
+
+								// Key ranges
+								keyRange = KeyRange.only("");
+								t.is ("", keyRange.lower);
+								t.is ("", keyRange.upper);
+								keyRange = KeyRange.bound("","");
+								t.is ("", keyRange.lower);
+								t.is ("", keyRange.upper);
+								keyRange = KeyRange.lowerBound("");
+								t.is ("", keyRange.lower);
+								keyRange = KeyRange.upperBound("");
+								t.is ("", keyRange.upper);
+
+								// Boundaries
+								t.is( 0, boundary( store, "", "lower", false ));
+								t.is( 0, boundary( store, "", "upper", false ));
+								
+								// Purge and indexOf
+								var ary = purge( [1, undef, 3, "", undef, "abc", "", null]);
+								t.is( 4, ary.length );
+								t.is( 2, Keys.indexOf(ary, ""));
+
+								// In Range
+								keyRange = KeyRange.bound(0,[]);
+								t.t( inRange( "", keyRange ));
+								keyRange = KeyRange.bound([],[1,2]);
+								t.f( inRange( "", keyRange ));
+
+								// Get range
+								keyRange = KeyRange.only("");
+								range = getRange( store, keyRange );
+								t.is ( 1, range.length);
+								t.is ( 0, range.first);
+
+								// Search
+								loc = search( store, "" );
+								t.is (-1, loc.ls );
+								t.is ( 0, loc.eq );
+								t.is ( 1, loc.gt );
+								t.is ( estr, loc.record.value.name );
+
+							}
+
+						},
+						
+						{
+							name: "Key instance comparison",
+							runTest:function (t) {
+								// Varify key comparison using the W3C rule: Array > String > Date > number
+								var intArray = [1,2,3,4];
+								var strArray = ["a", "b", "c"];
+								var string   = "abc";
+								var date     = new Date();
+								var number   = 100;
+
+								t.is( 0, compare( intArray, intArray ));	// Array == Array
+								t.is(-1, compare( intArray, strArray ));	// Array == Array -> Number < String (1,"a");
+								t.is( 1, compare( intArray, string ));		// Array > String
+								t.is( 1, compare( intArray, date ));			// Array > Date
+								t.is( 1, compare( intArray, number ));		// Array > Number
+
+								t.is(-1, compare( string, intArray));			// String < Array
+								t.is( 0, compare( string, string));				// String == String
+								t.is( 1, compare( string, date));					// String > Date
+								t.is( 1, compare( string, number));				// String > Number
+
+								t.is(-1, compare( date, intArray));				// Date < Array
+								t.is(-1, compare( date, string));					// Date < String
+								t.is( 0, compare( date, date));						// Date == Date
+								t.is( 1, compare( date, number));					// Date > Number
+
+								t.is(-1, compare( number, intArray));			// Number < Array
+								t.is(-1, compare( number, string));				// Number < String
+								t.is(-1, compare( number, date));					// Number < Date
+								t.is( 0, compare( number, number));				// Number == Number
+
+								// Test null & 'undefined'
+								t.is( 0, compare( undef, null)); 
+
+								t.is(-1, compare( null, intArray)); 
+								t.is(-1, compare( null, string)); 
+								t.is(-1, compare( null, date)); 
+								t.is(-1, compare( null, number)); 
+
+								t.is(-1, compare( undef, intArray)); 
+								t.is(-1, compare( undef, string)); 
+								t.is(-1, compare( undef, date)); 
+								t.is(-1, compare( undef, number)); 
+							}
+						},
+						
+						{
+							name: "Key literal comparison",
+							runTest:function (t) {
+								var date = new Date();
+
+								t.is( 0, compare( [1,2,3,4], [1,2,3,4] ));
+								t.is(-1, compare( [1,2,3,4], ["a","b","c"] ));
+								t.is( 1, compare( [1,2,3,4], "abc" ));
+								t.is( 1, compare( [1,2,3,4], date ));
+								t.is( 1, compare( [1,2,3,4], 100 ));
+
+								t.is(-1, compare( "abc", [1,2,3,4]));
+								t.is( 0, compare( "abc", "abc"));
+								t.is(-1, compare( "Abc", "abc"));				// "A" < "a"
+								t.is( 1, compare( "abc", date));
+								t.is( 1, compare( "abc", 100));
+
+								t.is(-1, compare( date, [1,2,3,4]));
+								t.is(-1, compare( date, "abc"));
+								t.is( 0, compare( date, date));
+								t.is( 1, compare( date, 100));
+
+								t.is(-1, compare( 100, [1,2,3,4]));
+								t.is(-1, compare( 100, "text"));
+								t.is(-1, compare( 100, "100"));
+								t.is(-1, compare( 100, new Date()));
+								t.is( 0, compare( 100, 100));
+								t.is( 1, compare( 100, 99));
+
+							}
+						},
+						
+						{
+							name: "Array comparison",
+							runTest:function (t) {
+								var date = new Date();
+
+								t.is( 0, compare( [1,2,3,4], [1,2,3,4] ));
+								t.is( 1, compare( [1,2,3,5], [1,2,3,4] ));
+								t.is(-1, compare( [1,2,3],   [1,2,3,4] ));
+								t.is(-1, compare( [1,2,3,4], [1,2,[1,2],4] ));	// Array > Number
+								t.is(-1, compare( [1,2,3,4], [1,2,"a",4] ));		// Number < String
+								t.is(-1, compare( [1,2,"a"], [1,2,"b",4] ));
+								t.is( 1, compare( [1,"a",3], [1,2,"b",4] ));
+
+								t.is( 1, compare( [[["b"]]], [[["a"]]] ));
+								t.is(-1, compare( [["b"]], [[["a"]]] ));
+
+								t.is(-1, compare( [1,2,3,4], ["a","b","c"] ));	// String > Number
+								t.is(-1, compare( [1,2,3,4], ["a"] ));					// String > Number
+
+								t.is(-1, compare( [1,2,3,4], [date] ));					// Number < Date
+							}
+						},
+						
+						{
+							name: "Key Boundaries",
+							runTest:function (t) {
+								
+								// Valid keys: "Abe" - "Todd", boundary: -1 - length (15)
+								
+								t.is( 0, boundary(store, undef, "lower", false) );
+								t.is( length, boundary(store, undef, "upper", false) );
+								t.is( 0, boundary(store, null, "lower", false) );
+								t.is( length, boundary(store, null, "upper", false) );
+								t.is( 0, boundary(store, "", "lower", false) );
+								t.is( 0, boundary(store, "", "upper", false) );
+
+								t.is( 1, boundary(store, "A", "lower", false) );
+								t.is( 0, boundary(store, "A", "upper", false) );				// "Abe"
+								t.is( 2, boundary(store, "B", "upper", false) );				// "Apu"
+								t.is( 3, boundary(store, "Bart", "upper", false) );			// "Bart" (inclusive)
+								t.is( 2, boundary(store, "Bart", "upper", true) );			// "Apu" (exclusive)
+
+								t.is( length, boundary(store, "Z", "lower", false) );		// all key < "Z"
+								t.is( length, boundary(store, "Z", "upper", false) );
+
+								t.is( 9, boundary(store, "Marge", "lower", false) );		// "Marge" (inclusive)
+								t.is(10, boundary(store, "Marge", "lower", true) );			// "Marge" (exclusive)
+
+								t.is( 9, boundary(store, "Marge", "upper", false) );		// "Marge" (inclusive)
+								t.is( 8, boundary(store, "Marge", "upper", true) );			// "Marge" (exclusive)
+
+								// Numberic keys should come BEFORE string keys
+								t.is( 0, boundary(store, 100, "lower", false) );				// Number < String
+								t.is(-1, boundary(store, 100, "upper", false) );				// Number < String
+
+								// Array keys should come AFTER string keys
+								t.is(length, boundary(store, [1], "lower", false) );		// Array > String
+								t.is(length, boundary(store, [1], "upper", false) );		// Array > String
+							}
+						},
+						
+						{
+							name: "Key Ranges",
+							runTest:function (t) {
+								var range, keyRange;
+								
+								keyRange = KeyRange.unbound();				// unbound() for internal use ONLY.
+								range = getRange( store, keyRange );
+								t.is( length, range.length );
+								t.is( 0, range.first);
+								t.is( length-1, range.last);
+
+								keyRange = KeyRange.bound("Bart", "Marge");
+								range = getRange( store, keyRange );
+								t.is( 7, range.length );
+								t.is( 3, range.first);
+								t.is( 9, range.last);
+
+								keyRange = KeyRange.only("Bart");
+								range = getRange( store, keyRange );
+								t.is( 1, range.length );
+								t.is( 3, range.first);
+								t.is( 3, range.last);
+
+								keyRange = KeyRange.lowerBound("Marge");
+								range = getRange( store, keyRange );
+								t.is( 7, range.length );
+								t.is( 9, range.first);
+								t.is(15, range.last);
+
+								keyRange = KeyRange.upperBound("Marge");
+								range = getRange( store, keyRange );
+								t.is(10, range.length );
+								t.is( 0, range.first);
+								t.is( 9, range.last);
+							}
+						},
+
+						{
+							name: "Keys in range",
+							runTest:function (t) {
+								var range, keyRange;
+								
+								// NOTE: The fact that a key is in range does not mean the key
+								//       actually exists. Keys.inRange() merely checks if a key
+								//       is in range.
+								
+								keyRange = KeyRange.lowerBound("Marge");
+
+								t.f (inRange("Bart", keyRange));
+								t.f (inRange(100, keyRange));
+
+								t.t (inRange(["Marge"], keyRange));		// Array > String
+								t.t (inRange("Marge", keyRange));
+								t.t (inRange("Todd", keyRange));
+								
+							}
+						},
+
+						{
+							name: "Key Search",
+							runTest:function (t) {
+								var locator;
+								
+								// Even though null and 'undefined' are invalid keys test them
+								// anyway 
+								locator = search( store, undef)
+								// Typical locator for a non-existing item.
+								t.is (null, locator.record);
+								t.is (-1, locator.ls);
+								t.is (-1, locator.eq);
+								t.is ( 0, locator.gt);
+								locator = search( store, null)
+								t.is (null, locator.record);
+								t.is (-1, locator.ls);
+								t.is (-1, locator.eq);
+								t.is ( 0, locator.gt);
+								
+								// Make sure we can locate the very first record...
+								locator = search( store, "")
+								t.t ( locator.record != undef );
+								t.is (-1, locator.ls);
+								t.is ( 0, locator.eq);
+								t.is ( 1, locator.gt);
+								t.is (estr, locator.record.value.name );
+
+								locator = search( store, "Bart")
+								t.t ( locator.record != undef );
+								t.is ( 2, locator.ls);
+								t.is ( 3, locator.eq);
+								t.is ( 4, locator.gt);
+								t.is ("Bart", locator.record.value.name );
+
+								// Make sure we can locate the very last record...
+								locator = search( store, "Todd")
+								t.t ( locator.record != undef );
+								t.is (14, locator.ls);
+								t.is (15, locator.eq);
+								t.is (16, locator.gt);
+								t.is ("Todd", locator.record.value.name );
+
+							}
+						}
+					]);
+
+					ready( function () {
+						doh.run();
+
+					});
+
+				}
+      );
+    </script>
+
+  </head>
+
+  <body class="claro">
+    <h1 class="DemoTitle">Keys</h1>
+  </body>
+</html>

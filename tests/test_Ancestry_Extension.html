@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Ancestry Extension</title>
+    <style type="text/css">
+      @import "../../dijit/themes/claro/claro.css";
+      @import "../../dijit/themes/claro/document.css";
+      @import "../../dijit/tests/css/dijitTests.css";
+    </style>
+
+    <script type="text/javascript">
+      var dojoConfig = {
+            async: true,
+            parseOnLoad: true,
+            isDebug: true,
+            baseUrl: "../../",
+            packages: [
+              { name: "dojo", location: "dojo" },
+              { name: "doh",  location: "util/doh" },
+              { name: "store",location: "indexedStore" }
+            ]
+      };
+    </script>
+
+    <script type="text/javascript" src="../../dojo/dojo.js"></script>
+    <script type="text/javascript">
+      require([
+        "doh/runner",
+        "dojo/_base/declare",
+        "dojo/_base/lang",
+        "dojo/ready",
+        "store/_base/_Store",
+        "store/_base/_Indexed",
+        "store/_base/_Loader",
+        "store/_base/Keys",
+        "store/_base/Library",
+				"store/extension/Hierarchy",
+				"store/extension/Ancestry"
+        ], function( doh, declare, lang, ready,
+											_Store, _Indexed, _Loader,	Keys, Lib, Hierarchy, Ancestry ) {
+					"use strict";
+					
+					// IMPORTANT:
+					//		Don't change the number of records without updating any of
+					//		the range and count tests.
+					// - there are 8 unique parents.
+					var Simpsons = [
+						{ "name":"Root", "parent":[], "hair":"none" },
+						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
+						{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
+						{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
+						{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
+						{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
+						{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },
+						{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
+						{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
+						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
+						{ "name":"Manjula", "age":40, "parent":["Apu"], "hair":"brown"},
+						{ "name":"Missy", "age":40, "parent":["Root"], "hair":"brown"},
+						{ "name":"Bastard", "age":40, "parent":["Homer", "Missy"], "hair":"brown"},
+						
+					];
+					var SouthPark = [
+						{ "name":"Root", "parent":[] },
+						{ "name":"Stan", "age":10, "parent":["Randy","Sharon"] },
+						{ "name":"Kyle", "age":65, "parent":["Gerald","Sheila"] },
+						{ "name":"Eric", "age":65, "parent":["Liane"] },
+						{ "name":"Kenny", "age":63, "parent":["Stuart","Carol"] },
+						{ "name":"Sheila", "age":9, "parent":["Randy","Sharon"] },
+						{ "name":"Ike", "age":9, "parent":["Gerald","Sheila"] },
+						{ "name":"Butters", "age":35, "parent":["Stephen","Linda"] },
+
+						{ "name":"Marvin", "age":9, "parent":["Root"] },
+						{ "name":"Gerald", "age":9, "parent":["Root"] },
+						{ "name":"Liane", "age":9, "parent":["Root"] },
+
+						{ "name":"Sharon", "age":9, "parent":["Root"] },
+						{ "name":"Shelly", "age":9, "parent":["Root"] },
+						{ "name":"Stuart", "age":9, "parent":["Root"] },
+						{ "name":"Carol", "age":9, "parent":["Root"] },
+						{ "name":"Stephen", "age":9, "parent":["Root"] },
+						{ "name":"Linda", "age":9, "parent":["Root"] },
+
+						{ "name":"Randy", "age":9, "parent":["Marvin"] },
+						{ "name":"Jimbo", "age":9, "parent":["Marvin"] },
+
+						{ "name":"Clyde", "age":40, "parent":["miss0"] },
+						{ "name":"Craig", "age":10, "parent":["miss0"] },
+						{ "name":"Jimmy", "age":9, "parent":["miss1"] },
+						{ "name":"Timmy", "age":2, "parent":["miss1"] },
+						{ "name":"Token", "age":37, "parent":["miss2"] },
+						{ "name":"Tweek", "age":38, "parent":["miss2"] },
+						{ "name":"Wendy", "age":9, "parent":["miss2"] }
+
+					];
+					var undef;
+					
+					doh.register("Ancestry Extension", [
+						{
+							name: "Analyze Ancestry, Complete Hierachy",
+							timeout: 1000,
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Ancestry]);
+								var store = new Store ({data: Simpsons, keyPath:"name"});
+								var defer = new doh.Deferred();
+
+								store.ready(
+									defer.getTestCallback( 
+										function (store) {
+											t.t( store.features.has("ancestry"));
+											var missing = store.analyze();
+											t.is( null, missing );
+											store.destroy();
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}
+								);
+								return defer;
+							}
+						},
+						{
+							name: "Analyze Ancestry, Missing Parents",
+							timeout: 1000,
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Ancestry]);
+								var store = new Store ({data:SouthPark, keyPath:"name"});
+								var defer = new doh.Deferred();
+
+								store.ready(
+									defer.getTestCallback( 
+										function (store) {
+											var missing = store.analyze();
+											var parents = Object.keys(missing);
+											// Number of parents missing....
+											t.is(3, parents.length);
+											// Reference count per parent.
+											t.is(2, missing.miss0.length);
+											t.is(2, missing.miss1.length);
+											t.is(3, missing.miss2.length);
+			
+											store.destroy();
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}
+								);
+								return defer;
+							}
+						},
+						{
+							name: "Test Ancestors",
+							timeout: 1000,
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Ancestry]);
+								var store = new Store ({data: Simpsons, keyPath:"name"});
+								var defer = new doh.Deferred();
+
+								store.ready(
+									defer.getTestCallback( 
+										function (store) {
+
+											// Ancestors non existing item
+											var ancestors = store.getAncestors("Unknown");
+											t.is( undef, ancestors );
+											// Existing item but with no ancestors
+											var ancestors = store.getAncestors("Root");
+											t.t( ancestors != undef);
+											t.is( 0, ancestors.length );
+
+
+											// Get ancestors using an object.
+											var obj = store.get("Bart");
+											// Homer, Abe, Root, Mona, Marge, Jacqueline
+											ancestors = store.getAncestors( obj );
+											t.is(6, ancestors.length);
+											// Get ancestors using a literal.
+											ancestors = store.getAncestors( "Bart" );
+											t.is(6, ancestors.length);
+											// Test we got a set of objects back...
+											ancestors.forEach( function (obj) {
+												t.t( Lib.isObject(obj) );
+											});
+
+											// Go get the ancestor's keys only
+											ancestors = store.getAncestors( "Bart", true );
+											t.is(6, ancestors.length);
+											// Test we got a set of keys back...
+											ancestors.forEach( function (key) {
+												// NOTE: this test work because the keys are strings.
+												t.t( !Lib.isObject(key) && Keys.validKey(key) );
+											});
+
+											store.destroy();
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}
+								);
+								return defer;
+							}
+						},
+
+						{
+							name: "Test Descendants",
+							timeout: 1000,
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Ancestry]);
+								var store = new Store ({data: Simpsons, keyPath:"name"});
+								var defer = new doh.Deferred();
+
+								store.ready(
+									defer.getTestCallback( 
+										function (store) {
+
+											// Descendants non existing item
+											var descendants = store.getDescendants("Unknown");
+											t.is( undef, descendants );
+											// Existing item but with no descendants
+											var descendants = store.getDescendants("Root");
+											t.t( descendants != undef);
+											t.is( 17, descendants.length );
+
+
+											// Get descendants using an object.
+											var obj = store.get("Abe");
+											// Homer, Bart, Lisa, Maggie, Bastard
+											descendants = store.getDescendants( obj );
+											t.is(5, descendants.length);
+											// Get descendants using a literal.
+											descendants = store.getDescendants( "Abe" );
+											t.is(5, descendants.length);
+											// Test we got a set of objects back...
+											descendants.forEach( function (obj) {
+												t.t( Lib.isObject(obj) );
+											});
+
+											// Go get the ancestor's keys only
+											descendants = store.getDescendants( "Abe", true );
+											t.is(5, descendants.length);
+											// Test we got a set of keys back...
+											descendants.forEach( function (key) {
+												t.t( !Lib.isObject(key) && Keys.validKey(key) );
+											});
+
+											store.destroy();
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}
+								);
+								return defer;
+							}
+						},
+						
+						{
+							name: "Test Siblings",
+							timeout: 1000,
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Ancestry]);
+								var store = new Store ({data: Simpsons, keyPath:"name"});
+								var defer = new doh.Deferred();
+
+								store.ready(
+									defer.getTestCallback( 
+										function (store) {
+
+											// Siblings non existing item
+											var siblings = store.getSiblings("Unknown");
+											t.is( undef, siblings );
+											// Existing item but with no siblings
+											var siblings = store.getSiblings("Root");
+											t.t( siblings != undef);
+											t.is( 0, siblings.length );
+
+
+											// Get siblings using an object.
+											var obj = store.get("Bart");
+											// Lisa, Maggie
+											siblings = store.getSiblings( obj );
+											t.is(3, siblings.length);
+											// Get siblings using a literal.
+											siblings = store.getSiblings( "Bart" );
+											t.is(3, siblings.length);
+											// Test we got a set of objects back...
+											siblings.forEach( function (obj) {
+												t.t( Lib.isObject(obj) );
+											});
+
+											// Go get the ancestor's keys only
+											siblings = store.getSiblings( "Bart", true );
+											t.is(3, siblings.length);
+											// Test we got a set of keys back...
+											siblings.forEach( function (key) {
+												// NOTE: this test work because the keys are strings.
+												t.t( !Lib.isObject(key) && Keys.validKey(key) );
+											});
+
+											store.destroy();
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}
+								);
+								return defer;
+							}
+						},
+
+						{
+							name: "Test isXXXX function",
+							timeout: 1000,
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Ancestry]);
+								var store = new Store ({data: Simpsons, keyPath:"name"});
+								var defer = new doh.Deferred();
+
+								store.ready(
+									defer.getTestCallback( 
+										function (store) {
+
+											var root    = store.get("Root");
+											var abe     = store.get("Abe");
+											var bart    = store.get("Bart");
+											var homer   = store.get("Homer");
+											var lisa    = store.get("Lisa");
+											var bastard = store.get("Bastard");
+
+											t.t (store.isAncestorOf(abe, bart));
+											t.t (store.isAncestorOf(abe, "Bart"));
+											t.t (store.isAncestorOf("Abe", bart));
+											t.t (store.isAncestorOf("Abe", "Bart"));
+											t.t (store.isAncestorOf(homer, bart));
+											t.f (store.isAncestorOf(bart, abe));
+											t.f (store.isAncestorOf(lisa, bart));
+
+											t.t (store.isDescendantOf(bart, root));
+											t.t (store.isDescendantOf("Bart", root));
+											t.t (store.isDescendantOf(bart, "Root"));
+											t.t (store.isDescendantOf("Bart", "Root"));
+											t.t (store.isDescendantOf(bart, abe));
+											t.t (store.isDescendantOf(bart, homer));
+											t.f (store.isDescendantOf(abe, bart));
+
+											t.t (store.isChildOf(bart, homer));
+											t.t (store.isChildOf("Bart", homer));
+											t.t (store.isChildOf(bart, "Homer"));
+											t.t (store.isChildOf("Bart", "Homer"));
+											t.f (store.isChildOf(bart, abe));
+											t.f (store.isChildOf(bart, lisa));
+
+											t.t (store.isSiblingOf(bart, lisa));
+											t.t (store.isSiblingOf("Bart", lisa));
+											t.t (store.isSiblingOf(bart, "Lisa"));
+											t.t (store.isSiblingOf("Bart", "Lisa"));
+											t.t (store.isSiblingOf(lisa, bart));
+											t.f (store.isSiblingOf(bart, homer));
+											t.f (store.isSiblingOf(bart, abe));
+
+											t.t (store.isSiblingOf(bart, bastard));
+											
+
+											store.destroy();
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}
+								);
+								return defer;
+							}
+						},
+
+						{
+							name: "Test isXXXX function",
+							timeout: 1000,
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Ancestry]);
+								var store = new Store ({data: Simpsons, keyPath:"name"});
+								var defer = new doh.Deferred();
+
+								store.ready(
+									defer.getTestCallback( 
+										function (store) {
+
+											var bart    = store.get("Bart");
+											var bastard = store.get("Bastard");
+											var paths0  = store.getPaths( "Bart" );
+											// 1 -> Root/Abe/Homer/Bart
+											// 2 -> Root/Mona/Homer/Bart
+											// 3 -> Root/Jacqueline/Marge/Bart
+											t.is( 3, paths0.length );
+											t.t( paths0.contains( "Homer"));
+											var segm = paths0.segments();
+											t.is( 7, segm.length );
+
+											segm.forEach( function (segment) {
+												t.t(paths0.contains(segment));
+											});
+
+											var paths1 = store.getPaths( "Bastard" );
+											// 1 -> Root/Abe/Homer/Bastard
+											// 2 -> Root/Mona/Homer/Bastard
+											// 3 -> Root/Missy/Bastard
+
+
+											t.t( store.isSiblingOf( bart, bastard ));
+											
+											var inter = paths0.intersect(paths1);
+											
+											store.destroy();
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}
+								);
+								return defer;
+							}
+						}
+					
+
+					]);
+
+					ready( function () {
+						doh.run();
+
+					});
+
+
+				}
+      );
+    </script>
+
+  </head>
+
+  <body class="claro">
+    <h1 class="DemoTitle">Ancestry Extension</h1>
+  </body>
+</html>

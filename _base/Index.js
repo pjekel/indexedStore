@@ -71,7 +71,7 @@ define(["dojo/_base/lang",
 
 		//=========================================================================
 
-		function assert(/*IDBIndex*/ index, /*any?*/ key, /*Boolean*/ optional) {
+		function assertKey(/*IDBIndex*/ index, /*any?*/ key, /*String*/ method, /*Boolean?*/ required) {
 			// summary:
 			//		Validate if the index and associated store have not been destroyed.
 			// index:
@@ -79,14 +79,14 @@ define(["dojo/_base/lang",
 			// tag:
 			//		Private
 			if ( index._destroyed || index.store._destroyed || index.store._beingDestroyed ) {
-				throw new StoreError("InvalidStateError", "assert");
+				throw new StoreError("InvalidStateError", method);
 			}
 			if (key != undef) {
 				if (!(key instanceof KeyRange) && !Keys.validKey(key)) {
-					throw new StoreError("DataError", "assert", "Invalid key or key range");
+					throw new StoreError("DataError", method, "Invalid key or key range");
 				}
-			} else if (!optional) {
-				throw new StoreError("ParameterMissing", "assert", "key is a required argument");
+			} else if (required) {
+				throw new StoreError("ParameterMissing", method, "key is a required argument");
 			}
 		}
 
@@ -400,7 +400,7 @@ define(["dojo/_base/lang",
 					key    = undef;
 				}
 			}
-			assert( this, key, true );
+			assertKey( this, key, "count", false );
 			if (key != undef) {
 				if (!(key instanceof KeyRange)) {
 					key = KeyRange.only( this.uppercase ? Keys.toUpperCase(key) : key );
@@ -436,7 +436,7 @@ define(["dojo/_base/lang",
 			// tag:
 			//		Public
 
-			assert( this, key );
+			assertKey( this, key, "get", true );
 			return retrieveReferenceValue( this, key );
 		};
 
@@ -452,7 +452,7 @@ define(["dojo/_base/lang",
 			//		The index key value.
 			// tag:
 			//		Public
-			assert(this, key);
+			assertKey(this, key, "getKey", true);
 			return retrieveIndexValue( this, key );
 		};
 
@@ -462,66 +462,75 @@ define(["dojo/_base/lang",
 			// keyRange:
 			//		A KeyRange object or a valid key.
 			// direction:
-			// options:
-			//		Optional pagination arguments to apply to the resultset.
+			//		The range's required direction.
+			// duplicates:
+			//		If false, duplicate store record references are ignored. The default
+			//		is true.
 			// returns: dojo/store/util/QueryResults
 			//		The range results, extended with iterative methods.
 			// tag:
 			//		Public
 
-			if (arguments.length) {
-				if (Lib.isDirection(arguments[0])) {
-					direction  = arguments[0];
-					duplicates = arguments[1];
-					keyRange   = undef;
-				} else if (typeof arguments[0] == "boolean") {
-					duplicates = arguments[0];
-					direction  = "next";
-					keyRange   = undef;					
-				} else if (typeof arguments[1] == "boolean") {
-					duplicates = arguments[1];
-					direction  = "next";
+			var range = keyRange, dir = "next", dup = true;
+			if (arguments.length > 1) {
+				if (arguments[1] !== null) {
+					if (Lib.isDirection(arguments[1])) {
+						dir = arguments[1];
+						dup = arguments[2];
+					} else if (typeof arguments[1] == "boolean") {
+						dup = arguments[1];
+					} else {
+						throw new StoreError("DataError", "getRange");
+					}
+				} else {
+					throw new StoreError("DataError", "getRange");
 				}
 			}
-			var results = Range( this, keyRange, direction, duplicates, false );
+			dup = dup != undef ? !!dup : true;
+			var results = Range( this, range, dir, dup, false );
 			return QueryResults( results );
 		};
 
-		this.getKeyRange = function (/*Key|KeyRange?*/ keyRange,/*String?*/ direction,/*Boolean*/ duplicates) {
+		this.getKeyRange = function (/*Key|KeyRange?*/ keyRange,/*String?*/ direction,/*Boolean?*/ duplicates) {
 			// summary:
 			//		Retrieve a range of store records.
 			// keyRange:
 			//		A KeyRange object or a valid key.
 			// direction:
+			//		The range's required direction.
 			// duplicates:
+			//		If false, duplicate store reference keys are ignored. The default
+			//		is true.
 			// returns: dojo/store/util/QueryResults
 			//		The range results, extended with iterative methods.
 			// tag:
 			//		Public
 
-			if (arguments.length) {
-				if (Lib.isDirection(arguments[0])) {
-					direction  = arguments[0];
-					duplicates = arguments[1];
-					keyRange   = undef;
-				} else if (typeof arguments[0] == "boolean") {
-					duplicates = arguments[0];
-					direction  = "next";
-					keyRange   = undef;					
-				} else if (typeof arguments[1] == "boolean") {
-					duplicates = arguments[1];
-					direction  = "next";
+			var range = keyRange, dir = "next", dup = true;
+			if (arguments.length > 1) {
+				if (arguments[1] !== null) {
+					if (Lib.isDirection(arguments[1])) {
+						dir = arguments[1];
+						dup = arguments[2];
+					} else if (typeof arguments[1] == "boolean") {
+						dup = arguments[1];
+					} else {
+						throw new StoreError("DataError", "getKeyRange");
+					}
+				} else {
+					throw new StoreError("DataError", "getKeyRange");
 				}
 			}
-			var results = Range( this, keyRange, direction, duplicates, true );
+			dup = dup != undef ? !!dup : true;
+			var results = Range( this, range, dir, dup, true );
 			return QueryResults( results );
 		};
 
-		this.openCursor = function (/*any?*/ range, /*DOMString?*/ direction) {
+		this.openCursor = function (/*Key|KeyRange?*/ keyRange, /*DOMString?*/ direction) {
 			// summary:
 			//		Open a new cursor. A cursor is a transient mechanism used to iterate
 			//		over multiple records in the store.
-			// range:
+			// keyRange:
 			//		The key range to use as the cursor's range.
 			// direction:
 			//		The cursor's required direction.
@@ -536,22 +545,23 @@ define(["dojo/_base/lang",
 			// tag:
 			//		Public
 
-			// If there's only argument test if it is the 'direction'...
-			if (Lib.isDirection(arguments[0])) {
-				direction = arguments[0];
-				range = undef;
-			} else {
-				assertKey( this, range );
+			var range = keyRange, dir = "next";
+			if (arguments.length > 1) {
+				if (arguments[1] && Lib.isDirection(arguments[1])) {
+					dir = arguments[1];
+				} else {
+					throw new StoreError("DataError", "openCursor");
+				}
 			}
-			var cursor = new Cursor( this, range, direction, false );
+			var cursor = new Cursor( this, range, dir, false );
 			return cursor;
 		};
 
-		this.openKeyCursor = function (/*any?*/ range, /*DOMString?*/ direction) {
+		this.openKeyCursor = function (/*any?*/ keyRange, /*DOMString?*/ direction) {
 			// summary:
 			//		Open a new cursor. A cursor is a transient mechanism used to iterate
 			//		over multiple records in the store.
-			// range:
+			// keyRange:
 			//		The key range to use as the cursor's range.
 			// direction:
 			//		The cursor's required direction.
@@ -566,14 +576,15 @@ define(["dojo/_base/lang",
 			// tag:
 			//		Public
 
-			// If there's only argument test if it is the 'direction'...
-			if (Lib.isDirection(arguments[0])) {
-				direction = arguments[0];
-				range = undef;
-			} else {
-				assert( this, range );
+			var range = keyRange, dir = "next";
+			if (arguments.length > 1) {
+				if (arguments[1] && Lib.isDirection(arguments[1])) {
+					dir = arguments[1];
+				} else {
+					throw new StoreError("DataError", "openKeyCursor");
+				}
 			}
-			var cursor = new Cursor( this, range, direction, true );
+			var cursor = new Cursor( this, range, dir, true );
 			return cursor;
 		};
 

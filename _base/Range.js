@@ -49,6 +49,9 @@ define(["./Keys",
 			var keysOnly   = keysOnly != undef ? !!keysOnly : false;
 			var results    = [];
 			
+			if (!Lib.isDirection( direction )) {
+				throw new StoreError( "TypeError", "constructor", "invalid direction");
+			}
 			if (!(keyRange instanceof KeyRange)) {
 				if (keyRange != undef) {
 					if (!Keys.validKey(keyRange)) {
@@ -59,9 +62,6 @@ define(["./Keys",
 					keyRange = KeyRange.unbound();
 				}
 			}			
-			if (!Lib.isDirection( direction )) {
-				throw new StoreError( "TypeError", "constructor", "invalid direction");
-			}
 			var records, value, range, keys = [];
 			// In case of a Natural store we have to iterate all records.
 			if (source.type == "store" && source.features.has("natural")) {
@@ -73,7 +73,7 @@ define(["./Keys",
 				records = source._records.slice(range.first, range.last+1);
 			}
 			if (records.length) {
-				if (!ascending) { results.reverse();}
+				if (!ascending) { records.reverse();}
 				switch (source.type) {
 					case "store":
 						records.forEach( function (record) {

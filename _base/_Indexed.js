@@ -310,11 +310,11 @@ define(["dojo/_base/declare",
 			return this.total;
 		},
 		
-		openCursor: function (/*any?*/ range, /*DOMString?*/ direction) {
+		openCursor: function (/*Key|KeyRange?*/ keyRange, /*DOMString?*/ direction) {
 			// summary:
 			//		Open a new cursor. A cursor is a transient mechanism used to iterate
 			//		over multiple records in the store.
-			// range:
+			// keyRange:
 			//		The key range to use as the cursor's range.
 			// direction:
 			//		The cursor's required direction. Valid options are: 'next', 'nextunique',
@@ -330,13 +330,16 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Public
 
-			this._assertKey( range, "openCursor", false );
-			// If there's only argument test if it is the 'direction'...
-			if (Lib.isDirection(arguments[0])) {
-				direction = arguments[0];
-				range = undef;
+			var range = keyRange, dir = "next";
+			if (arguments.length > 1) {
+				if (arguments[1] && Lib.isDirection(arguments[1])) {
+					dir = arguments[1];
+				} else {
+					throw new StoreError("DataError", "openCursor");
+				}
 			}
-			var cursor  = new Cursor( this, range, direction, false );
+			this._assertKey( range, "openCursor", false );
+			var cursor  = new Cursor( this, range, dir, false );
 			return cursor;
 		},
 

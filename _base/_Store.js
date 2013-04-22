@@ -58,7 +58,7 @@ define(["dojo/_base/declare",
 	//			property 'before' but does not support cursors, only the query engine.
 	// 
 	//		_Loader:
-	//			The base class _loader adds the ability to load the store with either
+	//			The base class _Loader adds the ability to load the store with either
 	//			in memory objects or objects retrieved using a URL. In addition, it
 	//			adds support for custom data handlers.
 	// 
@@ -73,6 +73,7 @@ define(["dojo/_base/declare",
 	//			- Hierarchy
 	//			- Ancestry
 	//			- CORS
+	//			- Watch
 	//
 	//		Hierarchy:
 	//			The Hierarchy extension adds support for the dojo/store/api/Store
@@ -245,6 +246,8 @@ define(["dojo/_base/declare",
 			//				suppressEvents: Boolean?
 			//			}
 
+			EventTarget.call(this);
+
 			// Mixin the keyword arguments.
 			declare.safeMixin( this, kwArgs );
 
@@ -390,10 +393,8 @@ define(["dojo/_base/declare",
 				if (!key instanceof KeyRange && !Keys.validKey(key)) {
 					throw new StoreError( "DataError", method, "invalid key specified");
 				}
-			} else {
-				if (required) {
+			} else if (required) {
 					throw new StoreError( "ParameterMissing", method, "key is a required argument");
-				}
 			}
 		},
 		
@@ -677,11 +678,15 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Public
 
-			if (/^next|^prev/.test(arguments[0])) {
-				direction = arguments[0];
-				keyRange  = undef;
+			var range = keyRange, dir = "next";
+			if (arguments.length > 1) {
+				if (arguments[1] && Lib.isDirection(arguments[1])) {
+					dir = arguments[1];
+				} else {
+					throw new StoreError("DataError", "getRange");
+				}
 			}
-			var results = Range( this, keyRange, direction, false, false );
+			var results = Range( this, range, dir, false, false );
 			return QueryResults( results );
 		},
 

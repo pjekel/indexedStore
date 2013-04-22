@@ -193,43 +193,42 @@ define(["../_base/Record",
 		
 		// Create matching query function. If no query is specified only pagination
 		// options will be applied to a dataset.
-		if (query) {
-			switch ( getObjClass(query) ) {
-				case "Array":
-				case "Object":
-					// Test query object for dot-separated property names.
-					hasDotPath = hasPropertyPath(query);
-					queryFunc  = function (object) {
-						var key, value, required;
-						for(key in query) {
-							required = query[key];
-							value		 = hasDotPath ? getProp(key,object) : object[key];
-							if (!match( value, required, ignoreCase )) {
-								if (typeof required == "function") {
-									if (required(value, key, object)) {
-										continue;
-									}
+
+		switch ( typeof query) {
+			case "undefined":
+			case "object":
+				// Test query object for dot-separated property names.
+				hasDotPath = hasPropertyPath(query);
+				queryFunc  = function (object) {
+					var key, value, required;
+					for(key in query) {
+						required = query[key];
+						value		 = hasDotPath ? getProp(key,object) : object[key];
+						if (!match( value, required, ignoreCase )) {
+							if (typeof required == "function") {
+								if (required(value, key, object)) {
+									continue;
 								}
-								return false;
 							}
+							return false;
 						}
-						return true;
-					};
-					break;
-				case "String":
-					// named query
-					if (!this[query] || typeof this[query] != "function") {
-						throw new StoreError( "MethodMissing", "QueryEngine", "No filter function " + query + " was found in store");
 					}
-					queryFunc = this[query];
-					break;
-				case "Function":
-					queryFunc = query;
-					break;
-				default:
-					throw new StoreError("InvalidType", "QueryEngine", "Can not query with a " + typeof query);
-			} /*end switch() */
-		}
+					return true;
+				};
+				break;
+			case "string":
+				// named query
+				if (!this[query] || typeof this[query] != "function") {
+					throw new StoreError( "MethodMissing", "QueryEngine", "No filter function " + query + " was found in store");
+				}
+				queryFunc = this[query];
+				break;
+			case "function":
+				queryFunc = query;
+				break;
+			default:
+				throw new StoreError("InvalidType", "QueryEngine", "Can not query with a " + typeof query);
+		} /*end switch() */
 		
 		function uniqueness(/*Object[]*/ data,/*Object*/ options) {
 			// summary:
@@ -275,21 +274,14 @@ define(["../_base/Record",
 			var data      = data || [];
 			var results   = [];
 			
-			if (data && queryFunc) {
-				data.forEach( function (obj) {
-					if (obj instanceof Record) {
-						if (queryFunc( queryKeys ? obj : obj.value )) {
-							results.push(obj.value);
-						}
-					} else {
-						if (queryFunc(obj)) {
-							results.push(obj);
-						}
-					}
-				});
-			} else {
-				results = data;
-			}
+			data.forEach( function (any) {
+				// TODO: how about cloning....
+				var object = any instanceof Record ? any.value : any;
+				if (queryFunc(object)) {
+					results.push(object);
+				}
+			});
+
 			if (!!unique) {
 				results = uniqueness(results, options);
 			}

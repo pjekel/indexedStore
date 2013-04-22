@@ -58,6 +58,9 @@ define(["dojo/_base/declare",
 		
 		constructor: function (kwArgs) {
 			if (this.features.has("indexed") || this.features.has("natural")) {
+				if (this.features.has("observable")) {
+					throw new StoreError( "Dependency", "constructor", "Observable must be loaded after the Hierarchy module");
+				}
 				var store = this;
 				this._addCallback( this._processParents );		// Add callback to the store.
 
@@ -70,7 +73,7 @@ define(["dojo/_base/declare",
 
 				this.features.add("hierarchy");
 			} else {
-				throw new StoreError( "MethodMissing", "constructor", "base class '_natural' or '_indexed' must be loaded first");
+				throw new StoreError( "MethodMissing", "constructor", "base class '_Natural' or '_Indexed' must be loaded first");
 			}
 		},
 		
@@ -87,23 +90,12 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Private
 
-			// Depnding on the strict mode the store function index() may throw an
-			// exception of type 'NotFoundError' or return undefined. So, account
-			// for both responses.
-			try {
-				if (this.index(C_INDEXNAME)) {
-					return;
+			if (!this.index(C_INDEXNAME)) {
+				if (keyPath instanceof Array || !Keys.validPath(keyPath)) {
+					throw new StoreError( "TypeError", "_parentPropertySetter", "invalid keypath: '%{0}'", keyPath );
 				}
-			} catch(err) {
-				if (err.name != "NotFoundError") {
-					throw err;
-				}
-				// It's Ok, just continue. Anything else is an error.
+				this.parentProperty = keyPath;
 			}
-			if (keyPath instanceof Array || !Keys.validPath(keyPath)) {
-				throw new StoreError( "TypeError", "_parentPropertySetter", "invalid keypath: '%{0}'", keyPath );
-			}
-			this.parentProperty = keyPath;
 		},
 
 		//=========================================================================
@@ -233,7 +225,7 @@ define(["dojo/_base/declare",
 
 		_storeOrder: function (/*Range*/ range) {
 			// summary:
-			//		Retrieve the records associated with the cursor in store (natural)
+			//		Retrieve the objects associated with the range in store (natural)
 			//		order.
 			// cursor:
 			//		Instance of Cursor
@@ -245,7 +237,7 @@ define(["dojo/_base/declare",
 
 			range.forEach( function (key) {
 				loc = this._retrieveRecord( key );
-				temp[loc.eq] = loc.record;
+				temp[loc.eq] = loc.value;
 			}, this);
 			return temp.filter( function() {return true;} );
 		},

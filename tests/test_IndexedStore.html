@@ -33,8 +33,7 @@
         "dojo/ready",
         "store/_base/_Store",
         "store/_base/_Indexed",
-        "store/_base/KeyRange",
-				"store/error/createError!store/error/StoreErrors.json"
+        "store/_base/KeyRange"
         ], function( doh, declare, lang, QueryResults, ready,
 											_Store, _Indexed, KeyRange, createError ) {
 					"use strict";
@@ -42,7 +41,6 @@
 					// IMPORTANT:
 					//		Don't change the number of records without updating any of
 					//		the range and count tests.
-					var StoreError = createError("store00");
 					var data = [
 						{ "name":"Root", "parent":[], "hair":"none" },
 						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },

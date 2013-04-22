@@ -210,7 +210,7 @@
 											t.is( index.count(), index.getKeyRange().total );
 
 											// Get all reference keys, no duplicates.
-											var range = index.getKeyRange(false);
+											var range = index.getKeyRange(null, false);
 											t.is( 15, range.total);
 
 											// count children using count()
@@ -279,7 +279,7 @@
 											t.is( index.count(), index.getKeyRange().total );
 
 											// Get all reference keys, no duplicates.
-											var range = index.getKeyRange(false);
+											var range = index.getKeyRange(null, false);
 											t.is( 15, range.total);
 
 											// count children using count()

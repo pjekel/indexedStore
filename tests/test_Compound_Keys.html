@@ -34,16 +34,14 @@
         "store/_base/_Store",
         "store/_base/_Natural",
         "store/_base/_Indexed",
-        "store/_base/KeyRange",
-				"store/error/createError!store/error/StoreErrors.json"
+        "store/_base/KeyRange"
         ], function( doh, declare, lang, QueryResults, ready,
-											_Store, _Natural, _Indexed, KeyRange, createError ) {
+											_Store, _Natural, _Indexed, KeyRange ) {
 					"use strict";
 					
 					// IMPORTANT:
 					//		Don't change the number of records without updating any of
 					//		the range and count tests.
-					var StoreError = createError("store");
 					var data = [
 						{ "name":"Abe", "address":{ "city":"Springfield", "street":"Second Street", "number":10} },
 						{ "name":"Mona", "address":{ "city":"Springfield", "street":"Second Street", "number":10} },
@@ -175,7 +173,7 @@
 								// Cursor with KeyRange
 								
 								cursor = store.openCursor( keyRange );
-								t.t( !!(cursor && cursor.length == 6) );
+								t.t( !!cursor );
 								for (count = 1; cursor.cont(); count++);
 								t.is( count,6 );
 
@@ -183,7 +181,7 @@
 								// Cursor, try updating portion of the key (should fail).
 								
 								cursor = store.openCursor();
-								t.t( !!(cursor && cursor.length) );
+								t.t( !!cursor );
 								while (cursor && cursor.value) {
 									var object = cursor.value;
 									object.address.number++;

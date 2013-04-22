@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Index Cursors</title>
+    <style type="text/css">
+      @import "../../dijit/themes/claro/claro.css";
+      @import "../../dijit/themes/claro/document.css";
+      @import "../../dijit/tests/css/dijitTests.css";
+    </style>
+
+    <script type="text/javascript">
+      var dojoConfig = {
+            async: true,
+            parseOnLoad: true,
+            isDebug: true,
+            baseUrl: "../../",
+            packages: [
+              { name: "dojo", location: "dojo" },
+              { name: "doh",  location: "util/doh" },
+              { name: "store",location: "indexedStore" }
+            ]
+      };
+    </script>
+
+    <script type="text/javascript" src="../../dojo/dojo.js"></script>
+    <script type="text/javascript">
+      require([
+        "doh/runner",
+        "dojo/_base/declare",
+        "dojo/_base/lang",
+        "dojo/store/util/QueryResults",
+        "dojo/ready",
+        "store/_base/_Store",
+        "store/_base/_Indexed",
+        "store/_base/Keys",
+        "store/_base/KeyRange"
+        ], function( doh, declare, lang, QueryResults, ready,
+											_Store, _Indexed, Keys, KeyRange ) {
+					"use strict";
+					
+					// IMPORTANT:
+					//		Don't change the number of records without updating any of
+					//		the range and count tests. In addition, 'Root' is given a
+					//		parent 'none' otherwise no index entry will be created for
+					//		Root...
+					var data = [
+						{ "name":"Root", "parent":["none"], "hair":"none" },
+						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
+						{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
+						{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
+						{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
+						{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
+						{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },
+						{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
+						{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
+						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
+						{ "name":"Manjula", "age":40, "parent":"Apu", "hair":"brown"}
+					];
+					var undef;
+					
+					//  NOTE:
+					//		When testing the number of iterations either a range or key range
+					//		is used, this because a range has a length property and a Cursor
+					//		doesn't
+
+					doh.register("Index Cursors", [
+						{
+							name: "Iterate store, NO key path, NO key generator",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ( {autoIncrement: false, keyPath:null});
+								var range, keyRange, result, cursor, count, key, index;
+								var max = data.length, i;
+								
+								var index = store.createIndex( "parents", "parent", {multiEntry:true} );
+
+								// Insert data into the store, using a custom key
+								data.forEach( function (object, idx) {
+									store.add( object, {key:100+idx} );
+								});
+
+								//==============================================================
+								// Cursor cont() using direction
+
+								// Open a cursor on all records.
+								range  = index.getKeyRange();
+								cursor = index.openCursor();	// Use default direction (next)
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+
+								for (count = 0; cursor.value; count++) {
+									t.is (range[count], cursor.primaryKey);
+									if (cursor.cont()) {
+										t.t (typeof cursor.key == "string");
+									}
+								}
+								t.is( range.length, count );		// Test number of iterations
+
+								range  = index.getKeyRange(null, "prev");
+								cursor = index.openCursor(null, "prev");
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								for (count = 0; cursor.value; count++) {
+									t.is (range[count], cursor.primaryKey);
+									if (cursor.cont()) {
+										t.t (typeof cursor.key == "string");
+									}
+								}
+								t.is( range.length, count );		// Test number of iterations
+
+								range  = index.getKeyRange(null, "nextunique");
+								cursor = index.openCursor(null, "nextunique");
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								key = cursor.key;
+								
+								// Test if keys values are ascending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont()) {
+										t.t (Keys.cmp(key, cursor.key) < 0);
+										key = cursor.key;
+									}
+								}
+								t.is( range.length, count );		// Test number of iterations
+
+								// Open a cursor on all records.
+								cursor = index.openCursor(null, "prevunique");
+								t.t( !!(cursor && cursor.value && cursor.key && cursor.key) );
+								key = cursor.key;
+								
+								// Test if keys values are descending...
+								for (var count = 0; cursor.value; count++) {
+									if (cursor.cont()) {
+										t.t (Keys.cmp(key, cursor.key) > 0);
+										key = cursor.key;
+									}
+								}
+								t.is( range.length, count );		// Test number of iterations
+
+								//==============================================================
+								// Cursor advance()
+
+								// Direction - "next"
+								range  = index.getKeyRange();
+								cursor = index.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+	
+								// Advance 2
+								for (i = 0; cursor.value; i = i + 2) {
+									t.is( range[i], cursor.primaryKey);
+									cursor.advance(2);
+								}
+
+								// Direction - "prev"
+								range  = index.getKeyRange(null, "prev");
+								cursor = index.openCursor(null, "prev");
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+								// Advance 2
+								for (i = 0; cursor.value; i = i + 2) {
+									t.is( range[i], cursor.primaryKey);
+									cursor.advance(2);
+								}
+
+								//==============================================================
+								// Cursor update()
+
+								cursor = index.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+
+								for (var count = 0; cursor.value; count++) {
+									var obj = cursor.value;
+									obj.newProp = true;
+									cursor.update( obj );
+									cursor.cont();
+								}
+								// Test if all records have the 'newProp' property and the original
+								// provided key has not changed.
+								// There is no public method to expose the record key therefore
+								// use the store._records property instead.
+								result = store._records;
+								result.forEach( function (record, idx) {
+									t.t( record.value.newProp != undef );
+									t.is( idx+100, record.key );
+								});
+
+								//==============================================================
+								// Cursor remove() - "next"
+
+								cursor = index.openCursor();
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+	
+								// Iterate cursor removing all records.
+								for (var count = 0; cursor.value; count++) {
+									cursor.remove();
+									cursor.cont();
+								}
+								t.is( 0, index.count() );
+								t.is( 0, store.count() );
+
+
+								//==============================================================
+								// Cursor remove() - "prev"
+
+								// reload the store...
+								data.forEach( function (object, idx) {
+									store.add( object, {key:100+idx} );
+								});
+
+								cursor = index.openCursor(null, "prev");
+								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
+	
+								// Iterate cursor removing all records.
+								for (var count = 0; cursor.value; count++) {
+									cursor.remove();
+									cursor.cont();
+								}
+								t.is( 0, index.count() );
+								t.is( 0, store.count() );
+
+
+								store.destroy();
+							}
+						},
+
+						{
+							name: "Index Key Cursor, no value property",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ( {autoIncrement: false, keyPath:null});
+								var range, keyRange, result, cursor, count, key, index;
+								var max = data.length, i;
+								
+								var index = store.createIndex( "parents", "parent", {multiEntry:true} );
+
+								// Insert data into the store, using a custom key
+								data.forEach( function (object, idx) {
+									store.add( object, {key:100+idx} );
+								});
+
+								// Key Cursor has no 'value' property
+								cursor = index.openKeyCursor();
+								t.is (undef, cursor.value );
+
+								store.destroy();
+							}
+
+						}
+
+					]);
+
+					ready( function () {
+						doh.run();
+
+					});
+
+
+				}
+      );
+    </script>
+
+  </head>
+
+  <body class="claro">
+    <h1 class="DemoTitle">Index Cursors</h1>
+  </body>
+</html>

@@ -38,18 +38,16 @@
         "store/_base/_Loader",
         "store/_base/Keys",
         "store/_base/KeyRange",
-				"store/error/createError!store/error/StoreErrors.json",
 				"store/extension/Hierarchy",
 				"store/extension/CORS"
         ], function( doh, declare, lang, QueryResults, promiseAll, ready,
 											_Store, _Indexed, _Natural, _Loader,
-											Keys, KeyRange, createError, Hierarchy, CORS ) {
+											Keys, KeyRange, Hierarchy, CORS ) {
 					"use strict";
 					
 					// IMPORTANT:
 					//		Don't change the number of records without updating any of
 					//		the range and count tests.
-					var StoreError = createError("store");
 					var data = [
 						{ "name":"Root", "parent":[], "hair":"none" },
 						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
@@ -153,7 +151,7 @@
 										function (store) {
 											// should not get here.....
 											defer.errback(
-												new StoreError("InvalidAccess", "loader", "Unexpect result, store shouldn't get ready.")
+												new Error("Unexpect result, store shouldn't get ready.")
 											);
 										}
 									),
@@ -480,7 +478,7 @@
 								var request = store.load( {data:data_error});
 								request.then( function() {
 										defer.errback(
-											new StoreError("InvalidAccess", "loader", "Unexpect result, store shouldn't load.")
+											new Error("Unexpect result, store shouldn't load.")
 										);
 									},
 									defer.getTestCallback( 

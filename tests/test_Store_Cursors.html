@@ -34,8 +34,7 @@
         "store/_base/_Store",
         "store/_base/_Indexed",
         "store/_base/Keys",
-        "store/_base/KeyRange",
-				"store/error/createError!store/error/StoreErrors.json"
+        "store/_base/KeyRange"
         ], function( doh, declare, lang, QueryResults, ready,
 											_Store, _Indexed, Keys, KeyRange, createError ) {
 					"use strict";
@@ -43,7 +42,6 @@
 					// IMPORTANT:
 					//		Don't change the number of records without updating any of
 					//		the range and count tests.
-					var StoreError = createError("store00");
 					var data = [
 						{ "name":"Root", "parent":[], "hair":"none" },
 						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
@@ -87,7 +85,6 @@
 								cursor = store.openCursor();	// Default direction 'next'
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -102,10 +99,9 @@
 								t.is( count, max );
 
 								// Open a cursor on all records.
-								cursor = store.openCursor("nextunique");
+								cursor = store.openCursor(null, "nextunique");
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -119,10 +115,9 @@
 								t.is( count, max );
 
 								// Open a cursor on all records.
-								cursor = store.openCursor("prev");
+								cursor = store.openCursor(null, "prev");
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -136,10 +131,9 @@
 								t.is( count, max );
 
 								// Open a cursor on all records.
-								cursor = store.openCursor("prevunique");
+								cursor = store.openCursor(null, "prevunique");
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -159,7 +153,6 @@
 								cursor = store.openCursor();
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -177,7 +170,6 @@
 								cursor = store.openCursor();
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -189,10 +181,9 @@
 									}
 								}
 
-								cursor = store.openCursor("prev");
+								cursor = store.openCursor(null, "prev");
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -210,13 +201,11 @@
 								cursor = store.openCursor(105);
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, 1 );
 
 								keyRange = KeyRange.bound( 103, 109);
 								cursor = store.openCursor(keyRange);
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, 7 );
 
 								for (var count = 0; cursor.value; count++) {
 									cursor.cont();
@@ -229,7 +218,6 @@
 								cursor = store.openCursor();
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								// Test if keys values are ascending...
 								for (var count = 0; cursor.value; count++) {
@@ -254,7 +242,6 @@
 								cursor = store.openCursor();
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								// Iterate cursor removing all records.
 								for (var count = 0; cursor.value; count++) {
@@ -295,7 +282,6 @@
 								cursor = store.openCursor();
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -310,10 +296,9 @@
 								t.is( count, max );
 
 								// Open a cursor on all records.
-								cursor = store.openCursor("nextunique");
+								cursor = store.openCursor(null, "nextunique");
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -327,10 +312,9 @@
 								t.is( count, max );
 
 								// Open a cursor on all records.
-								cursor = store.openCursor("prev");
+								cursor = store.openCursor(null, "prev");
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -344,10 +328,9 @@
 								t.is( count, max );
 
 								// Open a cursor on all records.
-								cursor = store.openCursor("prevunique");
+								cursor = store.openCursor(null, "prevunique");
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -367,7 +350,6 @@
 								cursor = store.openCursor();
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -385,7 +367,6 @@
 								cursor = store.openCursor();
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -397,10 +378,9 @@
 									}
 								}
 
-								cursor = store.openCursor("prev");
+								cursor = store.openCursor(null, "prev");
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -418,7 +398,6 @@
 								cursor = store.openCursor();
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								// Test if keys values are ascending...
 								for (var count = 0; cursor.value; count++) {
@@ -439,7 +418,6 @@
 								cursor = store.openCursor();
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								// Iterate cursor removing all records.
 								for (var count = 0; cursor.value; count++) {
@@ -472,7 +450,6 @@
 								cursor = store.openCursor();
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -487,10 +464,9 @@
 								t.is( count, max );
 
 								// Open a cursor on all records.
-								cursor = store.openCursor("nextunique");
+								cursor = store.openCursor(null, "nextunique");
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -504,10 +480,9 @@
 								t.is( count, max );
 
 								// Open a cursor on all records.
-								cursor = store.openCursor("prev");
+								cursor = store.openCursor(null, "prev");
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -521,10 +496,9 @@
 								t.is( count, max );
 
 								// Open a cursor on all records.
-								cursor = store.openCursor("prevunique");
+								cursor = store.openCursor(null, "prevunique");
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								var primKey = cursor.primaryKey;
 								
@@ -543,7 +517,6 @@
 								cursor = store.openCursor();
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								for (var count = 0; cursor.value; count++) {
 									var obj = cursor.value;
@@ -562,7 +535,6 @@
 								cursor = store.openCursor();
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								for (var count = 0; cursor.value; count++) {
 									var obj = cursor.value;
@@ -600,7 +572,6 @@
 								cursor = store.openCursor();
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								for (var count = 0; cursor.value; count++) {
 									var obj = cursor.value;
@@ -619,7 +590,6 @@
 								cursor = store.openCursor();
 								t.t( !!(cursor && cursor.value && cursor.primaryKey && cursor.key) );
 								t.is( cursor.key, cursor.primaryKey );
-								t.is( cursor.length, max );
 	
 								// Iterate cursor removing all records.
 								for (var count = 0; cursor.value; count++) {

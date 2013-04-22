@@ -198,7 +198,7 @@
 								var intArray = [1,2,3,4];
 								var strArray = ["a", "b", "c"];
 								var string   = "abc";
-								var date     = new Date();
+								var date     = new Date();								
 								var number   = 100;
 
 								t.is( 0, compare( intArray, intArray ));	// Array == Array
@@ -222,7 +222,9 @@
 								t.is(-1, compare( number, date));					// Number < Date
 								t.is( 0, compare( number, number));				// Number == Number
 
-								// Test null & 'undefined'
+								// Although null and undefined are invalid keys, Keys.cmp() 
+								// does provide support for them.
+
 								t.is( 0, compare( undef, null)); 
 
 								t.is(-1, compare( null, intArray)); 

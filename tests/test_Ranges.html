@@ -60,14 +60,18 @@
 						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
 						{ "name":"Manjula", "age":40, "parent":"Apu", "hair":"brown"}
 					];
+					var length = data.length;
 					var undef;
 					
 					doh.register("Store and Index Ranges", [
 						{
 							name: "Key Range Properties",
 							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store();
 								var keyRange, range;
 
+								// Test KeyRange
 								keyRange = KeyRange.only("a");
 								t.is ("a", keyRange.lower);
 								t.is ("a", keyRange.upper);
@@ -83,15 +87,163 @@
 								t.e( Error, KeyRange, "bound", ["a"] );
 								t.e( Error, KeyRange, "bound", [undef,"a"] );
 								t.e( Error, KeyRange, "bound", ["a",0] );			// String > Number
+
 							}
 						},
 						
+						{
+							name: "Store getRange() Parameters",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store();
+								var keyRange, range;
+
+								// Test store range parameters
+								store.getRange();
+								store.getRange(null);
+								store.getRange(101);
+								keyRange = KeyRange.bound(100,105);
+								store.getRange(keyRange);
+								store.getRange(keyRange, "next");
+								store.getRange(keyRange, "nextunique");
+								store.getRange(keyRange, "prev");
+								store.getRange(keyRange, "prevunique");
+
+								// Direction not nullable
+								t.e( Error, store, "getRange", [null, null] );
+								t.e( Error, store, "getRange", [keyRange, null] );
+								t.e( Error, store, "getRange", [null, "what?"] );
+							}
+						},
+						
+						{
+							name: "Index getRange() & getKeyRange() Parameters",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ({keyPath:"name"});
+								var keyRange, range;
+
+								var index = store.createIndex("parent", "parent", {multiEntry: true});
+
+								// Test index range parameters
+								index.getRange();
+								index.getRange(null);
+								index.getRange(101);
+								keyRange = KeyRange.bound(100,105);
+								index.getRange(keyRange);
+								index.getRange(keyRange, false);
+								index.getRange(keyRange, "next");
+								index.getRange(keyRange, "next", false);
+								index.getRange(keyRange, "nextunique");
+								index.getRange(keyRange, "prev");
+								index.getRange(keyRange, "prevunique");
+
+								// Direction not nullable
+								t.e( Error, index, "getRange", [null, null] );
+								t.e( Error, index, "getRange", [keyRange, null] );
+								t.e( Error, index, "getRange", [null, "what?"] );
+
+								// Test index key range parameters
+								index.getKeyRange();
+								index.getKeyRange(null);
+								index.getKeyRange(101);
+								keyRange = KeyRange.bound(100,105);
+								index.getKeyRange(keyRange);
+								index.getKeyRange(keyRange, false);
+								index.getKeyRange(keyRange, "next");
+								index.getKeyRange(keyRange, "next", false);
+								index.getKeyRange(keyRange, "nextunique");
+								index.getKeyRange(keyRange, "prev");
+								index.getKeyRange(keyRange, "prevunique");
+
+								// Direction not nullable
+								t.e( Error, index, "getKeyRange", [null, null] );
+								t.e( Error, index, "getKeyRange", [keyRange, null] );
+								t.e( Error, index, "getKeyRange", [null, "what?"] );
+							}
+						},
+
+						{
+							name: "Range reversal",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ( {autoIncrement: false, keyPath:null});
+								var index = store.createIndex("parents", "parent", {multiEntry: true});
+								var keyRange, rangeNxt, rangePrv;
+								var undef;
+								
+								// Insert data into the store, using a custom key
+								data.forEach( function (object, idx) {
+									var key = store.add( object, {key: idx+100} );
+								});
+
+								// Test range direction on the store
+								rangeNxt = store.getRange(null, "next");
+								rangePrv = store.getRange(null, "prev");
+								t.is (rangeNxt.length, rangePrv.length);
+								rangePrv.reverse();
+								rangeNxt.forEach( function (obj, idx) {
+									t.is (obj.name, rangePrv[idx].name);
+								});
+
+								// 'nextunique' on a store is effectively the same as 'next'
+								// considering store keys MUST be unique to being with.
+								
+								rangeNxt = store.getRange(null, "nextunique");
+								rangePrv = store.getRange(null, "prevunique");
+								t.is (rangeNxt.length, rangePrv.length);
+								rangePrv.reverse();
+								rangeNxt.forEach( function (obj, idx) {
+									t.is (obj.name, rangePrv[idx].name);
+								});
+
+
+								rangeNxt = index.getRange(null, "next");
+								rangePrv = index.getRange(null, "prev");
+								t.is (rangeNxt.length, rangePrv.length);
+								rangePrv.reverse();
+								rangeNxt.forEach( function (obj, idx) {
+									t.is (obj.name, rangePrv[idx].name);
+								});
+
+								rangeNxt = index.getKeyRange(null, "next");
+								rangePrv = index.getKeyRange(null, "prev");
+								t.is (rangeNxt.length, rangePrv.length);
+								rangePrv.reverse();
+								t.is (0, Keys.cmp( rangeNxt, rangePrv));
+
+								store.destroy();
+							}
+						},
+
+						{
+							name: "Range, no duplicates",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ( {autoIncrement: false, keyPath:null});
+								var index = store.createIndex("parents", "parent", {multiEntry: true});
+								var rangeUniq, rangeDupl
+								
+								// Insert data into the store, using a custom key
+								data.forEach( function (object, idx) {
+									var key = store.add( object, {key: idx+100} );
+								});
+
+								rangeDupl = index.getKeyRange();
+								rangeUniq = index.getKeyRange(null, false);
+								t.is ( rangeUniq, Keys.purgeKey( rangeDupl));
+
+								store.destroy();
+							}
+						},
+
+
 						{
 							name: "Iterate store, NO key path, NO key generator",
 							runTest:function (t) {
 								var Store = declare( [_Store, _Indexed]);
 								var store = new Store ( {autoIncrement: false, keyPath:null});
-								var keyRange, result, cursor;
+								var keyRange, result;
 								var max = data.length;
 								var undef;
 								
@@ -149,7 +301,6 @@
 							}
 						}
 						
-
 
 					]);
 

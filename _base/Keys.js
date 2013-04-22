@@ -32,22 +32,7 @@ define(["exports",
 	var StoreError = createError( "Keys" );			// Create the StoreError type.
 	var undef;
 	
-	function cmpAry( ary1, ary2 ) {
-		//summary:
-		//		Deep array comparison. Non-numeric properties are ignored.
-		var min = (ary1.length < ary2.length ? ary1.length : ary2.length);
-		var res = 0, i;
-		
-		for (i = 0; !res && i<min; i++) {
-			res = exports.cmp( ary1[i], ary2[i]);
-		}
-		if (!res && ary1.length != ary2.length) {
-			return (ary1.length < ary2.length ? -1 : 1);
-		}
-		return res;
-	}
-
-	exports.cmp = function cmp ( key1, key2 ) {
+	exports.cmp = function cmp ( key1, key2, strict ) {
 		// summary:
 		//		This method compares two keys. The method returns 1 if the first key
 		//		is greater than the second, -1 if the first is less than the second,
@@ -72,36 +57,56 @@ define(["exports",
 		// tag:
 		//		Public.
 
+		function cmpAry( ary1, ary2 ) {
+			//summary:
+			//		Deep array comparison. Non-numeric properties are ignored.
+			var min = (ary1.length < ary2.length ? ary1.length : ary2.length);
+			var res = 0, i;
+			
+			for (i = 0; !res && i<min; i++) {
+				res = exports.cmp( ary1[i], ary2[i]);
+			}
+			if (!res && ary1.length != ary2.length) {
+				return (ary1.length < ary2.length ? -1 : 1);
+			}
+			return res;
+		}
+
 		// Handle 'undefined' same as null but preserve any empty strings.
 		var keyA = key1 != undef ? key1 : null;
 		var keyB = key2 != undef ? key2 : null;
 
-		// Explicitly test for null so comparing the 'empty string' works correct.
 		if (keyA != null && keyB != null) {
-			if (keyA instanceof Array || keyB instanceof Array) {
-				if (!(keyA instanceof Array)) return -1;
-				if (!(keyB instanceof Array)) return 1;
-				return cmpAry( keyA, keyB );	// Perform deep array comparison.
-			}
 			if (typeof keyA == typeof keyB) {
+				if (keyA instanceof Array) {
+					return cmpAry( keyA, keyB );	// Perform deep array comparison.
+				}
+				// Expliticly test if KeyA equals KeyB, this because two distinct objects
+				// are never the same. Trying to compare objects will throw an exception 
+				// of type TypeError.
+				if (keyA > keyB) return  1;
 				if (keyA < keyB) return -1;
-				if (keyA > keyB) return 1;
-				return 0;
-			} else if (keyA instanceof String || typeof keyA == "string") {
-				return 1;
-			} else if (keyB instanceof String || typeof keyB == "string") {
-				return -1;
-			} else if (keyA instanceof Date) {
-				return 1;
-			} else if (keyB instanceof Date) {
-				return -1;
+				if (keyA == keyB) return 0;
 			}
-			// Getting here actually implies invalid key values. (unsupported types).
-			return exports.cmp( keyA.toString(), keyB.toString() );
+			if (keyA instanceof Array) return  1;
+			if (keyB instanceof Array) return -1;
+
+			if (keyA instanceof String || typeof keyA =="string") return  1;
+			if (keyB instanceof String || typeof keyB =="string") return -1;
+
+			if (keyA instanceof Date) return  1;
+			if (keyB instanceof Date) return -1;
+
+			throw new StoreError("TypeError", "cmp");
 		}
-		if (!keyA && !keyB) return 0;
-		if (!keyA) return -1;
-		return 1;
+		// Although null is not a valid key, allow it so this function can be used
+		// for  more than just key comparison.
+		if (!strict) {
+			if (!keyA && !keyB) return 0;
+			if (!keyA) return -1;
+			return 1;
+		}
+		throw new StoreError("TypeError", "cmp");
 	};
 
 	exports.boundary = function (/*Index|Store*/ source, /*any*/ key, /*String*/ type, /*Boolean*/ open ) {
@@ -212,7 +217,9 @@ define(["exports",
 
 	exports.getRange = function (/*Index|Store*/ source, /*KeyRange*/ keyRange) {
 		// summary:
-		//		Determine all records within a given key range.
+		//		Determine all records within a given key range. This function does
+		//		not return records, instead it returns a Range object which holds
+		//		information about the first and last record in range.
 		// source:
 		//		An index or a store with their records in ascending key order.
 		// keyRange:
@@ -267,12 +274,12 @@ define(["exports",
 		//		The location in keyArray to start the search from. fromIndex can be
 		//		an integer between 0 and the length of keyArray. The default is 0.
 		// returns:
-		//		If found the zero based location otherwise -1.
+		//		If found the zero based location of key otherwise -1.
 		// tag:
 		//		Public
-		var idx = Number(fromIndex) || 0;
 		
 		if (key != undef && keyArray instanceof Array) {
+			var idx = Number(fromIndex) || 0;
 			var max = keyArray.length;
 			for(; idx < max; idx++) {
 				if (!exports.cmp(key, keyArray[idx])) {
@@ -331,7 +338,6 @@ define(["exports",
 		//		Any. The value returned may or may not be a valid key.
 		// tag:
 		//		Public
-		var keyValue;
 
 		if (keyPath != undef) {
 			if (keyPath instanceof Array) {
@@ -348,7 +354,8 @@ define(["exports",
 
 	exports.purgeKey = function (/*Key||Key[]*/ keyValue ) {
 		// summary:
-		//		If keyValue is an array, remove all invalid and duplicate	key values.
+		//		If keyValue is an array, remove all invalid and duplicate	key values
+		//		otherwise simply return keyValue.
 		// keyValue:
 		//		Key value or key value array.
 		// returns:
@@ -374,8 +381,8 @@ define(["exports",
 		// summary:
 		//		Search in an ordered list of records all records that share key and
 		//		return a location object.
-		// records:
-		//		List of records in ascending order by key.
+		// source:
+		//		Either a store or index object.
 		// key:
 		//		Key identifying the record(s).
 		// returns:
@@ -409,16 +416,16 @@ define(["exports",
 		return new Location(source);
 	};
 
-	exports.sort = function (/*Array*/ keys, /*Boolean*/ ascending) {
+	exports.sort = function (/*Key[]*/ keys, /*Boolean?*/ ascending) {
 		// summary:
-		//		Sort an array of keys. If keys are an array a deep array comparison
+		//		Sort an array of keys. If keys are arrays a deep array comparison
 		//		is performed. In accordance with the W3C IndexedDB specs, the rule:
 		//		(Array > String > Date > Number) is applied while sorting keys.
 		// keys:
 		//		Array of keys.
 		// ascending:
 		//		If true, the keys are sorted in ascending order otherwise the	keys
-		//		are sorted in descending order.
+		//		are sorted in descending order. The default is true.
 		// tag:
 		//		Public
 		if (keys instanceof Array) {
@@ -445,12 +452,12 @@ define(["exports",
 		//		Private
 
 		if (store.keyPath != undef) {
-			if (key) {
+			if (key != undef) {
 				return false;		// Can't have key path AND optional key provided.
 			}
 			key = exports.keyValue(store.keyPath, value);
 		}		
-		if (key) {
+		if (key != undef) {
 			if (!exports.validKey(key)) {
 				return false;		// Key is not a valid key
 			}
@@ -483,7 +490,7 @@ define(["exports",
 
 	exports.validKey = function (/*any*/ key) {
 		// summary:
-		//		Valid if key is a valid indexedDB key
+		//		Validate if key is a valid indexedDB key
 		// key:
 		//		Key to be validated.
 		// returns:

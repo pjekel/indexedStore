@@ -83,7 +83,7 @@ define(["dojo/_base/declare",
 		},
 
 		//=========================================================================
-		// Public cbtree/store/api/store API methods
+		// Public IndexedStore/api/store API methods
 
 		watch: function (/*RegExp|String|String[]*/property) {
 			// summary:
@@ -114,7 +114,7 @@ define(["dojo/_base/declare",
 
 		unwatch: function (/*String|String[]*/property) {
 			// summary:
-			//		Remove a property name from the list of properties being monotored.
+			//		Remove a property name from the list of properties being monitored.
 			// property:
 			//		Regular expression, property name or property path.
 			// tag:

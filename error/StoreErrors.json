@@ -3,6 +3,7 @@
 	{"AccessError":						{"text":"requested or required access is not allowed"} },
 	{"DataError": 						{"text":"data provided to an operation does not meet requirements"} },
 	{"DataCloneError": 				{"text":"the object can not be cloned."} },
+	{"DependencyError":				{"text":"Module requires another module or the modules are loaded in the wrong order"} },
 	{"ItemExistError":				{"text":"object with specified ID already exist"} },
 	{"InvalidAccessError":		{"text":"operation or parameter is not allowed"} },
 	{"InvalidPropertyError":	{"text":"invalid property or type specified"} },

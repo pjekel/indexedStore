@@ -21,7 +21,7 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 
 	var Library = {
 
-		clone: function clone (object) {
+		clone: function clone (object, strict) {
 			// html structured cloning algorithm. (no type map support)
 			var memory = [];
 
@@ -106,6 +106,12 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 //				Object.defineProperty( object, property, {value: object[property], enumerable:false});
 			} else {
 				this.defProp( object, property, {enumerable:value});
+			}
+		},
+
+		freeze: function (object) {
+			if (defineable) {
+				Object.freeze(object);
 			}
 		},
 

@@ -26,20 +26,11 @@ define(["dojo/_base/lang",
 	//
 	//			http://www.w3.org/TR/IndexedDB/#cursor-sync
 	//
-	//		Cursors are supported on store/_Indexed based stores and any index. In
-	//		addition, cursors can be passed directly to the store's query engine.
-	//		For example:
-	//
-	//	|	var range  = KeyRange.bound("Bart", "Homer");
-	//	| var cursor = store.openCursor( range );
-	//	| var query  = {type:"parent", hair:"blond"}
-	//	| var result = store.queryEngine(query)(cursor); 
-	//
-	
-	// Requires JavaScript 1.8.5
+	//		Cursors are supported on store/_Indexed based stores and any index.
+
 	var StoreError = createError( "Cursor" );		// Create the CBTError type.
-	var clone      = Lib.clone;									// HTML5 structure clone.
 	var defProp    = Lib.defProp;
+	var clone      = Lib.clone;									// HTML5 structure clone.
 	var undef;
 
 	function Cursor (/*Store|Index*/ source,/*KeyRange*/ range, /*String*/ direction,
@@ -62,7 +53,7 @@ define(["dojo/_base/lang",
 
 		//=========================================================================
 
-		function assertSource(/*IDBIndex|IDBObjectStore*/ source ) {
+		function assertSource(/*Index|Store*/ source ) {
 			// summary:
 			//		Test if the cursor's store or index is still in a valid state.
 			// source:
@@ -77,95 +68,9 @@ define(["dojo/_base/lang",
 			return true;
 		}
 
-		function loadCursor(source, keyRange, direction) {
-			// summary:
-			//		Load the cursor. This function is called once for each cursor.
-			//		Effectively it returns the first record in range.
-			// tag:
-			//		Private
-			var records = source._records;
-			var range, keyLoc;
-
-			range = Keys.getRange( source, keyRange );
-			if (range.length) {
-				var first = range.first;
-				var last  = range.last;
-
-				switch (direction) {
-					case "next":
-					case "nextunique":
-						keyLoc = new Location( source, first-1, first, first+1 );
-						break;
-					case "prev":
-						keyLoc = new Location( source, last-1, last, last+1 );
-						if (index && !source.unique) {
-							var storeKeys = keyLoc.record.value;
-							keyLoc.position = storeKeys.length - 1;
-						}
-						break;
-					case "prevunique":
-						keyLoc = new Location( source, last-1, last, last+1 );
-						break;
-				}
-			} else {
-				// make sure keyLoc is a location object.
-				keyLoc = new Location( source );
-			}
-			length = range.length;
-			return keyLoc;
-		}
-
-		function iterateCursor(/*IDBCursor*/ cursor, /*any*/ key ) {
-			// summary:
-			//		Iterate the cursor
-			// cursor:
-			//		Cursor to iterate
-			// tag:
-			//		Private
-			var position, record;
-
-			if (locator) {
-				switch (direction) {
-					case "next":
-						locator = locator.next(key);
-						break;
-					case "nextunique":
-						locator = locator.next(key, true);
-						break;
-					case "prev":
-						locator = locator.previous(key);
-						break;
-					case "prevunique":
-						locator = locator.previous(key, true);
-						break;
-				}
-			} else {
-				locator = loadCursor(source, keyRange, direction);	
-			}
-			position = locator.position;
-			record   = locator.record;
-
-			if (record && Keys.inRange( record.key, keyRange)) {
-				currentKey = primaryKey = record.key;
-				if (index) {
-					primaryKey = record.value[position];
-					if (!keyCursor) {
-						currentVal = store.get( primaryKey );
-					}
-				} else {
-					currentVal = store._clone ? clone(record.value) : record.value;
-				}
-			} else {
-				currentVal = currentKey = primaryKey = undefined;
-				gotValue = false;
-				return null;
-			}
-			gotValue = true;
-			return cursor;
-		}
-
 		function advanceCursor(/*Cursor*/ cursor, /*any?*/ key,/*Number?*/ count ) {
 			// summary:
+			//		Advance the cursor 'count' number of times in the cursor direction.
 			// tag:
 			//		Private
 			var result;
@@ -178,6 +83,174 @@ define(["dojo/_base/lang",
 			}
 			return result;
 		}
+
+		function iterateCursor(/*IDBCursor*/ cursor, /*any*/ key ) {
+			// summary:
+			//		Perform one cursor iteration
+			// cursor:
+			//		Cursor to iterate
+			// key:
+			//		The next key to position this cursor at
+			// tag:
+			//		Private
+
+			var record, reset = false;
+			if (!locator) {
+				// Create a location object and get the first key in range.
+				locator = new Location( source );			
+				var range = Keys.getRange( source, keyRange );
+				if (range.length) {
+					record = dirForward ? source._records[range.first] : source._records[range.last];
+					key = record.key;
+				} else {
+					gotValue = false;
+					return null;
+				}
+				reset = true;		// reset the locator.
+			}
+
+			if (dirForward) {
+				locator = next(key, dirUnique, reset);
+			} else {
+				locator = previous(key, dirUnique, reset);
+			}
+			record = locator.record;
+
+			if (record && Keys.inRange( record.key, keyRange)) {
+				if (index && !keyCursor) {
+					currentVal = store.get( primaryKey );
+				} else {
+					currentVal = store._clone ? clone(record.value) : record.value;
+				}
+			} else {
+				currentVal = currentKey = primaryKey = undef;
+				gotValue = false;
+				return null;
+			}
+			gotValue = true;
+			return cursor;
+		}
+
+		function setKeys( key, primKey ) {
+			currentKey = key;
+			primaryKey = primKey;
+		}
+
+		function next (/*any?*/ key, /*Boolean?*/ unique,/*Boolean?*/ reset) {
+			// summary:
+			//		Get the next record relative to the current location.
+			// key:
+			//		The next key to position this cursor at.
+			// unique:
+			//		If true records with duplicate keys are skipped.
+			// returns:
+			//		A location object.
+			// tag:
+			//		Private
+			var keyLoc, keyIdx, record, value;
+			var nxtLoc = locator.gt;
+			
+			if (key != undef) {
+				keyLoc = Keys.search(source, key);
+				keyIdx = keyLoc.eq != -1 ? keyLoc.eq : keyLoc.ls + 1;
+				if (!reset && keyIdx < nxtLoc) {
+					return new Location( source, - 1, -1, 0 );
+				} else {
+					nxtLoc = keyIdx;
+				}
+			} else {
+				record = source._records[locator.eq];
+				// Test if the current record still exist and hasn't changed....
+				if (record && !Keys.cmp(record.key, currentKey)) {
+					if (!unique && (index && !source.unique)) {
+						value  = record.value;
+						keyIdx = Keys.indexOf(value, primaryKey);
+						if (keyIdx == -1) {
+							for (keyIdx = 0; keyIdx < value.length && Keys.cmp(primaryKey, value[keyIdx]) > 0; keyIdx++);
+						} else {
+							keyIdx++;
+						}
+						if (keyIdx < value.length) {
+							keyLoc = new Location( source, locator.ls, locator.eq, locator.gt );
+							setKeys( record.key, value[keyIdx] );
+							return keyLoc;
+						}
+					}
+				} else {
+					// The record identified by this location object has been deleted.
+					return next( currentKey, unique, true );
+				}
+			}
+			if (nxtLoc >= 0 && nxtLoc < source._records.length) {
+				keyLoc = new Location( source, nxtLoc - 1, nxtLoc, nxtLoc+1 );
+				setKeys( keyLoc.key, index ? keyLoc.value[0] : keyLoc.key );
+				return keyLoc;
+			}
+			return new Location( source, nxtLoc - 1, -1, nxtLoc );
+		}
+		
+		function previous (/*any?*/ key, /*Boolean?*/ unique,/*Boolean?*/ reset) {
+			// summary:
+			//		Get the previous record relative to the current location.
+			// key:
+			//		The next key to position this cursor at.
+			// unique:
+			//		If true no records with duplicate keys are returned.
+			// returns:
+			//		A location object.
+			// tag:
+			//		Private
+			var nxtLoc = locator.ls;
+			var record;
+			var keyLoc;
+
+			if (key != undef) {
+				keyLoc = Keys.search(source, key);
+				var keyIdx = keyLoc.eq != -1 ? keyLoc.eq : keyLoc.gt - 1;
+				if (!reset && keyIdx > nxtLoc) {
+					return new Location( source, - 1, -1, 0 );
+				} else {
+					nxtLoc = keyIdx;
+				}
+			} else {
+				record = source._records[locator.eq];
+				if (record && !Keys.cmp(record.key, currentKey)) {
+					if (!unique && (index && !source.unique)) {
+						var value = record.value;
+						var idx = Keys.indexOf(value, primaryKey);
+
+						if (idx == -1) {
+							for (idx = value.length-1; idx >= 0 && Keys.cmp(primaryKey, value[idx]) < 0; idx--);
+						} else {
+							idx--;
+						}
+						if (idx >= 0) {
+							var keyLoc = new Location( source, locator.ls, locator.eq, locator.gt );
+							setKeys( record.key, value[idx] );
+							return keyLoc;
+						}
+					}
+				} else {
+					// The record identified by this location object has been deleted.
+					return previous( currentKey, unique, true );
+				}
+			}
+			nxtLoc = Math.min(nxtLoc, source._records.length-1);
+			if (nxtLoc >= 0) {
+				keyLoc = new Location( source, nxtLoc - 1, nxtLoc, nxtLoc+1 );
+				if (index) {
+					if (unique) {
+						setKeys( keyLoc.key, keyLoc.value[0] );
+					} else {
+						setKeys( keyLoc.key, keyLoc.value[ keyLoc.value.length-1] );
+					}
+				} else {
+					setKeys( keyLoc.key, keyLoc.key );
+				}
+				return keyLoc;
+			}
+			return new Location( source, nxtLoc - 1, -1, nxtLoc );
+		};
 
 		//=========================================================================
 		// Public Cursor methods.
@@ -233,9 +306,6 @@ define(["dojo/_base/lang",
 			//		Public
 			if (gotValue && !keyCursor) {
 				if (store.remove( primaryKey )) {
-					locator.last--;
-					locator.gt--;
-					length--;
 					return true;
 				}
 				return false;
@@ -283,69 +353,15 @@ define(["dojo/_base/lang",
 		}
 
 		//=========================================================================
-		// Array style properties/methods.
 
-		this.forEach = function ( callback, thisArg ) {
-			// summary:
-			//		forEach executes the provided callback once for each element of the
-			//		cursor. the callback is invoked with 3 arguments:
-			//		1) the record value, 2) record index and 3) the cursor.
-			// callback:
-			// thisArg:
-			//		The scope in which the callback will execute.
-			// tag:
-			//		Public, hidden
-			if (typeof callback !== "function" ) {
-				throw new StoreError("Parameter", "forEach", "%{0} is not a function", callback );
-			}
-			while (gotValue) {
-				callback.call( thisArg, currentVal, locator.position, this );
-				advanceCursor(this, null, 1);
-			}
-    };
-
-		this.slice = function (begin, end) {
-			// summary:
-			//		Returns a shallow copy of a portion of a cursor
-			// begin:
-			//		Zero-based index at which to begin extraction. As a negative index,
-			//		begin indicates an offset from the end of the sequence. slice(-2)
-			//		extracts the second-to-last element and the last element in the
-			//		sequence.
-			// end:
-			//		Zero-based index at which to end extraction. slice extracts up to
-			//		but not including end.slice(1,4) extracts the second element through
-			//		the fourth element (elements indexed 1, 2, and 3). As a negative
-			//		index, end indicates an offset from the end of the sequence.
-			// tag:
-			//		Public, hidden
-
-			if (!keyCursor) {
-				var cursor = new Cursor( source, keyRange, direction, false );
-				var count  = (end == undef) ? source.count( keyRange ) : Number(end);
-				var values = [];
-				
-				while (cursor.value && count--) {
-					values.push( cursor.value );
-					cursor.cont();
-				}
-				return values.slice(begin,end);
-			}
-			throw new StoreError("NotSupported", "slice", "operation is not supported on a key cursor" );
-		}
-
-		defProp( this, "forEach", {enumerable: false});
-		defProp( this, "slice", {enumerable: false});
-
-		//=========================================================================
-
-		var direction   = direction || "next";
-		var source      = source;
-		var store       = source;
-		var gotValue    = false;
-		var index       = false;
-		var keyRange		= range;
-		var length      = 0;
+		var direction  = direction || "next";
+		var dirUnique  = false;
+		var dirForward = true;
+		var source     = source;
+		var gotValue   = false;
+		var index      = false;
+		var keyRange   = range;
+		var store      = null;
 
 		var primaryKey;
 		var currentKey;
@@ -357,7 +373,6 @@ define(["dojo/_base/lang",
 		defProp( this, "direction", {get: function () { return direction; },	enumerable: true});
 		defProp( this, "source", {get: function () { return source; }, enumerable: true});
 		defProp( this, "key", {get: function () { return currentKey; },	enumerable: true});
-		defProp( this, "length", {get: function () { return length; },	enumerable: true});
 
 		// Implement IDBCursorWithValue
 		if (!keyCursor) {
@@ -370,12 +385,17 @@ define(["dojo/_base/lang",
 				index = true;
 				break;
 			case "store":
+				store = source;
 				break;
 			default:
 				throw new StoreError("NotSupported", "constructor", "Unknown source type" );
 		}
 		
-		if (!Lib.isDirection(direction)) {
+
+		if (Lib.isDirection(direction)) {
+			dirForward = /^next/.test(direction);
+			dirUnique  = /unique$/.test(direction);
+		} else {
 			throw new StoreError("InvalidType", "constructor", "Invalid cursor direction.");
 		}
 

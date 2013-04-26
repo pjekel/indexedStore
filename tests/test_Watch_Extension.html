@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Watch Extension</title>
+    <style type="text/css">
+      @import "../../dijit/themes/claro/claro.css";
+      @import "../../dijit/themes/claro/document.css";
+      @import "../../dijit/tests/css/dijitTests.css";
+    </style>
+
+    <script type="text/javascript">
+      var dojoConfig = {
+            async: true,
+            parseOnLoad: true,
+            isDebug: true,
+            baseUrl: "../../",
+            packages: [
+              { name: "dojo", location: "dojo" },
+              { name: "doh",  location: "util/doh" },
+              { name: "store",location: "indexedStore" }
+            ]
+      };
+    </script>
+
+    <script type="text/javascript" src="../../dojo/dojo.js"></script>
+    <script type="text/javascript">
+      require([
+        "doh/runner",
+        "dojo/_base/declare",
+        "dojo/ready",
+        "store/_base/_Store",
+        "store/_base/_Indexed",
+        "store/_base/_Loader",
+				"store/extension/Hierarchy",
+				"store/extension/Watch"
+        ], function( doh, declare, ready,
+											_Store, _Indexed, _Loader, Hierarchy, Watch ) {
+					"use strict";
+					
+					// IMPORTANT:
+					//		Don't change the number of records without updating any of
+					//		the range and count tests.
+					// - there are 8 unique parents.
+					var data = [
+						{ "name":"Root", "parent":[], "hair":"none" },
+						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
+						{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
+						{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
+						{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
+						{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
+						{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },
+						{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
+						{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
+						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
+						{ "name":"Manjula", "age":40, "parent":["Apu"], "hair":"brown"}
+					];
+					var undef;
+
+					function listener0() {
+					};
+					function listener1() {
+					};
+					function listener2() {
+					};
+					function listener99() {
+					};
+					
+					doh.register("Watch Extension", [
+						{
+							name: "Watch properties, single entry, no listeners",
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Watch]);
+								var store = new Store ();
+
+								// Get the store's private properties...
+								var spotters = store._spotters;
+								var props    = store._watchList;
+
+								t.is( 0, spotters.length );
+								t.is( 0, props.length );
+
+								store.watch("name");
+								t.is( 0, spotters.length );
+								t.is( 1, props.length );
+
+								// Add same property again....
+								store.watch("name");
+								t.is( 0, spotters.length );
+								t.is( 1, props.length );
+
+								var handle = store.watch("hair");
+								t.is( 0, spotters.length );
+								t.is( 2, props.length );
+
+								handle.remove();
+								t.is( 0, spotters.length );
+								t.is( 1, props.length );
+
+							}
+						},
+
+						{
+							name: "Watch properties, multi entry, no listeners",
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Watch]);
+								var store = new Store ();
+
+								// Get the store's private properties...
+								var spotters = store._spotters;
+								var props    = store._watchList;
+
+								t.is( 0, spotters.length );
+								t.is( 0, props.length );
+
+								var hndl0 = store.watch("name, hair, age");
+								t.is( 0, spotters.length );
+								t.is( 3, props.length );
+
+								// Add same property again....
+								store.watch("name, hair");
+								t.is( 0, spotters.length );
+								t.is( 3, props.length );
+
+								var hndl1 = store.watch("hair");
+								t.is( 0, spotters.length );
+								t.is( 3, props.length );
+
+								hndl1.remove();
+								t.is( 0, spotters.length );
+								t.is( 2, props.length );
+
+								store.unwatch("name, age");
+								t.is( 0, spotters.length );
+								t.is( 0, props.length );
+
+								hndl0.remove();
+							}
+						},
+
+						{
+							name: "Watch properties, single entry, with listener",
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Watch]);
+								var store = new Store ();
+
+								// Get the store's private properties...
+								var spotters = store._spotters;
+								var props    = store._watchList;
+
+								t.is( 0, spotters.length );
+								t.is( 0, props.length );
+
+								store.watch("name", listener0);
+								t.is( 1, spotters.length );
+								t.is( 1, props.length );
+
+								// Add same property again....
+								store.watch("name");
+								t.is( 1, spotters.length );
+								t.is( 1, props.length );
+
+								// New property, same listener
+								var handle = store.watch("hair", listener0);
+								t.is( 2, spotters.length );
+								t.is( 2, props.length );
+
+								handle.remove();
+								t.is( 1, spotters.length );
+								t.is( 1, props.length );
+
+								// Try removing a non-existing listener
+								store.unwatch( "name", listener99);
+								t.is( 1, spotters.length );
+								t.is( 1, props.length );
+
+								store.unwatch( "name");
+								t.is( 0, spotters.length );
+								t.is( 0, props.length );
+
+								store.watch("age", listener0);
+								store.watch("age", listener1);
+								store.watch("age", listener2);
+
+								store.unwatch( "age", listener1);
+								t.is( 2, spotters.length );
+								t.is( 1, props.length );
+
+								store.unwatch("age");
+								t.is( 0, spotters.length );
+								t.is( 0, props.length );
+
+							}
+						},
+
+						{
+							name: "Watch properties, multiple entries, with listener",
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Watch]);
+								var store = new Store ();
+
+								// Get the store's private properties...
+								var spotters = store._spotters;
+								var props    = store._watchList;
+
+								t.is( 0, spotters.length );
+								t.is( 0, props.length );
+
+								var handle0 = store.watch("name, hair, age", listener0);
+								t.is( 3, spotters.length );
+								t.is( 3, props.length );
+
+								// Add same property again, no listener
+								store.watch("name");
+								t.is( 3, spotters.length );
+								t.is( 3, props.length );
+
+								// Add same property, same lsitener
+								var handle1 = store.watch("hair", listener0);
+								t.is( 3, spotters.length );
+								t.is( 3, props.length );
+
+								handle0.remove();
+								t.is( 0, spotters.length );
+								t.is( 0, props.length );
+
+							}
+						},
+
+						{
+							name: "Watch properties, monitor using the set event",
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Watch]);
+								var store = new Store ({data:data, keyPath:"name"});
+
+								var events = [];
+
+								// Event handler...
+								function onSet(event) {
+									var detail = event.detail;
+									events[detail.property] = (events[detail.property] || 0) + 1;
+								}
+								
+								store.watch("age, hair, parent");
+								store.on("set", onSet);
+								
+								var homer = store.get("Homer");
+								homer.hair = "blond";
+								homer.age++;
+
+								store.put(homer);
+
+								t.is ( 1, events["hair"] );
+								t.is ( 1, events["age"] );
+
+								store.removeParent(homer,"Mona");
+
+								t.is ( 1, events["parent"] );
+								t.is ( 1, events["hair"] );
+								t.is ( 1, events["age"] );
+
+								// Lets change the parent property without using the Hierarchy 
+								// method addParent().
+								
+								homer.parent.push("Mama");
+								store.put(homer);
+
+								t.is ( 2, events["parent"] );
+								t.is ( 1, events["hair"] );
+								t.is ( 1, events["age"] );
+
+							}
+						},
+
+						{
+							name: "Watch properties, monitor using listeners",
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Watch]);
+								var store = new Store ({data:data, keyPath:"name"});
+
+								var events = [];
+
+								// Event handler...
+								function watcher(object, property, newValue, oldValue) {
+									events[property] = (events[property] || 0) + 1;
+								}
+								
+								store.watch("age, hair, parent", watcher);
+								
+								var homer = store.get("Homer");
+								homer.hair = "blond";
+								homer.age++;
+
+								store.put(homer);
+
+								t.is ( 1, events["hair"] );
+								t.is ( 1, events["age"] );
+
+								store.removeParent(homer,"Mona");
+
+								t.is ( 1, events["parent"] );
+								t.is ( 1, events["hair"] );
+								t.is ( 1, events["age"] );
+
+								// Lets change the parent property without using the Hierarchy 
+								// method addParent().
+								
+								homer.parent.push("Mama");
+								store.put(homer);
+
+								t.is ( 2, events["parent"] );
+								t.is ( 1, events["hair"] );
+								t.is ( 1, events["age"] );
+
+							}
+						},
+
+						{
+							name: "Watch properties, monitor using listeners and remove listener",
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Watch]);
+								var store = new Store ({data:data, keyPath:"name"});
+
+								var events = [];
+
+								// Event handler...
+								function watcher(object, property, newValue, oldValue) {
+									events[property] = (events[property] || 0) + 1;
+								}
+								
+								var h0 = store.watch("age", watcher);
+								var h1 = store.watch("hair", watcher);
+								var h2 = store.watch("parent", watcher);
+
+								var homer = store.get("Homer");
+								homer.hair = "blond";
+								homer.age++;
+
+								store.put(homer);
+
+								t.is ( 1, events["hair"] );
+								t.is ( 1, events["age"] );
+
+								store.removeParent(homer,"Mona");
+
+								t.is ( 1, events["parent"] );
+								t.is ( 1, events["hair"] );
+								t.is ( 1, events["age"] );
+
+								// Lets change the parent property without using the Hierarchy 
+								// method addParent().
+								
+								homer.parent.push("Mama");
+								store.put(homer);
+
+								t.is ( 2, events["parent"] );
+								t.is ( 1, events["hair"] );
+								t.is ( 1, events["age"] );
+
+								// Remove a listener, we shouldn't get called for the 'hair' property.
+								h1.remove();
+								homer.hair = "none";
+								homer.age++;
+								store.put( homer );
+
+								t.is ( 2, events["parent"] );
+								t.is ( 1, events["hair"] );
+								t.is ( 2, events["age"] );
+								
+							}
+						}
+
+					]);
+
+					ready( function () {
+						doh.run();
+
+					});
+
+
+				}
+      );
+    </script>
+
+  </head>
+
+  <body class="claro">
+    <h1 class="DemoTitle">Watch Extension</h1>
+  </body>
+</html>

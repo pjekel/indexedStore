@@ -12,7 +12,7 @@ define([], function () {
 	"use strict";
 
 // module:
-//		store/_base/Location
+//		IndexedStore/_base/Location
 //
 
 	var undef;

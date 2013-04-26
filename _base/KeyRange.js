@@ -13,7 +13,7 @@ define(["./Keys",
 			 ], function (Keys, createError) {
 
 	// module:
-	//		store/_base/KeyRange
+	//		IndexedStore/_base/KeyRange
 	// summary:
 	//		This module implement the IndexedDB KeyRange object. The KeyRange object
 	//		is identical to the IDBKeyRange object specified in the IndexedDB specs:
@@ -125,7 +125,9 @@ define(["./Keys",
 		throw new StoreError("DataError", "bound");
 	};
 
+	//========================================================================
 	// Internal use ONLY
+	
 	Object.defineProperty( KeyRange, "unbound", {
 		value: function () {
 			return freezeObject( new KeyRange() );

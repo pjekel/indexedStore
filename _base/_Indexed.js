@@ -22,7 +22,7 @@ define(["dojo/_base/declare",
 										 Location, Record, createError, Event) {
 	"use strict";
 	// module:
-	//		store/_base/_Indexed
+	//		IndexedStore/_base/_Indexed
 	// summary:
 	// 		The _Indexed class is used in combination with the store/_base/_Store
 	//		class and will organize all object store records in a binary tree.
@@ -81,14 +81,38 @@ define(["dojo/_base/declare",
 		// Constructor
 
 		constructor: function () {
-			if (this.features.has("natural")) {
-				throw new StoreError("ConstraintError", "constructor", "base class 'Natural' and 'Indexed' are mutual exclusive");
+			if (this.features.has("store")) {
+				if (this.features.has("natural")) {
+					throw new StoreError("Dependency", "constructor", "base class '_Natural' and '_Indexed' are mutual exclusive");
+				}
+				this.features.add("indexed");
+				Lib.defProp( this,"indexed", {value:true, writable:false, enumerable: true} );
+				Lib.protect(this);
+			} else {
+				throw new StoreError("Dependency", "constructor", "base class '_Store' must be loaded first");
 			}
-			this.features.add("indexed");
-			Lib.defProp( this,"indexed", {value:true, writable:false, enumerable: true} );
-			Lib.protect(this);
 		},
 		
+		//===================================================================
+		// Private methods.
+
+		_clearRecords: function () {
+			// summary:
+			//		Remove all records from the store and all indexes.
+			// tag:
+			//		Private
+			var name, index;
+			for(name in this._indexes) {
+				index = this._indexes[name];
+				index._clear();
+			}
+			this._records.forEach( function (record) {				
+				record.destroy();
+			});
+			this._records = [];
+			this.total = 0;
+		},
+
 		//===================================================================
 		// IndexedDB procedures
 
@@ -132,13 +156,18 @@ define(["dojo/_base/declare",
 				// Make sure we destroy the real store record and not a clone.
 				var record = this._records.splice( recNum, 1 )[0];
 				var value  = record.value;
+				var key    = record.key;
 				record.destroy();
+
+				this.total = this._records.length;
+				this.revision++;
+				
+				this._callbacks.fireWithOptions("delete", key, null, value, recNum );
 
 				if (!this.suppressEvents) {
 					var event = new Event("delete", {detail:{item: value}});
 					this.dispatchEvent(event);
 				}
-				this.total = this._records.length;
 			}
 			return false;
 		},
@@ -209,7 +238,7 @@ define(["dojo/_base/declare",
 			}
 		},
 
-		_storeRecord: function (/*any*/ value,/*PutDirectives*/ options, /*Function?*/ callback) {
+		_storeRecord: function (/*any*/ value,/*PutDirectives*/ options) {
 			// summary:
 			//		Add a record to the store. Throws a StoreError of type ConstraintError
 			//		if the key already exists and overwrite flag is set to true.
@@ -224,7 +253,7 @@ define(["dojo/_base/declare",
 			//		Record key.
 			// tag:
 			//		Private
-			var curRec, newRec, event, cb, i, at;
+			var newRec, newVal, event, at;
 			var optKey, overwrite = false;
 			
 			if (options) {
@@ -233,10 +262,11 @@ define(["dojo/_base/declare",
 			}
 
 			// Test if the primary key already exists.
-			var baseVal = Keys.getKey(this, value, optKey);
+			var baseVal = Keys.getKey(this, value, optKey);		// Extract key value
 			var keyVal  = this.uppercase ? Keys.toUpperCase(baseVal) : baseVal;
 			var locator = this._retrieveRecord(keyVal);
 			var curRec  = locator.record;
+			var curVal  = curRec && curRec.value;
 			var curAt   = locator.eq;
 			
 			if (curRec) {
@@ -250,15 +280,9 @@ define(["dojo/_base/declare",
 				}
 			}
 
-			// Check if any extension added a callback.
-			if (cb = this._callback) {
-				for (i = 0; i < cb.length; i++) {
-					cb[i].call(this, keyVal, curAt, value, (curRec ? curRec.value : null), options);
-				}
-			}
 			try {
-				value  = this._clone ? clone(value) : value;
-				newRec = new Record( keyVal, value );
+				newVal = this._clone ? clone(value) : value;
+				newRec = new Record( keyVal, newVal );
 			} catch(err) {
 				throw new StoreError( "DataCloneError", "_storeRecord" );
 			}
@@ -271,21 +295,26 @@ define(["dojo/_base/declare",
 			} else {
 				this._records.splice( at, 0, newRec );
 			}
+			this.total = this._records.length;
+			this.revision++;
+			
+			// Check if any extension added a callback.
+			this._callbacks.fireWithOptions("write", keyVal, value, curVal, at, options );
+
 			// Next, event handling ....
 			if (!this.suppressEvents) {
 				if (curRec) {
-					event = new Event( "change", {detail:{item: value, oldItem: curRec.value}});
+					event = new Event( "change", {detail:{item: value, oldItem: curVal}});
 				} else {
 					event = new Event( "new", {detail:{item: value}});
 				}
 				this.dispatchEvent( event );
 			}
-			this.total = this._records.length;
 			return keyVal;
 		},
 
 		//=========================================================================
-		// Public store/api/store API methods
+		// Public IndexedStore/api/store API methods
 
 		count: function (/*any*/ key) {
 			// summary:
@@ -313,7 +342,8 @@ define(["dojo/_base/declare",
 		openCursor: function (/*Key|KeyRange?*/ keyRange, /*DOMString?*/ direction) {
 			// summary:
 			//		Open a new cursor. A cursor is a transient mechanism used to iterate
-			//		over multiple records in the store.
+			//		over multiple records in the store.  A cursor does NOT contain any
+			//		store data and therefore does NOT have a length property.
 			// keyRange:
 			//		The key range to use as the cursor's range.
 			// direction:
@@ -339,7 +369,7 @@ define(["dojo/_base/declare",
 				}
 			}
 			this._assertKey( range, "openCursor", false );
-			var cursor  = new Cursor( this, range, dir, false );
+			var cursor = new Cursor( this, range, dir, false );
 			return cursor;
 		},
 

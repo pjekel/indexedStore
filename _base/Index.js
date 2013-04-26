@@ -588,43 +588,6 @@ define(["dojo/_base/lang",
 			return cursor;
 		};
 
-		this.query = function (/*Object*/ query,/*QueryOptions?*/ options) {
-			// summary:
-			//		Queries the index for objects.
-			// query: Object
-			//		The query to use for retrieving objects from the store.
-			// options:
-			//		The optional arguments to apply to the resultset.
-			// returns: dojo/store/api/Store.QueryResults
-			//		The results of the query, extended with iterative methods.
-			// tag:
-			//		Public
-			var results = [], keys = [];
-			
-			// To query index keys the query must at least have a 'key' property.
-			if (query && query.key) {
-				results = this.queryEngine(query, options)(this._records, true);
-				if (results.length) {
-					results.forEach( function (primKeys) {
-						if (options.nextUnique) {
-							keys.push(primKeys[0]);						
-						} else {
-							primKeys.forEach( function (key) {
-								if (Keys.indexOf(keys,key) == -1) {
-									keys.push(key);
-								}
-							}, this);
-						}
-					}, this);
-
-					results = keys.map( function (key) {
-						return this.store.get( key );
-					}, this);
-				}
-			}
-			return QueryResults( results );
-		};
-
 		this.ready = function (/*Function?*/ callback,/*Function?*/ errback,/*thisArg*/ scope) {
 			// summary:
 			//		Execute the callback when the store has been loaded. If an error

@@ -24,7 +24,7 @@ define(["dojo/_base/declare",
 										 QueryResults, Keys, Lib, Event, createError, QueryEngine) {
 	
 	// module:
-	//		store/_base/_Loader
+	//		IndexedStore/_base/_Loader
 	// summary:
 
 	var StoreError = createError("Loader");		// Create the StoreError type.
@@ -57,9 +57,9 @@ define(["dojo/_base/declare",
 		// Constructor keyword arguments:
 
 		// autoLoad: Boolean
-		//		Indicates, when a URL is specified, if the data should be loaded during
-		//		store construction or deferred until the user explicitly calls the load
-		//		method.
+		//		Indicates, when data or URL is specified, if the data should be loaded
+		//		during store construction or deferred until the user explicitly calls
+		//		the load() method.
 		autoLoad: true,
 
 		// data: Array
@@ -91,7 +91,7 @@ define(["dojo/_base/declare",
 		//		The response argument is a JavaScript key:value pairs object with a
 		//		"text" or "data" property.
 		//
-		//		(See cbtree/stores/handlers/csvHandler.js for an example handler).
+		//		(See Indexedstore/handler/csvHandler.js for an example handler).
 		dataHandler: null,
 
 		// filter: Object | Function
@@ -107,8 +107,8 @@ define(["dojo/_base/declare",
 		handleAs: null,
 
 		// maxErrors: Number
-		//		The maximum number of data errors that may occur before a load request
-		//		is aborted.
+		//		The maximum number of data errors allowed before a load request is
+		//		aborted.
 		maxErrors: 50,
 		
 		// progress: Boolean
@@ -314,10 +314,14 @@ define(["dojo/_base/declare",
 			
 			if (data instanceof Array) {
 				if (store.filter) {
-					data = QueryEngine(store.filter)(data);
+					if (Lib.isObject(store.filter)) {
+						data = QueryEngine(store.filter)(data);
+					} else if (typeof store.filter == "function") {
+						data = data.filter(store.filter);
+					}
 				}
 				try {
-					store.dispatchEvent( new Event ("loadStart", {detail:{store:this}}) );
+					store.dispatchEvent( new Event ("loadStart", {detail:{store:store}}) );
 					// If loading from a remote source skip cloning...
 					if (defer.url) {
 						store._clone = false;
@@ -344,11 +348,12 @@ define(["dojo/_base/declare",
 					if (errors >= 25) {
 						console.warn( errors - 25, " more objects failed.");
 					}
-					store.dispatchEvent( new Event ("loadEnd", {detail:{store:this}}) );
+					store.dispatchEvent( new Event ("loadEnd", {detail:{store:store}}) );
 					store._loadProgress(100, 100, defer);
-					store._loadSuccess(defer);
+					store._clone = clone;
+					store._loadSuccess(defer);					
 				} catch (err) {
-					store.dispatchEvent( new Event ("loadFailed", {detail:{store:this}}) );
+					store.dispatchEvent( new Event ("loadFailed", {detail:{store:store}}) );
 					throw err;
 				} finally {
 					store._clone = clone;
@@ -428,7 +433,7 @@ define(["dojo/_base/declare",
 		},
 
 		//=========================================================================
-		// Public cbtree/store/api/store API methods
+		// Public IndexedStore/api/store API methods
 
 		close: function (/*Boolean?*/ clear) {
 			// summary:
@@ -455,7 +460,7 @@ define(["dojo/_base/declare",
 			//		contains a dataset or URL and a load request is currently pending
 			//		the new request is rejected.
 			// options:
-			//		optional cbtree/store/api/Store.LoadDirectives
+			//		optional IndexedStore/api/Loader.LoadDirectives
 			// returns:
 			//		dojo/promise/Promise
 			// tag:

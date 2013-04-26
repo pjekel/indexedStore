@@ -13,9 +13,11 @@ define(["dojo/_base/declare",
 				"dojo/Deferred",
 				"dojo/Stateful",
 				"dojo/store/util/QueryResults",
+				"./Callback",
 				"./FeatureList",
 				"./Index",
 				"./Library",
+				"./Listener",
 				"./Location",
 				"./Keys",
 				"./KeyRange",
@@ -28,12 +30,12 @@ define(["dojo/_base/declare",
 				"../util/QueryEngine",
 				"../util/shim/Array"						 // ECMA-262 Array shim
 			 ], function (declare, lang, Deferred, Stateful, QueryResults,
-			               FeatureList, Index, Lib, Location, Keys, KeyRange, 
+			               Callback, FeatureList, Index, Lib, Listener, Location, Keys, KeyRange, 
 			               Range, Record, createError, Event, EventTarget, 
 			               DOMStringList, QueryEngine ) {
 	"use strict";
 	// module:
-	//		store/_base/_Store
+	//		IndexedStore/_base/_Store
 	// summary:
 	//		Abstract base class for the indexed store. This base class implements
 	//		the majority of both the dojo/store/api/Store API and the IndexedDB
@@ -41,9 +43,9 @@ define(["dojo/_base/declare",
 	//		Three additional base classes are provided to build a fully functional
 	//		object store, they are:
 	//
-	//			1 - store/_base/_Indexed
-	//			2 - store/_base/_Natural
-	//			3 - store/_base/_Loader
+	//			1 - IndexedStore/_base/_Indexed
+	//			2 - IndexedStore/_base/_Natural
+	//			3 - IndexedStore/_base/_Loader
 	//
 	//		_Indexed class
 	//			The base class _Indexed will organize all store records in a binary
@@ -55,7 +57,7 @@ define(["dojo/_base/declare",
 	//			The base class _Natural will organize all store records in a natural
 	//			order, that is, in the order the records are added to the store.
 	//			This class provides support for the dojo/store/api/Store PutDirective
-	//			property 'before' but does not support cursors, only the query engine.
+	//			property 'before' but does not support Cursors, only the query engine.
 	// 
 	//		_Loader:
 	//			The base class _Loader adds the ability to load the store with either
@@ -73,6 +75,7 @@ define(["dojo/_base/declare",
 	//			- Hierarchy
 	//			- Ancestry
 	//			- CORS
+	//			- Observable
 	//			- Watch
 	//
 	//		Hierarchy:
@@ -89,6 +92,12 @@ define(["dojo/_base/declare",
 	//			The CORS extension is used in combination with the Loader and adds
 	//			Cross-Origin Resource Sharing (CORS) capabilities. When applied
 	//			URL's with the schema http: or https: can be used.
+	//		Observable:
+	//			Monitors for, and Notifies the user, of changes to query results.
+	//		Watch:
+	//			Monitors store objects for changes to specific object properties.
+	//			If an object property that is being monitored changes a set event
+	//			is dispatched.
 	//
 	//		For detailed information on the bases classes and extensions please
 	//		refer to the modules in either the store/_base or store/extension
@@ -252,16 +261,17 @@ define(["dojo/_base/declare",
 			declare.safeMixin( this, kwArgs );
 
 			this._autoIndex  = 1;
-			this._clone      = true;		// Only handout cloned objects
+			this._clone      = true;						// Handout only cloned objects
 			this._indexes    = {};
-			this._index      = {};			// Local record index (used by _Natural only).
 			this._records    = [];
+			this._callbacks  = new Callback();
 			this._storeReady = new Deferred();
 
 			this.features    = new FeatureList();
 			this.indexNames  = new DOMStringList();
 			this.idProperty  = this.keyPath || this.idProperty;
 			this.keyPath     = this.idProperty;
+			this.revision    = 0;
 			this.total       = 0;
 			this.transaction = null;
 			this.type        = "store";
@@ -269,8 +279,9 @@ define(["dojo/_base/declare",
 			if (!this.name) {
 				this.name = "store_" + uniqueId++;
 			}
+			this.features.add("store");
 
-			Lib.writable( this, "type", false );
+			Lib.writable( this, "type, features", false );
 			Lib.protect( this );	// Hide own private properties.
 
 			this._storeIsReady( this );
@@ -332,38 +343,8 @@ define(["dojo/_base/declare",
 			}
 		},
 
-		_strictSetter: function (value) {
-			this.strict = !!value;
-		},
-
 		//===================================================================
-		// Common procedures
-		
-		_addCallback: function ( callback ) {
-			// summary:
-			//		Add a callback to the store's _storeRecord() procedure. The callback
-			//		is called just before the object is written to the store.  The use
-			//		of callbacks is intented for store extension.
-			// callback:
-			//		Callback function with the following signature:
-			//			callback( key, 				// object key
-			//								at, 				// current record index
-			//								newValue,		// new object value
-			//								oldValue,		// old object value
-			//								options			// any add() or put() options.
-			//							)
-			// NOTE: Callbacks MUST NOT alter any object properties that are part of
-			//       object's primary key.
-			// tag:
-			//		Private
-			if (typeof callback  == "function") {
-				if (!this._callback) {
-					this._callback = [callback];
-				} else {
-					this._callback.push(callback);
-				}
-			}
-		},
+		// Private methods
 		
 		_applyDefaults: function (/*Object*/ object) {
 			// summary:
@@ -422,17 +403,17 @@ define(["dojo/_base/declare",
 			//		Remove all records from the store and all indexes.
 			// tag:
 			//		Private
-			var name, index;
-			for(name in this._indexes) {
-				index = this._indexes[name];
-				index._clear();
-			}
-			this._records.forEach( function (record) {				
-				record.destroy();
-			});
-			this._records = [];
-			this._index   = {};
-			this.total = 0;
+			AbstractOnly("_clearRecords");
+		},
+
+		_storeIsReady: function (result) {
+			// summary:
+			//		Resolve the _storeReady deferred. (the store is ready for operation).
+			//		This method will be overwritten if the _Loader module is installed.
+			// result:
+			// tag:
+			//		private
+			return this._storeReady.resolve(result);
 		},
 
 		//===================================================================
@@ -484,18 +465,7 @@ define(["dojo/_base/declare",
 		},
 
 		//=========================================================================
-		// Private methods
-
-		_storeIsReady: function (result) {
-			// summary:
-			//		Resolve the _storeReady deferred. (the store is ready for operation).
-			// tag:
-			//		private
-			return this._storeReady.resolve(result);
-		},
-
-		//=========================================================================
-		// Public cbtree/store/api/store API methods
+		// Public IndexedStore/api/store API methods
 
 		add: function (/*Object*/ object,/*PutDirectives?*/ options) {
 			// summary:
@@ -526,6 +496,10 @@ define(["dojo/_base/declare",
 			
 			this._assertStore( this, "clear", true );
 			this._clearRecords();
+
+			this.revision++;
+			this._callbacks.fireWithOptions("clear");
+
 			this.dispatchEvent( new Event( "clear" ) );
 		},
 		
@@ -626,9 +600,19 @@ define(["dojo/_base/declare",
 			//		Release all memory and mark store as destroyed.
 			// tag:
 			//		Public
+			var name, index;
+
 			this._assertStore( this, "destroy", true );
 			this._destroyed = true;
 			this._clearRecords();
+			// Destroy all indexes.
+			for(name in this._indexes) {
+				index = this._indexes[name];
+				index._destroy();
+			}
+			this.indexNames = null;
+			this.callbacks  = null;
+			this.features   = null;
 		},
 
 		get: function (/*Key*/ key) {
@@ -665,7 +649,7 @@ define(["dojo/_base/declare",
 			}
 		},
 
-		getRange: function (/*Key|KeyRange?*/ keyRange,/*String*/ direction) {
+		getRange: function (/*Key|KeyRange?*/ keyRange,/*String?*/ direction) {
 			// summary:
 			//		Retrieve a range of store records.
 			// keyRange:
@@ -686,8 +670,7 @@ define(["dojo/_base/declare",
 					throw new StoreError("DataError", "getRange");
 				}
 			}
-			var results = Range( this, range, dir, false, false );
-			return QueryResults( results );
+			return QueryResults( Range( this, range, dir, false, false ) );
 		},
 
 		index: function (name){
@@ -704,21 +687,6 @@ define(["dojo/_base/declare",
 			if (index) {
 				return index;
 			}
-		},
-
-		isItem: function (/*Object*/ object) {
-			// summary:
-			//		Test if object is a member of this store.
-			// object:
-			//		Object to test.
-			// returns:
-			//		Boolean true of false
-			// tag:
-			//		Public
-			if (isObject(object)) {
-				return !!this.get( this.getIdentity(object) );
-			}
-			return false;
 		},
 
 		put: function (/*Object*/ object,/*PutDirectives?*/ options) {

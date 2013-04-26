@@ -22,7 +22,7 @@ define(["dojo/_base/declare",
 										 Record, createError, Event) {
 	"use strict";
 	// module:
-	//		store/_base/_Natural
+	//		IndexedStore/_base/_Natural
 	// summary:
 	// 		The _Natural class is used in combination with the store/_base/_Store
 	//		class and will organize all object store records in a natural order.
@@ -82,12 +82,39 @@ define(["dojo/_base/declare",
 		// Constructor
 
 		constructor: function () {
-			if (this.features.has("indexed")) {
-				throw new StoreError("ConstraintError", "constructor", "addOns 'natural' and 'indexed' are mutual exclusive");
+			if (this.features.has("store")) {
+				if (this.features.has("indexed")) {
+					throw new StoreError("Dependency", "constructor", "base class '_Natural' and '_Indexed' are mutual exclusive");
+				}
+				this._index      = {};			// Local record index.
+
+				this.features.add("natural");
+				Lib.defProp( this,"natural", {value:true, writable:false, enumerable:true} );
+				Lib.protect(this);
+			} else {
+				throw new StoreError("Dependency", "constructor", "base class '_Store' must be loaded first");
 			}
-			this.features.add("natural");
-			Lib.defProp( this,"natural", {value:true, writable:false, enumerable:true} );
-			Lib.protect(this);
+		},
+
+		//===================================================================
+		// Private methods.
+
+		_clearRecords: function () {
+			// summary:
+			//		Remove all records from the store and all indexes.
+			// tag:
+			//		Private
+			var name, index;
+			for(name in this._indexes) {
+				index = this._indexes[name];
+				index._clear();
+			}
+			this._records.forEach( function (record) {				
+				record.destroy();
+			});
+			this._records = [];
+			this._index   = {};
+			this.total = 0;
 		},
 
 		//===================================================================
@@ -150,7 +177,14 @@ define(["dojo/_base/declare",
 				// Make sure we destroy the real store record and not a clone.
 				var record = this._records.splice( recNum, 1 )[0];
 				var value  = record.value;
+				var key    = record.key;
 				record.destroy();
+
+				this.total = this._records.length;
+				this.revision++;
+				
+				this._callbacks.fireWithOptions("delete", key, null, value, recNum );
+
 				if (!this.suppressEvents) {
 					var event  = new Event("delete", {detail:{item: value, at:-1, from:recNum}});
 					this.dispatchEvent(event);
@@ -303,7 +337,7 @@ define(["dojo/_base/declare",
 			}
 		},
 
-		_storeRecord: function (/*any*/ value, /*PutDirectives*/ options, /*Function?*/ callback) {
+		_storeRecord: function (/*any*/ value, /*PutDirectives*/ options) {
 			// summary:
 			//		Add a record to the store. Throws a StoreError of type ConstraintError
 			//		if the key already exists and noOverwrite is set to true.
@@ -315,7 +349,7 @@ define(["dojo/_base/declare",
 			//		Record key.
 			// tag:
 			//		Private
-			var curRec, newRec, event, before, cb, at, i;
+			var newRec, newVal, event, before, cb, at, i;
 			var optKey, overwrite = false;
 			
 			if (options) {
@@ -337,6 +371,7 @@ define(["dojo/_base/declare",
 			var locator  = this._retrieveRecord(keyVal);
 			var location = {at: locator.eq, from:locator.eq};
 			var curRec   = locator.record;
+			var curVal   = curRec && curRec.value;
 			var curAt    = locator.eq;
 			
 			if (curRec) {
@@ -345,22 +380,17 @@ define(["dojo/_base/declare",
 				}
 				this._removeFromIndex( curRec );
 			}
-			// Check if any extension added a callback.
-			if (cb = this._callback) {
-				for (i = 0; i < cb.length; i++) {
-					cb[i].call(this, keyVal, curAt, value, (curRec ? curRec.value : null), options);
-				}
-			}
+
 			try {
-				value  = this._clone ? clone(value) : value;
-				newRec = new Record( keyVal, value );
+				newVal = this._clone ? clone(value) : value;
+				newRec = new Record( keyVal, newVal );
 			} catch(err) {
 				throw new StoreError( "DataCloneError", "_storeRecord" );
 			}
 
 			if (before && before.record) {
 				this._moveRecord(newRec, curAt, before.eq);
-				location.at = before.eq;
+				at = location.at = before.eq;
 			} else {
 				at = curRec ? curAt : this._records.length;
 				if (curRec) {
@@ -371,22 +401,27 @@ define(["dojo/_base/declare",
 				this._indexRecord(newRec, at);
 				location.at = at;
 			}
+			this.total = this._records.length;
+			this.revision++;
+			
+			// Check if any extension added a callback.
+			this._callbacks.fireWithOptions("write", keyVal, value, curVal, at, options );
+
 			// Next, Event handling ....
 			if (!this.suppressEvents) {
 				if (curRec) {
-					event = new Event( "change", {detail:{item: value, oldItem: curRec.value}});
+					event = new Event( "change", {detail:{item: value, oldItem: curVal}});
 				} else {
 					event = new Event( "new", {detail:{item: value}});
 				}
 				lang.mixin( event.detail, location );
 				this.dispatchEvent( event );
 			}
-			this.total = this._records.length;
 			return keyVal;
 		},
 
 		//=========================================================================
-		// Public cbtree/store/api/store API methods
+		// Public IndexedStore/api/store API methods
 
 		count: function (/*any*/ key) {
 			// summary:

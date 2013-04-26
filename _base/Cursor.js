@@ -18,7 +18,7 @@ define(["dojo/_base/lang",
 	"use strict";
 
 	// module:
-	//		store/_base/Cursor
+	//		IndexedStore/_base/Cursor
 	// summary:
 	//		Cursors are a transient mechanism used to iterate over multiple records
 	//		in a store. Storage operations are performed on the underlying index or
@@ -26,8 +26,8 @@ define(["dojo/_base/lang",
 	//
 	//			http://www.w3.org/TR/IndexedDB/#cursor-sync
 	//
-	//		Cursors are supported on store/_Indexed based stores and any index.
-
+	//		Cursors are supported on IndexedStore/_Indexed based stores and any index.
+	
 	var StoreError = createError( "Cursor" );		// Create the CBTError type.
 	var defProp    = Lib.defProp;
 	var clone      = Lib.clone;									// HTML5 structure clone.

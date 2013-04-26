@@ -17,7 +17,7 @@ define(["dojo/_base/lang",
 	"use strict";
 
 	// module:
-	//		store/_base/TransactionMgr
+	//		IndexedStore/_base/TransactionMgr
 	// summary:
 	//		This module implements the synchronous Transaction Manager and replaces
 	//		the IDBDatabase.transaction() interface. Note, the use of Transactions

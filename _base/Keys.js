@@ -16,7 +16,7 @@ define(["exports",
 	"use strict";
 
 	// module:
-	//		store/_base/keys
+	//		IndexedStore/_base/keys
 	// summary:
 	//		The Keys module implements all the functionality required to handle
 	//		IndexedDB keys and key ranges. For detailed information on keys and
@@ -25,9 +25,9 @@ define(["exports",
 	//			http://www.w3.org/TR/IndexedDB/#key-construct
 	//			http://www.w3.org/TR/IndexedDB/#range-concept
 	//
-	//		The KeyRange object is implemented by a separate model:
+	//		The KeyRange object is implemented by:
 	//
-	//			store/_base/KeyRange
+	//			IndexedStore/_base/KeyRange
 
 	var StoreError = createError( "Keys" );			// Create the StoreError type.
 	var undef;

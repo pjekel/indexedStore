@@ -8,9 +8,11 @@
 //	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define ([], function () {
+define (["./Library"], function (Lib) {
 	"use strict";
 
+	var defProp = Lib.defProp;
+	
 	function FeatureList() {
 		// summary:
 		// tag:
@@ -22,7 +24,7 @@ define ([], function () {
 		//=========================================================================
 		// Helper functions
 		
-		Object.defineProperty( this, "toSource", {
+		defProp( this, "toSource", {
 			value: function  () { return features; },
 			enumerable: false
 		});
@@ -30,13 +32,13 @@ define ([], function () {
 		//=========================================================================
 		// Public properties and methods
 
-		Object.defineProperty( this, "length", {
+		defProp( this, "length", {
 			get: function () {
 				return length;
 			},
 			enumerable: true
 		});
-		Object.defineProperty( this, "features", {
+		defProp( this, "features", {
 			get: function () {
 				var keys = Object.keys(features).sort();
 				return keys.toString();
@@ -54,17 +56,18 @@ define ([], function () {
 			return false;
 		};
 		
-		this.has = function(/*String|String[]*/ name ) {
+		this.has = function(/*String|String[]*/ name,/*Boolean?*/ all ) {
 			// summary:
 			//		Returns true if a given string is part of the DOMStringList otherwise
 			//		false
 			// name:
 			//		A feature name, a comma separated list of feature names or an array
 			//		of feature names.
+			// all:
 			// tag:
 			//		Public
 			if (name instanceof Array) {
-				return name.some( this.has );
+				return (all ? name.every( this.has ) : name.some( this.has ));
 			} else if (/,/.test(name)) {
 				return this.has( name.split(/\s*,\s*/));
 			}

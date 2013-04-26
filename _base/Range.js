@@ -22,7 +22,7 @@ define(["./Keys",
 	function Range(/*Store|Index*/ source,/*Key|KeyRange*/ keyRange,/*String*/ direction,
 									/*Boolean*/ duplicates, /*Boolean*/ keysOnly) {
 		// summary:
-		//		Retrieve the objects or key in range of a given key range.
+		//		Retrieve the objects or keys in range of a given key range.
 		// source:
 		//		Instance of Store or Index.
 		// keyRange:
@@ -98,7 +98,8 @@ define(["./Keys",
 						break;
 				};	/* end switch() */
 			}
-			results.keyRange = keysOnly;
+			results.direction = direction;
+			results.keyRange  = keysOnly;
 			return results;
 		} else {
 			throw new StoreError("DataError", "constructor", "invalid source specified");

@@ -17,7 +17,7 @@ define(["./Library",
 	"use strict";
 	
 	// module:
-	//		store/_base/Transaction
+	//		IndexedStore/_base/Transaction
 	// summary:
 	//		This module implements the relevant parts of IDBTransactionsSync. Note
 	//		that the use of transactions is not required to interface with a store
@@ -25,7 +25,7 @@ define(["./Library",
 	//		restrict concurrent access to a store.
 	//		The implementation currently does not support rollback and Transactions
 	//		are created using the TransactionMgr interface instead of the IDBDatabase
-	//		interface. See store/_base/TransactionMgr for additional details.
+	//		interface. See IndexedStore/_base/TransactionMgr for additional details.
 	
 	var StoreError = createError( "Transaction" );		// Create the StoreError type.
 	var debug = dojo.config.isDebug || false;

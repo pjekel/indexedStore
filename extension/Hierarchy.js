@@ -14,9 +14,11 @@ define(["dojo/_base/declare",
 				"dojo/aspect",
 				"../_base/Keys",
 				"../_base/Library",
+				"../_base/Listener",
 				"../_base/Range",
 				"../error/createError!../error/StoreErrors.json"
-			 ], function (declare, lang, QueryResults, aspect, Keys, Lib, Range, createError) {
+			 ], function (declare, lang, QueryResults, aspect, Keys, Lib, Listener,
+			               Range, createError) {
 
 	var StoreError = createError( "Hierarchy" );		// Create the StoreError type.
 	var isObject   = Lib.isObject;
@@ -26,8 +28,6 @@ define(["dojo/_base/declare",
 	// module:
 	//		store/extension/Hierarchy
 	// summary:
-	//		This store implements the cbtree/store/api/Store API which is an extension
-	//		to the dojo/store/api/Store API.
 
 	var Hierarchy = {
 
@@ -61,9 +61,6 @@ define(["dojo/_base/declare",
 				if (this.features.has("observable")) {
 					throw new StoreError( "Dependency", "constructor", "Observable must be loaded after the Hierarchy module");
 				}
-				var store = this;
-				this._addCallback( this._processParents );		// Add callback to the store.
-
 				// Explicitly set the parentProperty before we create the index. We can't
 				// post create the index as the optional Loader gets started first, that
 				// is, before the parents index gets created.
@@ -151,8 +148,8 @@ define(["dojo/_base/declare",
 			// summary:
 			//		Load an array of data objects into the store and indexes it. If the
 			//		store property 'multiParented' is set to "auto" test if any object
-			//		has a parent property whose value is an array. If so, make sure all
-			//		store objects store their parents as an array.
+			//		has a parent property whose value is an array. If so, switch to the
+			//		multi parented mode.
 			// data:
 			//		An array of objects.
 			// tag:
@@ -164,37 +161,35 @@ define(["dojo/_base/declare",
 					this.multiParented = data.some( function (object) {
 						return (object[this.parentProperty] instanceof Array);
 					}, this);
-					if (this.multiParented) {
-						data.forEach( function (value) {
-							this._setParentType(value, value[this.parentProperty]);
-						}, this);
-					}
 				}
 			}
 			// Load the store
 			this.inherited(arguments);
 		},
 
-		_processParents: function (key, at, newValue, oldValue, options) {
+		_storeRecord: function (/*any*/ value,/*PutDirectives*/ options) {
 			// summary:
-			//		Process any optional PutDirectives. This function is called as a 
-			//		callback just before the record is stored, therefore do not alter
-			//		any key path values.
-			// key:
-			//		key portion of a record.
+			//		Add a record to the store. Throws a StoreError of type ConstraintError
+			//		if the key already exists and overwrite flag is set to true.
 			// value:
-			//		Value portion of a record (JavaScript key:values pairs object)
+			//		Record value property
 			// options:
+			//		Optional, PutDirectives
 			// returns:
-			//		new value.
+			//		Record key.
 			// tag:
-			//		Private, callback
-			var parents = newValue[this.parentProperty];
+			//		Private
+			var parents = value[this.parentProperty];
+			
 			if (options && options.parent) {
-				parents = this._getParentKeys(key, options.parent);				
+				var key = options.key != undef ? options.key : (options.id != undef ? options.id : null);
+				key = Keys.keyValue(this.keyPath, value) || key;
+				key = this.uppercase ? Keys.toUpperCase(key) : key;
+				parents = this._getParentKeys(key, options.parent);
 			}
 			// Convert the 'parent' property to the correct format.
-			this._setParentType(newValue, parents);
+			this._setParentType(value, parents);
+			return this.inherited(arguments);
 		},
 
 		_setParentType: function (/*Object*/ value,/*Key|Key[]*/ parents) {
@@ -243,7 +238,7 @@ define(["dojo/_base/declare",
 		},
 
 		//=========================================================================
-		// Public cbtree/store/api/store API methods
+		// Public IndexedStore/api/Hierarchy API methods
 
 		addParent: function(/*Object*/ child,/*any*/ parents) {
 			// summary:
@@ -295,9 +290,9 @@ define(["dojo/_base/declare",
 			//		Public
 
 			if (isObject(parent)) {
-				var identity = this.getIdentity(parent);
-				if (identity) {
-					var index  = this.index(C_INDEXNAME);
+				var key = this.getIdentity(parent);
+				if (key) {
+					var index = this.index(C_INDEXNAME);
 					var range, keys, query = {};
 					
 					// Depending on if this is an indexed or natural store we either fetch
@@ -306,12 +301,12 @@ define(["dojo/_base/declare",
 					// order. (NOTE: indexes are ALWAYS in ascending order).
 
 					if (this.indexed) {
-						range = Range( index, identity, "next", true, false );
+						range = Range( index, key, "next", true, false );
 					} else {
-						keys  = Range( index, identity, "next", true, true );
+						keys  = Range( index, key, "next", true, true );
 						range = this._storeOrder( keys );
 					}
-					query[this.parentProperty] = identity;
+					query[this.parentProperty] = key;
 					// Call the query() method so the result can be made observable.
 					return this.query( query, options, range );
 				} else {

@@ -255,7 +255,7 @@ define(["../_base/Record",
 			return data;
 		}
 
-		function execute(/*(Object|Record)[]*/ data, /*Boolean?*/ queryKeys) {
+		function execute(/*(Object|Record)[]*/ data) {
 			// summary:
 			//		Execute the query on a set of objects and apply pagination to the
 			//		query result. This function is returned as the result of a call to
@@ -270,7 +270,6 @@ define(["../_base/Record",
 			"use strict";
 			var paginate  = options && (options.start || options.count || options.sort);
 			var unique    = options && options.unique;
-			var queryKeys = queryKeys || false;
 			var data      = data || [];
 			var results   = [];
 			

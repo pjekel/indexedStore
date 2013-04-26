@@ -62,6 +62,8 @@ var profile = {
 				"store/extension/CORS",
 				"store/extension/Hierarchy",
 				"store/extension/Loader",
+				"store/extension/Observable",
+				"store/extension/Watch",
 				"store/handler/csvHandler",
 				"store/handler/ifrsHandler",
 				"store/util/shim/Array",

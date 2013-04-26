@@ -364,7 +364,7 @@
 						},
 
 						{
-							name: "Remove Parents",
+							name: "Remove Parents, removeParent()",
 							timeout: 1000,
 							runTest: function (t) {
 								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy]);
@@ -395,6 +395,55 @@
 											});
 
 
+											store.destroy();
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}
+								);
+								return defer;
+							}
+						},
+
+						{
+							name: "Change parent property directly",
+							timeout: 1000,
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy]);
+								var store = new Store ({data:data, keyPath:"name"});
+								var defer = new doh.Deferred();
+
+								// Instead of using the Hierarchy methods addParent() and removeParent()
+								// we are going to change the parent property directly. The store should
+								// notice the change and rewrite the parent property using the correct
+								// format. In addition, the parent index should update correctly with
+								// the new parent property value(s).
+								
+								store.ready(
+									defer.getTestCallback( 
+										function (store) {
+											var index   = store.index("parents");
+											var homer   = store.get("Homer");
+											var parents = lang.clone( homer.parent );
+											
+											// Use single value eventhough the store is multi parented.
+											homer.parent = "Mammie";
+											store.put(homer);
+											
+											// Parent property should have been reformatted.
+											t.t( homer.parent instanceof Array);
+
+											// The old parents should no longer be part of the index.
+											parents.forEach( function(parent) {
+												t.t( index.get(parent) == undef );
+											},this);
+											
+											// Test if 'Mammie' has a child and if so if it is 'Homer'.
+											var child = index.get("Mammie");
+											t.t( child != undef );
+											t.is( store.getIdentity(homer), store.getIdentity(child));
+											
 											store.destroy();
 										}
 									),

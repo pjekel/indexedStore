@@ -268,13 +268,12 @@ define(["../_base/Record",
 			// tag:
 			//		Private
 			"use strict";
-			var paginate  = options && (options.start || options.count || options.sort);
-			var unique    = options && options.unique;
-			var data      = data || [];
-			var results   = [];
+			var paginate = options && (options.start || options.count || options.sort);
+			var unique   = options && options.unique;
+			var data     = data || [];
+			var results  = [];
 			
 			data.forEach( function (any) {
-				// TODO: how about cloning....
 				var object = any instanceof Record ? any.value : any;
 				if (queryFunc(object)) {
 					results.push(object);

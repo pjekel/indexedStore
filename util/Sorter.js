@@ -36,7 +36,7 @@ define(["../_base/Library",
 			if (typeof objects.slice == "function") {
 				objects = objects.slice();
 			}
-			throw new StoreError("DataError", "Sorter", "object has no sort or slice property");
+			throw new StoreError("DataError", "Sorter", "object has no sort or slice method");
 		}
 
 		if (sortSet) {

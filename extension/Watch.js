@@ -35,31 +35,31 @@ define(["dojo/_base/declare",
 			
 			var listener = new Listener( this._watchProperty, null, this );
 			this._callbacks.add( "write", listener );		// Add callback to the store.
+
+			if (!this._clone) {
+				console.warn("Watch Extension only works when object cloning is enabled");
+			}
 			this.features.add("watch");
+
 			Lib.protect( this );	// Hide own private properties.
 
 		},
-		
-		destroy: function () {
-			this.inherited(arguments);
-			this._watchList = [];
-			this._spotters  = null;
-		},
-		
+
 		//=========================================================================
 		// Private methods
 
-		_watchProperty: function (/*any*/ cbOpt,/*Key*/ key, /*Object*/ newObj, /*Object*/ oldObj,/*Number*/ at) {
+		_watchProperty: function (cbOpt, key, newObj, oldObj, at) {
 			// summary:
 			//		Test if any of the object properties being monitored have changed.
 			//		This method is called immediately after the store is updated.
-			// cbOpt:
-			// key:
+			// cbOpt: Any
+			// key: Key
 			//		Object key
-			// newObj:
+			// newObj: Object
 			//		New object.
-			// oldObj:
+			// oldObj: Object
 			//		Old object.
+			// at: Number
 			// tag:
 			//		Private, callback
 			
@@ -93,19 +93,25 @@ define(["dojo/_base/declare",
 		//=========================================================================
 		// Public IndexedStore/api/store API methods
 
-		watch: function (/*String|String[]*/property,/*Function?*/ listener,/*Object?*/ thisArg) {
+		destroy: function () {
+			this.inherited(arguments);
+			this._watchList = [];
+			this._spotters  = null;
+		},
+		
+		watch: function (property, callback, thisArg) {
 			// summary:
 			//		Add a property to the list properties being monitored for change.
 			//		If the specified property of an object changes a 'set' event will
-			//		be generated and, if specified, the listener is notified.
-			// property:
+			//		be generated and, if specified, the callback is notified.
+			// property: String|String[]
 			//		Property name or property path. A property path is dot-separated
 			//		string of identifiers like 'a.b.c'.
-			// listener:
+			// callback: Function
 			//		Callback, if specified the callback is called when the property of
-			//		a store object changed. The signature of listener is as follows:
-			//			listener( object, property, newValue, oldValue ) 
-			//  thisArg:
+			//		a store object changed. The signature of callback is as follows:
+			//			callback( object, property, newValue, oldValue ) 
+			//  thisArg: Object?
 			//		Object to use as this when executing the callback.
 			// tag:
 			//		Public
@@ -115,7 +121,7 @@ define(["dojo/_base/declare",
 				// An array of properties...
 				if (property instanceof Array) {
 					var handles = property.map( function (prop) {
-						return this.watch(prop, listener);
+						return this.watch(prop, callback);
 					}, this );
 					handles.remove = function () {
 						handles.forEach( function (handle) {
@@ -127,7 +133,7 @@ define(["dojo/_base/declare",
 				// Comma separated list of properties.
 				if (property instanceof String || typeof property == "string") {
 					if (/,/.test(property)) {
-						return this.watch( property.split(/\s*,\s*/), listener );
+						return this.watch( property.split(/\s*,\s*/), callback );
 					}
 				}
 				// Single property.
@@ -135,8 +141,8 @@ define(["dojo/_base/declare",
 					if (this._watchList.indexOf(property) == -1) {
 						this._watchList.push(property);
 					}
-					if (listener) {
-						var listener = new Listener(listener, null, thisArg );
+					if (callback) {
+						var listener = new Listener(callback, null, thisArg );
 						this._spotters.add( property, listener );
 					}
 				} else {
@@ -150,38 +156,39 @@ define(["dojo/_base/declare",
 			}
 		},
 
-		unwatch: function (/*String|String[]*/property,/*Function?*/ listener) {
+		unwatch: function (property, callback) {
 			// summary:
 			//		Remove a property name from the list of properties being monitored.
-			// property:
+			// property: String|String[]
 			//		Property name or property path.
-			// listener:
-			//		If a listener is specified only the specific listener is removed
-			//		otherwise all available listeners for the property are removed.
+			// callback: Function|Listener
+			//		Function or a Listener object. If a callback is specified only the
+			//		specific callback is removed otherwise all available listeners for
+			//		the property are removed.
 			// tag:
 			//		Public
 			if (property) {
 				if (property instanceof Array) {
 					property.forEach( function(prop) {
-						this.unwatch(prop, listener);
+						this.unwatch(prop, callback);
 					}, this);
 					return;
 				}
 				if (property instanceof String || typeof property == "string") {
 					if (/,/.test(property)) {
-						return this.unwatch( property.split(/\s*,\s*/), listener );
+						return this.unwatch( property.split(/\s*,\s*/), callback );
 					}
 				}
 				if (Keys.validPath(property)) {
 					var spotters = this._spotters.getByType(property);
 					var remProp  = true;
 					if (spotters.length) {
-						if (listener) {
-							// Remove individual listener.
-							if (listener instanceof Listener) {
-								this._spotters.remove( property, listener);
+						if (callback) {
+							// Remove individual callback.
+							if (callback instanceof Listener) {
+								this._spotters.remove( property, callback);
 							} else {
-								listener = this._spotters.getByCallback(property, listener);
+								var listener = this._spotters.getByCallback(property, callback);
 								if (listener) {
 									this._spotters.remove( property, listener);
 								}
@@ -206,7 +213,7 @@ define(["dojo/_base/declare",
 			}
 		}
 
-	};	/* end Hierarch {} */
+	};	/* end Watch {} */
 	
 	return declare( null, Watch );
 

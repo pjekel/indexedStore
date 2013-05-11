@@ -331,7 +331,7 @@ define(["dojo/_base/declare",
 			return (Keys.indexOf( siblings, this.getIdentity(item)) != -1);
 		}
 		
-	};	/* end declare(1) */
+	};	/* end Ancestry {} */
 
 	return declare( null, Ancestry );
 

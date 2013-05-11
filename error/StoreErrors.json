@@ -10,7 +10,6 @@
 	{"InvalidObjectError":		{"text":"item is not an a valid store object"} },
 	{"InvalidPathError":			{"text":"invalid path"} },
 	{"InvalidResponseError":	{"text":"function returned an invalid or unexpected response"} },
-	{"InvalidTypeError":			{"text":"parameter or property type is invalid"} },
 	{"InvalidVersionError":		{"text":"invalid dojo or dijit version"} },
 	{"InvalidWidgetError":		{"text":"invalid widget"} },
 	{"MethodMissingError":		{"text":"a required function is missing"} },

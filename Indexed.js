@@ -11,12 +11,12 @@
 define(["dojo/_base/declare",
 				"./_base/_Store",
 				"./_base/_Indexed",
-				"./extension/Loader"
-			 ], function (declare, _Store, _Indexed, Loader) {
+				"./_base/_Loader"
+			 ], function (declare, _Store, _Indexed, _Loader) {
 	"use strict";
 	// module:
 	//		store/Hierarchy
 	// summary:
 
-	return declare( [_Store, _Indexed, Loader] );
+	return declare( [_Store, _Indexed, _Loader] );
 });

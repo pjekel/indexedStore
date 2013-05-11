@@ -33,9 +33,6 @@ define(["dojo/_base/lang",
 	//
 	//			http://www.w3.org/TR/IndexedDB/#index-sync
 	
-	// Requires JavaScript 1.8.5
-	var defineProperty = Object.defineProperty;
-
 	// Define default index properties.
 	var IDBIndexOptions = { unique: false, 
 	                        multiEntry: false, 
@@ -47,16 +44,16 @@ define(["dojo/_base/lang",
 	var debug = dojo.config.isDebug || false;
 	var undef;
 	
-	function Index (/*Store*/ store, /*DOMString*/ name, /*any*/ keyPath, /*Object*/ optionalParameters) {
+	function Index (store, name, keyPath, optionalParameters) {
 		// summary:
 		//		Implements the IDBIndexSync interface
-		// store:
+		// store: Store
 		//		A IDBObjectStore object which is the parent of the new index.
-		// name:
+		// name: DOMString
 		//		The name of a new index.
-		// keyPath:
+		// keyPath: KeyPath
 		//		The key path used by the new index.
-		// optionalParameters:
+		// optionalParameters: Object?
 		//		The options object whose attributes are optional parameters to this
 		//		function. unique specifies whether the index's unique flag is set.
 		//		multiEntry specifies whether the index's multiEntry flag is set.
@@ -65,17 +62,22 @@ define(["dojo/_base/lang",
 		//			unique: false,
 		//			multiEntry: false
 		//		}
-		//
+		// returns:
+		//		A new Index object.
 		// tag:
 		//		Public
 
 		//=========================================================================
 
-		function assertKey(/*IDBIndex*/ index, /*any?*/ key, /*String*/ method, /*Boolean?*/ required) {
+		function assertKey(index, key, method, required) {
 			// summary:
 			//		Validate if the index and associated store have not been destroyed.
-			// index:
+			// index: Index
 			//		Index to assert, typically the thisObject.
+			// key: Key?
+			// method: String
+			//		Name of the calling function.
+			// required: Boolean?
 			// tag:
 			//		Private
 			if ( index._destroyed || index.store._destroyed || index.store._beingDestroyed ) {
@@ -90,13 +92,15 @@ define(["dojo/_base/lang",
 			}
 		}
 
-		function addIndexRecord(/*IDBIndex*/ index, /*any*/ indexKey, /*any*/ storeKey ) {
+		function addIndexRecord(index, indexKey, storeKey ) {
 			// summary:
 			//		Add a new record to the index.
-			// index:
+			// index: Index
 			//		Index to which the record is added.
-			// record:
-			//		Index Record to insert.
+			// indexKey: Key
+			//		Index key.
+			// storeKey: Key
+			//		Primary key
 			// tag:
 			//		Private
 			var locator = Keys.search(index, indexKey);
@@ -118,10 +122,11 @@ define(["dojo/_base/lang",
 		function indexStore( store, index, defer ) {
 			// summary:
 			//		Index all existing store records.
-			// store:
+			// store: Store
 			//		Store.
-			// index:
+			// index: Index
 			//		The IDBIndex in which the keys are stored.
+			// defer: dojo.Deferred
 			// tag:
 			//		Private
 			var records = store._records;
@@ -146,7 +151,7 @@ define(["dojo/_base/lang",
 		function onStoreEvent (evt) {
 			// summary:
 			//		Local store event handler.
-			// evt:
+			// evt: Event
 			//		Store event.
 			// tag:
 			//		Private
@@ -156,6 +161,7 @@ define(["dojo/_base/lang",
 					this._updates = 0;
 					break;
 				case "loadFailed":
+				case "loadCancel":
 				case "loadEnd":
 					if (this.loading) {
 						delete this.loading;
@@ -165,13 +171,14 @@ define(["dojo/_base/lang",
 			}
 		}
 
-		function sortDuplicates( index ) {
+		function sortDuplicates (index) {
 			// summary:
 			//		Sort all duplicate index entries. This method is called when either
 			//		a store was indexed or a store load request completed, this because
 			//		during both such events the sorting of duplicate index entries is
 			//		suspended for performance reasons.
-			// returns:
+			// index: Index
+			// returns: Number
 			//		Total number of records in the index.
 			// tag:
 			//		Private
@@ -195,13 +202,15 @@ define(["dojo/_base/lang",
 		//=========================================================================
 		// Database operations (http://www.w3.org/TR/IndexedDB/#database-operations)
 
-		function retrieveIndexValue(/*IDBIndex*/ index, /*any*/ key ) {
+		function retrieveIndexValue (index, key) {
 			// summary:
-			//		Retrieve the value of an index record.
-			// index:
+			//		Retrieve the value of an index record. If key is a key range, the
+			//		value of the first record in range is returned.
+			// index: Index
 			//		Index to retrieve the value from, typically the thisObject.
-			// key:
-			//		Index key.
+			// key: Key|KeyRange
+			//		Index key or key range.
+			// returns: Object
 			// tag:
 			//		Private
 			var record;
@@ -216,14 +225,16 @@ define(["dojo/_base/lang",
 			}
 		}
 
-		function retrieveReferenceValue(/*IDBIndex*/ index, /*any*/ key ) {
+		function retrieveReferenceValue (index, key) {
 			// summary:
 			//		Retrieve the referenced value from a store and return a structured
-			//		clone.
-			// index:
+			//		clone. If key is a key range, the value of the first record in range
+			//		is returned.
+			// index: Index
 			//		Index to retrieve the value from, typically the thisObject.
-			// key:
-			//		Index key.
+			// key: Key|KeyRange
+			//		Index key or key range.
+			// returns: Object
 			// tag:
 			//		Private
 			var indexValue = retrieveIndexValue( index, key );
@@ -240,26 +251,25 @@ define(["dojo/_base/lang",
 		//=========================================================================
 		// Private methods
 
-		this._add = function (/*Record*/ storeRecord ) {
+		this._add = function (storeRecord) {
 			// summary:
 			//		Add an index entry for the store record. If the index key is an array
 			//		and multiEntry is enabled an index entry is created for each element
 			//		in the index key array. If the index key already exists and unique is
 			//		true a StoreError of type ConstraintError is thrown.
-			// storeRecord:
+			// storeRecord: Record
 			//		Store record to index
-			// exception:
-			//		ConstraintError
 			// tag:
 			//		Private
 
-			function hasKey(/*IDBIndex*/ index, /*any*/ indexKey) {
+			function hasKey (index, indexKey) {
 				// summary:
 				//		Return true if an index key already exists otherwise false. If the
 				//		key is an array and multiEntry is enabled each entry in the array
 				//		is tested.
-				// index:
-				// indexKey:
+				// index: Index
+				// indexKey: Key
+				// returns: Boolean
 				// tag:
 				//		Private
 				if (indexKey instanceof Array && index.multiEntry) {
@@ -297,7 +307,7 @@ define(["dojo/_base/lang",
 			}
 		};
 
-		this._clear = function() {
+		this._clear = function () {
 			// summary:
 			//		Remove all records from the index.
 			// tag:
@@ -314,12 +324,12 @@ define(["dojo/_base/lang",
 			this._clear();
 		};
 
-		this._remove = function (/*Record*/ storeRecord) {
+		this._remove = function (storeRecord) {
 			//summary:
 			//		Remove all index records whose value matches the store key if any
 			//		such records exist. Note: index records are structured as follows:
 			//		{ key: indexKey, value: [storeKey1, storeKey2, storeKey3, .. ]}.
-			// storeRecord:
+			// storeRecord: Record
 			//		Store record whose index record(s) are to be deleted.
 			// tag:
 			//		Private
@@ -379,17 +389,16 @@ define(["dojo/_base/lang",
 		//=========================================================================
 		// Public methods
 
-		this.count = function (/*any?*/ key,/*Boolean?*/ unique) {
+		this.count = function (key, unique) {
 			// summary:
-			//		Count the total number of records that share the key or key range and
-			//		return that value as the result for the IDBRequest.
-			// key:
+			//		Count the total number of records that share the key or key range.
+			// key: Key|KeyRange
 			//		Key identifying the record to be retrieved. The key arguments can also
 			//		be an KeyRange.
-			// unique:
+			// unique: Boolean
 			//		If true only unique index entries are counted otherwise all entries
 			//		are counted.
-			// returns:
+			// returns: Number
 			//		Number of index entries.
 			// tag:
 			//		Public
@@ -402,11 +411,11 @@ define(["dojo/_base/lang",
 			}
 			assertKey( this, key, "count", false );
 			if (key != undef) {
-				if (!(key instanceof KeyRange)) {
+				if (!(key instanceof KeyRange) && Keys.validKey(key)) {
 					key = KeyRange.only( this.uppercase ? Keys.toUpperCase(key) : key );
+				} else {
+					throw new StoreError("DataError", "count", "invalid key");
 				}
-			} else {
-				key = KeyRange.unbound();
 			}
 
 			var range = Keys.getRange(this, key);
@@ -424,11 +433,11 @@ define(["dojo/_base/lang",
 			return count;
 		};
 
-		this.get = function (/*any*/ key) {
+		this.get = function (key) {
 			// summary:
 			//		Get the first record that matches key. The store record value is
 			//		returned as the result of the IDBRequest.
-			// key:
+			// key: Key|KeyRange
 			//		Key identifying the record to be retrieved. This can also be an
 			//		KeyRange in which case the function retreives the first existing
 			//		value in that range.
@@ -440,15 +449,15 @@ define(["dojo/_base/lang",
 			return retrieveReferenceValue( this, key );
 		};
 
-		this.getKey = function (/*any*/ key) {
+		this.getKey = function (key) {
 			// summary:
 			//		Get the first record that matches key. The index record value, that
 			//		is, the primary key of the referenced store is returned.
-			// key:
+			// key: Key|KeyRange
 			//		Key identifying the record to be retrieved. This can also be an
 			//		KeyRange in which case the function retreives the first existing
 			//		value in that range.
-			// returns:
+			// returns: Key
 			//		The index key value.
 			// tag:
 			//		Public
@@ -456,14 +465,14 @@ define(["dojo/_base/lang",
 			return retrieveIndexValue( this, key );
 		};
 
-		this.getRange = function (/*Key|KeyRange?*/ keyRange,/*String?*/ direction, /*Boolean?*/ duplicates) {
+		this.getRange = function (keyRange, direction, duplicates) {
 			// summary:
 			//		Retrieve a range of store records.
-			// keyRange:
+			// keyRange: Key|KeyRange?
 			//		A KeyRange object or a valid key.
-			// direction:
+			// direction: String?
 			//		The range's required direction.
-			// duplicates:
+			// duplicates: Boolean?
 			//		If false, duplicate store record references are ignored. The default
 			//		is true.
 			// returns: dojo/store/util/QueryResults
@@ -491,14 +500,14 @@ define(["dojo/_base/lang",
 			return QueryResults( results );
 		};
 
-		this.getKeyRange = function (/*Key|KeyRange?*/ keyRange,/*String?*/ direction,/*Boolean?*/ duplicates) {
+		this.getKeyRange = function (keyRange, direction, duplicates) {
 			// summary:
 			//		Retrieve a range of store records.
-			// keyRange:
+			// keyRange: Key|KeyRange?
 			//		A KeyRange object or a valid key.
-			// direction:
+			// direction: String?
 			//		The range's required direction.
-			// duplicates:
+			// duplicates: Boolean?
 			//		If false, duplicate store reference keys are ignored. The default
 			//		is true.
 			// returns: dojo/store/util/QueryResults
@@ -526,15 +535,15 @@ define(["dojo/_base/lang",
 			return QueryResults( results );
 		};
 
-		this.openCursor = function (/*Key|KeyRange?*/ keyRange, /*DOMString?*/ direction) {
+		this.openCursor = function (keyRange, direction) {
 			// summary:
 			//		Open a new cursor. A cursor is a transient mechanism used to iterate
 			//		over multiple records in the store.
-			// keyRange:
+			// keyRange: Key|KeyRange?
 			//		The key range to use as the cursor's range.
-			// direction:
+			// direction: String?
 			//		The cursor's required direction.
-			// returns:
+			// returns: Cursor
 			//		A cursorWithValue object.
 			// example:
 			//		| var cursor = store.openCursor();
@@ -557,16 +566,16 @@ define(["dojo/_base/lang",
 			return cursor;
 		};
 
-		this.openKeyCursor = function (/*any?*/ keyRange, /*DOMString?*/ direction) {
+		this.openKeyCursor = function (keyRange, direction) {
 			// summary:
 			//		Open a new cursor. A cursor is a transient mechanism used to iterate
 			//		over multiple records in the store.
-			// keyRange:
+			// keyRange: Key|KeyRange?
 			//		The key range to use as the cursor's range.
-			// direction:
+			// direction: String?
 			//		The cursor's required direction.
-			// returns:
-			//		A cursorWithValue object.
+			// returns: Cursor
+			//		A cursor Object.
 			// example:
 			//		| var cursor = store.openCursor();
 			//		| while( cursor && cursor.value ) {
@@ -588,7 +597,7 @@ define(["dojo/_base/lang",
 			return cursor;
 		};
 
-		this.ready = function (/*Function?*/ callback,/*Function?*/ errback,/*thisArg*/ scope) {
+		this.ready = function (callback, errback, scope) {
 			// summary:
 			//		Execute the callback when the store has been loaded. If an error
 			//		is detected that will prevent the store from getting ready errback
@@ -598,15 +607,15 @@ define(["dojo/_base/lang",
 			//		potentially many load requests was successful. To keep track of
 			//		a specific load request use the promise returned by the load()
 			//		function instead.
-			// callback:
+			// callback: Function?
 			//		Function called when the store is ready.
-			// errback:
+			// errback: Function?
 			//		Function called when a condition was detected preventing the store
 			//		from getting ready.
-			// scope:
+			// scope: Object?
 			//		The scope/closure in which callback and errback are executed. If
 			//		not specified the store is used.
-			// returns:
+			// returns: dojo/promise/Promise
 			//		dojo/promise/Promise
 			// tag:
 			//		Public
@@ -648,7 +657,7 @@ define(["dojo/_base/lang",
 			var index = this;
 
 			// Add the event listeners
-			store.on("loadStart, loadEnd, loadFailed", lang.hitch( this, onStoreEvent ));
+			store.on("loadStart, loadCancel, loadEnd, loadFailed", lang.hitch( this, onStoreEvent ));
 
 			if (async) {
 				setTimeout( function () {

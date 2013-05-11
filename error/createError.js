@@ -165,7 +165,7 @@ define(["dojo/_base/lang",
 		// tag:
 		//		Public
 
-		function storeError (/*String|Error*/ type,/*String?*/ method,/*String?*/ message) {
+		function StoreError (/*String|Error*/ type,/*String?*/ method,/*String?*/ message) {
 			// summary:
 			//		Constructor, create a new instance of the custom error type.
 			// type:
@@ -219,10 +219,10 @@ define(["dojo/_base/lang",
 
 		addMessage( errors || {});
 
-		storeError.prototype = new Error();
-		storeError.prototype.constructor = storeError;
+		StoreError.prototype = new Error();
+		StoreError.prototype.constructor = StoreError;
 
-		return storeError;
+		return StoreError;
 	};
 
 	createError.normalize = function(/*String*/ resource,/*Function*/ toAbsMid) {

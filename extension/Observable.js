@@ -24,8 +24,8 @@ define(["dojo/_base/declare",
 	//		query result sets. The query result sets returned from the store will
 	//		include a observe function that can be used to monitor query changes.
 	// NOTE:
-	//		This module is an extension as opposed to the dojo/store/Observable
-	//		which is a store wrapper.
+	//		This module is an extension as opposed to dojo/store/Observable which
+	//		is a store wrapper.
 	// example:
 	//	|	define(["dojo/_base/declare",
 	//	|         "store/_base/_Store",
@@ -77,41 +77,14 @@ define(["dojo/_base/declare",
 		},
 		
 		//=========================================================================
-		// Public store/api/store API methods
+		// Public IndexedStore/api/store API methods
 
-		notify: function (/*Object?*/ object,/*Key?*/ key) {
-			// summary:
-			//		This method is for dojo/store/Observable API compatibility only.
-			//		Because it is unknown why the applications called this method it
-			//		is impossible to perform the same level of testing as add() and
-			//		put() would do.
-			// object:
-			//		A valid JavaScript object.
-			// key:
-			//		A valid key.
-			// tag:
-			//		Public
-
-			if ((object && isObject(object)) || (!object && Keys.validKey(key))) {
-				if (object) {
-					var evtType = (key != undef) ? "change" : "new";
-				} else {
-					var evtType = "delete";
-				}			
-				this._observers.forEach( function ( observer ) {
-					observer.updater(evtType, key, object);
-				}, this);
-			} else {
-				throw new StoreError( "DataError", "notify" );
-			}
-		},
-
-		getRange: function (/*Key|KeyRange?*/ keyRange,/*String*/ direction) {
+		getRange: function (keyRange, direction) {
 			// summary:
 			//		Retrieve a range of store records.
-			// keyRange:
+			// keyRange: Key|KeyRange?
 			//		A KeyRange object or valid key.
-			// direction:
+			// direction: String?
 			//		The range required direction. Valid options are: 'next', 'nextunique',
 			//		'prev' or 'prevunique'.
 			// returns: dojo/store/api/Store.QueryResults
@@ -119,105 +92,96 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Public
 
-			function observe (/*Function*/ callback,/*Boolean?*/ includeUpdates, /*Object*/ thisArg ) {
+			function observe (callback, includeUpdates, thisArg) {
 				// summary:
 				//		The observe method added to the query results, that is, if the
-				//		query results has a forEach method. When called the listener is
-				//		registered with the query Observer.
-				// listener:
+				//		query results has a forEach method. When called the callback is
+				//		registered with the Observer and will be notified of changes to
+				//		results set.
+				// callback: Function
 				//		The callback called when the query results changed or when an
 				//		object being part of the query results has changed.
-				// includeUpdates:
-				//		If true, the listener will also be called when an object that is
-				//		part of the query result has changed.
-				// thisArg:
+				// includeUpdates: Boolean?
+				//		If true, the callback will also be notified when an object that
+				//		is part of the results set has simply changed.
+				// thisArg: Object?
 				//		Object to use as this when executing callback.
-				// returns:
+				// returns: Object
 				//		An object with a remove() method. The remove method can be used
 				//		to remove the listener from the Observer object.
 				// tag:
 				//		Public
 				
 				if (!observer) {
-					observer = new Observer(store, results, keyRange, direction, revision);
-					handle   = observer.on("release", function (event) {
-						handle.remove();
-						observer = null;
-					});
+					observer = new Observer(store, results, keyRange, direction);
+					observer.done( function () { observer = null;	});
 				}
-
-				var options  = {updates: !!includeUpdates };
-				var listener = new Listener(callback, options, thisArg);
-				observer.addListener("range", listener);
+				var listOpts = {updates: !!includeUpdates};
+				var listener = new Listener(callback, listOpts, thisArg);
+				observer.addListener(listener);
 
 				return {
 					remove: function () { 
-						observer.removeListener("range", listener ); 
+						observer.removeListener(listener ); 
 					}
 				};
 			}	/* end observe() */
 
-			var results   = this.inherited(arguments);
+			var results   = this.inherited(arguments);		// Call parent getRange()
 			var direction = direction || "next";
-			var keyRange  = KeyRange.unbound();
+			var keyRange  = keyRange;
 			var store     = this;
-			var revision  = store.revision;
 			var observer  = null;
 			var handle    = null;
 			
 			// Test if the results can be iterated.
 			if (results && typeof results.forEach == "function") {
-				results.observe = observe;
+				results.observe  = observe;
 			}
 			return results;
 		},
 
-		query: function (/*Object*/ query,/*Store.QueryOptions*/ options ) {
+		query: function (query, options) {
 			// summary:
 			//		Queries the store for objects. The query result get an additional
 			//		method called observe which, when called, starts monitoring the
 			//		query result for any changes.
-			// query: Object
+			// query: Object?
 			//		The query to use for retrieving objects from the store.
-			// options:
+			// options: Store.QueryOptions?
 			//		The optional arguments to apply to the resultset.
 			// returns: dojo/store/api/Store.QueryResults
 			//		The results of the query, extended with iterative methods.
 			// tag:
 			//		Public
 
-			function observe (/*Function*/ listener,/*Boolean?*/ includeUpdates, /*Object*/ thisArg ) {
+			function observe (callback, includeUpdates, thisArg) {
 				// summary:
 				//		See getRange.observer()
 				if (!observer) {
-					observer = new Observer(store, results, query, options, revision );
-					handle   = observer.on("release", function (event) {
-						handle.remove();
-						observer = null;
-					});
+					observer = new Observer(store, results, query, options );
+					observer.done( function () { observer = null;	});
 				}
-				var options  = {updates: !!includeUpdates };
-				listener = new Listener(listener, options, thisArg);
-				observer.addListener("query", listener);
+				var listOpts = {updates: !!includeUpdates};
+				var listener = new Listener(callback, listOpts, thisArg);
+				observer.addListener(listener);
 
 				return {
 					remove: function () { 
-						observer.removeListener("query", listener ); 
+						observer.removeListener(listener); 
 					}
 				};
 			}	/* end observe() */
 
-			// Call 'parent' query 
-			var results  = this.inherited(arguments);
+			var results  = this.inherited(arguments);	// Call parent query()
 			var options  = options || {};
 			var store    = this;
-			var revision = store.revision;
 			var observer = null;
 			var handle   = null;
 			
 			// Test if the results can be iterated.
 			if (results && typeof results.forEach == "function") {
-				results.observe = observe;
+				results.observe  = observe;
 			}
 			return results;
 		}

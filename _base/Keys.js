@@ -42,11 +42,11 @@ define(["exports",
 		//			Array > String > Date > Number
 		//
 		//		(See http://www.w3.org/TR/IndexedDB/#key-construct)
-		// key1:
+		// key1: Any
 		//		First valid indexedDB key.
-		// key2:
+		// key2: Any
 		//		Second valid indexedDB key.
-		// returns:
+		// returns: Number
 		//		-1, 0 or 1
 		// NOTE:
 		//		When comparing dates the time portion of the date objects is ignored.
@@ -109,21 +109,21 @@ define(["exports",
 		throw new StoreError("TypeError", "cmp");
 	};
 
-	exports.boundary = function (/*Index|Store*/ source, /*any*/ key, /*String*/ type, /*Boolean*/ open ) {
+	exports.boundary = function (source, key, type, open ) {
 		// summary:
 		//		Determine the upper or lower boundary of an ordered list of records
 		//		sharing the same key.
-		// source:
+		// source: Store|Index
 		//		The source to search which is either an Index or Store.
-		// key:
+		// key: Key
 		//		Key for which the boundary is to be determined.
-		// type:
+		// type: String
 		//		Boundary type: 'lower' or 'upper'
-		// open:
+		// open: Boolean
 		//		Indicates if the key itself is to be included or excluded when setting
 		//		the boundary. If open is set to false matching key records will be
 		//		included otherwise they are excluded.
-		// returns:
+		// returns: Number
 		//		Record index. If boundary equals 'lower' the index identifies the
 		//		lower boundary or first record otherwise it is the upper boundary or
 		//		last record.
@@ -164,15 +164,17 @@ define(["exports",
 		return max;
 	};
 
-	exports.getKey = function (/*Store*/ store,/*Object*/ value,/*any?*/ key ) {
+	exports.getKey = function (store, value, key) {
 		// summary:
 		//		Get the key from the value using a key path (in-line-key), the
 		//		optional provided key (out-of-line key) or generate a key.
-		// value:
+		// store: Store
+		// value: Object
 		//		JavaScript key:value pairs object.
-		// key:
-		//		Optional, key
-		// returns:
+		// key: Key?
+		//		Key to be assigned if no key value can be extracted from the object.
+		//		Only allowed if the store has no key path defined.
+		// returns: Key
 		//		Key value.
 		// tag:
 		//		Private
@@ -215,23 +217,32 @@ define(["exports",
 		return key;
 	},
 
-	exports.getRange = function (/*Index|Store*/ source, /*KeyRange*/ keyRange) {
+	exports.getRange = function (source, keyRange) {
 		// summary:
 		//		Determine all records within a given key range. This function does
 		//		not return records, instead it returns a Range object which holds
 		//		information about the first and last record in range.
-		// source:
+		// source: Store|Index
 		//		An index or a store with their records in ascending key order.
-		// keyRange:
+		// keyRange: KeyRange
 		//		A KeyRange object
-		// returns:
+		// returns: Range
 		//		A Range object.
 		// tag:
 		//		Public
 
-		function Range (/*Index|Store*/ source,/*Number*/ first,/*Number*/ last) {
+		function Range (source, first, last) {
 			// summary:
 			// 		Compose a Range object.
+			// source: Store|Index
+			// first: Number
+			//		Index number of the first record in range.
+			// last:  number
+			//		Index number of the last record in range.
+			// returns: Range
+			//		A Range object
+			// tag:
+			//		Private
 			var max  = source._records.length;
 			var last = Math.min(last, max);
 			
@@ -253,27 +264,31 @@ define(["exports",
 			var records = source._records;
 			var first = -1, last = -1;
 
-			if (keyRange && records.length) {
-				first = exports.boundary( source, keyRange.lower, "lower", keyRange.lowerOpen);
-				last  = exports.boundary( source, keyRange.upper, "upper", keyRange.upperOpen);
+			if (records.length) {
+				if (keyRange) {
+					first = exports.boundary( source, keyRange.lower, "lower", keyRange.lowerOpen);
+					last  = exports.boundary( source, keyRange.upper, "upper", keyRange.upperOpen);
+				} else {
+					return new Range(source, 0, records.length);
+				}
 			}
 			return new Range(source, first, last);		// return a range object
 		}
 		throw new StoreError("ParameterError", "getRange");
 	};
 
-	exports.indexOf = function (/*Key[]*/ keyArray,/*Key*/ key,/*Number?*/ fromIndex) {
+	exports.indexOf = function (keyArray, key, fromIndex) {
 		// summary:
 		//		Returns the first index at which a given key can be found in the key
 		//		array, or -1 if it is not present.
-		// keyArray:
+		// keyArray: Key[]
 		//		Array to search.
-		// key:
+		// key: Key
 		//		Key to locate in the array.
-		// fromIndex:
+		// fromIndex: Number?
 		//		The location in keyArray to start the search from. fromIndex can be
 		//		an integer between 0 and the length of keyArray. The default is 0.
-		// returns:
+		// returns: Number
 		//		If found the zero based location of key otherwise -1.
 		// tag:
 		//		Public
@@ -290,7 +305,7 @@ define(["exports",
 		return -1;
 	};
 	
-	exports.inRange = function (/*any*/ key, /*KeyRange*/ keyRange) {
+	exports.inRange = function (key, keyRange) {
 		// summary:
 		//		Validate if key is within a key range. A key is considered to be in
 		//		range if both the following conditions are fulfilled:
@@ -300,17 +315,17 @@ define(["exports",
 		//		• The key range upper value is undefined or greater than key. It may
 		//			also be equal to key if upperOpen is false.
 		//
-		// key:
+		// key: Key
 		//		Key to be evaluated.
-		// keyRange:
+		// keyRange: KeyRange?
 		//		A KeyRange.
-		// returns:
-		//		Boolean, true if key is in range otherwise false.
+		// returns: Boolean
+		//		true if key is in range otherwise false.
 		// tag:
 		//		Public
 
 		if (exports.validKey(key)) {
-			if (keyRange.lower == undef && keyRange.upper == undef) {
+			if (!keyRange || (keyRange.lower == undef && keyRange.upper == undef)) {
 				return true;
 			}
 			var lower = keyRange.lower != undef ? exports.cmp(keyRange.lower, key) : -1;
@@ -324,17 +339,17 @@ define(["exports",
 		return false;
 	};
 
-	exports.keyValue = function (/*String|String[]*/ keyPath,/*object*/ object ) {
+	exports.keyValue = function (keyPath, object) {
 		// summary:
 		//		Extract the key value from an object using a key path.
-		// keyPath:
+		// keyPath: String|String[]
 		//		A key path is a DOMString that defines how to extract a key from a value.
 		//		A valid key path is either the empty string, a JavaScript identifier, or
 		//		multiple Javascript identifiers separated by periods. (Note that spaces
 		//		are not allowed within a key path.)
-		// object:
+		// object: Object
 		//		Object to extract the key value from.
-		// returns:
+		// returns: Any
 		//		Any. The value returned may or may not be a valid key.
 		// tag:
 		//		Public
@@ -352,13 +367,13 @@ define(["exports",
 		}
 	};
 
-	exports.purgeKey = function (/*Key||Key[]*/ keyValue ) {
+	exports.purgeKey = function (keyValue) {
 		// summary:
 		//		If keyValue is an array, remove all invalid and duplicate	key values
 		//		otherwise simply return keyValue.
-		// keyValue:
+		// keyValue: Key[]
 		//		Key value or key value array.
-		// returns:
+		// returns: Key[]
 		//		keyValue purged.
 		// tag:
 		//		Public
@@ -377,15 +392,15 @@ define(["exports",
 		return keyValue;
 	};
 
-	exports.search = function search (/*Index|Store*/ source, /*any*/ key ) {
+	exports.search = function search (source, key) {
 		// summary:
 		//		Search in an ordered list of records all records that share key and
 		//		return a location object.
-		// source:
+		// source: Store|Index
 		//		Either a store or index object.
-		// key:
+		// key: Key
 		//		Key identifying the record(s).
-		// returns:
+		// returns: Location
 		//		A location object.
 		// tag:
 		//		Public
@@ -421,11 +436,13 @@ define(["exports",
 		//		Sort an array of keys. If keys are arrays a deep array comparison
 		//		is performed. In accordance with the W3C IndexedDB specs, the rule:
 		//		(Array > String > Date > Number) is applied while sorting keys.
-		// keys:
+		// keys: Key[]
 		//		Array of keys.
-		// ascending:
+		// ascending: Boolean?
 		//		If true, the keys are sorted in ascending order otherwise the	keys
 		//		are sorted in descending order. The default is true.
+		// returns: Key[]
+		//		The keys array sorted.
 		// tag:
 		//		Public
 		if (keys instanceof Array) {
@@ -437,14 +454,16 @@ define(["exports",
 		return keys;
 	};
 
-	exports.test = function (/*Store*/ store,/*Object*/ value,/*any?*/ key ) {
+	exports.test = function (store, value, key) {
 		// summary:
 		//		Test a value to determine if a store operation would succeed given
 		///		the store's use of in-line or out-of-line keys, the availability of
 		//		a key generator and the optional key, if provided.
-		// value:
+		// store: Store
+		//		Instance of a Store
+		// value: Object
 		//		JavaScript key:value pairs object.
-		// key:
+		// key: Key?
 		//		Optional, key
 		// returns:
 		//		Boolean true if store operation would succeed otherwise false.
@@ -469,10 +488,12 @@ define(["exports",
 		return true;
 	},
 	
-	exports.toUpperCase = function (/*Key*/ key ) {
+	exports.toUpperCase = function (key) {
 		// summary:
 		//		Convert a key value to uppercase.
-		// keyValue:
+		// key: Key
+		// returns: Key
+		//		New key.
 		// tag:
 		//		Public
 		var keyValue = Lib.clone(key);
@@ -488,12 +509,12 @@ define(["exports",
 		return keyValue;
 	};
 
-	exports.validKey = function (/*any*/ key) {
+	exports.validKey = function (key) {
 		// summary:
 		//		Validate if key is a valid indexedDB key
-		// key:
+		// key: Key
 		//		Key to be validated.
-		// returns:
+		// returns: Boolean
 		//		Boolean, true if a valid key otherwise false.
 		// tag
 		//		Public
@@ -508,13 +529,13 @@ define(["exports",
 		return false;
 	};
 	
-	exports.validPath = function (/*KeyPath*/ keyPath) {
+	exports.validPath = function (keyPath) {
 		// summary:
 		//		Validate if key path is valid. Note: A key path can be an array
 		//		but not nested.
-		// keyPath:
+		// keyPath: KeyPath
 		//		KeyPath to be validated.
-		// returns:
+		// returns: Boolean
 		//		Boolean, true if a valid path otherwise false.
 		// tag
 		//		Public

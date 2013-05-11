@@ -13,7 +13,7 @@ define(["./Listener",
 			 ], function (Listener, createError) {
 	"use strict";
 	// module:
-	//		IndexedStore/_base/Callback
+	//		indexedStore/_base/Callback
 	// summary:
 
 	var StoreError = createError( "Callback" );		// Create the StoreError type.
@@ -24,8 +24,8 @@ define(["./Listener",
 
 		this.add = function (type, listener) {
 			// summary:
-			// type:
-			// listener:
+			// type: String
+			// listener: Listener
 			// tag:
 			//		Public
 			if (listener instanceof Listener) {
@@ -46,7 +46,12 @@ define(["./Listener",
 				cbByType.push(listener);
 				callbacks[type] = cbByType;
 				self.length++;
-				return listener;
+
+				return {
+					remove: function () {
+						self.remove( type, listener );
+					}
+				}
 			}
 		};
 
@@ -60,7 +65,7 @@ define(["./Listener",
 			//		Call every callback registered for the given type.  This method
 			//		does NOT pass the optional listener options as the first argument.
 			//		See also fireWithOptions().
-			// type:
+			// type: String
 			// tag:
 			//		Public
 			var cb = callbacks[type];
@@ -78,7 +83,7 @@ define(["./Listener",
 			//		Call every callback registered for the given type.  The optional
 			//		listener options are passed to the callback as the first argument.
 			//		See also fire().
-			// type:
+			// type: String
 			// tag:
 			//		Public
 			var cb = callbacks[type];
@@ -94,7 +99,7 @@ define(["./Listener",
 
 		this.getByType = function (type) {
 			// summary:
-			// type:
+			// type: String
 			// tag:
 			//		Public
 			var list = callbacks[type] || [];
@@ -120,8 +125,8 @@ define(["./Listener",
 		
 		this.remove = function (type, listener) {
 			// summary:
-			// type:
-			// listener:
+			// type: String
+			// listener: Listener
 			// tag:
 			//		Public
 			if (listener instanceof Listener) {

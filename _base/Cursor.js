@@ -33,30 +33,31 @@ define(["dojo/_base/lang",
 	var clone      = Lib.clone;									// HTML5 structure clone.
 	var undef;
 
-	function Cursor (/*Store|Index*/ source,/*KeyRange*/ range, /*String*/ direction,
-										/*Boolean?*/ keyCursor) {
+	function Cursor (source, range, direction, keyCursor) {
 		// summary:
 		//		Cursors are a transient mechanism used to iterate over multiple records
 		//		in a store. Storage operations are performed on the underlying index
 		//		object store.
-		// source:
+		// source: Store|Index
 		//		The cursor's source, that is, store or index, on which this cursor will
 		//		operate.
-		// range:
+		// range: KeyRange
 		//		The key range to use as the cursor's range.
-		// direction:
-		//		The cursor's required direction.
-		// keyCursor:
+		// direction: String?
+		//		The cursor's required direction, default is "next"
+		// keyCursor: Boolean?
 		//		Indicates if this is a key cursor. (default is false)
+		// returns: Cursor
+		//		A new Cursor object
 		// tag:
 		//		Public
 
 		//=========================================================================
 
-		function assertSource(/*Index|Store*/ source ) {
+		function assertSource(source) {
 			// summary:
 			//		Test if the cursor's store or index is still in a valid state.
-			// source:
+			// source: Store|Index
 			//		The index or store to assert.
 			// exception:
 			//		InvalidState
@@ -68,9 +69,12 @@ define(["dojo/_base/lang",
 			return true;
 		}
 
-		function advanceCursor(/*Cursor*/ cursor, /*any?*/ key,/*Number?*/ count ) {
+		function advanceCursor(cursor, key, count ) {
 			// summary:
 			//		Advance the cursor 'count' number of times in the cursor direction.
+			// cursor: Cursor
+			// key: Key?
+			// count: Number?
 			// tag:
 			//		Private
 			var result;
@@ -84,12 +88,12 @@ define(["dojo/_base/lang",
 			return result;
 		}
 
-		function iterateCursor(/*IDBCursor*/ cursor, /*any*/ key ) {
+		function iterateCursor(cursor, key) {
 			// summary:
 			//		Perform one cursor iteration
-			// cursor:
+			// cursor: Cursor
 			//		Cursor to iterate
-			// key:
+			// key: Key?
 			//		The next key to position this cursor at
 			// tag:
 			//		Private
@@ -132,18 +136,24 @@ define(["dojo/_base/lang",
 		}
 
 		function setKeys( key, primKey ) {
+			// summary:
+			// key:
+			// primKey:
+			// tag:
+			//		Private
 			currentKey = key;
 			primaryKey = primKey;
 		}
 
-		function next (/*any?*/ key, /*Boolean?*/ unique,/*Boolean?*/ reset) {
+		function next (key, unique, reset) {
 			// summary:
 			//		Get the next record relative to the current location.
-			// key:
+			// key: Key?
 			//		The next key to position this cursor at.
-			// unique:
+			// unique: Boolean
 			//		If true records with duplicate keys are skipped.
-			// returns:
+			// reset: Boolean?
+			// returns: Location
 			//		A location object.
 			// tag:
 			//		Private
@@ -189,14 +199,15 @@ define(["dojo/_base/lang",
 			return new Location( source, nxtLoc - 1, -1, nxtLoc );
 		}
 		
-		function previous (/*any?*/ key, /*Boolean?*/ unique,/*Boolean?*/ reset) {
+		function previous (key, unique, reset) {
 			// summary:
 			//		Get the previous record relative to the current location.
-			// key:
+			// key: Key?
 			//		The next key to position this cursor at.
-			// unique:
+			// unique: Boolean?
 			//		If true no records with duplicate keys are returned.
-			// returns:
+			// reset: Boolean?
+			// returns: Location
 			//		A location object.
 			// tag:
 			//		Private
@@ -255,10 +266,10 @@ define(["dojo/_base/lang",
 		//=========================================================================
 		// Public Cursor methods.
 
-		this.advance = function (/*number*/ count) {
+		this.advance = function (count) {
 			// summary:
 			//		Advance the cursor count number of times forward.
-			// count:
+			// count: Number
 			//		The number of advances forward the cursor should make.
 			// tag:
 			//		Public
@@ -274,15 +285,14 @@ define(["dojo/_base/lang",
 		}
 
 		// dojo buildsystem doesn't allow 'this.continue' therefore we use 'this.cont'
-		this.cont = function (/*any?*/ key) {
+		this.cont = function (key) {
 			// summary:
 			//		Advance the cursor once in the direction set for the cursor or to
 			//		the key if specified.
-			// key:
+			// key: Key?
 			//		The next key to position this cursor at
-			// exception:
-			//		DataError
-			//		InvalidState
+			// returns: Boolean
+			//		True if the cursor was successfully repositioned otherwise false.
 			// tag:
 			//		Public
 			if (key && !Keys.validKey(key)) {
@@ -298,10 +308,9 @@ define(["dojo/_base/lang",
 		this.remove = function () {
 			// summary:
 			//		Delete the record with the cursor's current primary key from the store.
-			// returns:
-			//		A Boolean.
-			// exception:
-			//		InvalidState
+			// returns: Boolean
+			//		True if the object at the current cursor position was successfully 
+			//		removed otherwise false.
 			// tag:
 			//		Public
 			if (gotValue && !keyCursor) {
@@ -313,18 +322,15 @@ define(["dojo/_base/lang",
 			throw new StoreError("InvalidState", "remove");
 		}
 
-		this.update = function (/*object*/ value) {
+		this.update = function (value) {
 			// summary:
 			//		Update the value of the store record whose key matches the cursor's
 			//		current primary key. If the updated value results in an different
 			//		key for the record a StoreError of type DataError is thrown. This
 			//		effectively means the caller is not allowed to change the primary
 			//		key of the store record.
-			// value:
+			// value: Object
 			//		The new value to store.
-			// exception:
-			//		DataError
-			//		InvalidState
 			// tag:
 			//		Public
 
@@ -405,8 +411,6 @@ define(["dojo/_base/lang",
 					throw new StoreError( "TypeError", "constructor", "invalid keyRange");
 				}
 				keyRange = KeyRange.only( source.uppercase ? Keys.toUpperCase(keyRange) : keyRange );
-			} else {
-				keyRange = KeyRange.unbound();
 			}
 		}
 

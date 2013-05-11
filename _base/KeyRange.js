@@ -19,9 +19,19 @@ define(["./Keys",
 	//		is identical to the IDBKeyRange object specified in the IndexedDB specs:
 	//
 	//			http://www.w3.org/TR/IndexedDB/#range-concept
-
+	//
+	//	However, if a native IDBKeyRange implementation is available it will be
+	//	used instead.
+	
 	var StoreError   = createError( "KeyRange" );		// Create the StoreError type.
 	var freezeObject = Object.freeze;
+
+	// Test if a native IDBKeyRange implementation is available
+	var nativeKeyRange = window.IDBKeyRange || window.webkitIDBKeyRange ||
+                       window.mozIDBKeyRange || window.msIDBKeyRange;
+	if (nativeKeyRange) {
+		return nativeKeyRange;
+	}
 
 	function IDBKeyRange (lower, upper, lowerOpen, upperOpen) {
 		this.lower = lower
@@ -43,11 +53,11 @@ define(["./Keys",
 	KeyRange.prototype = new IDBKeyRange();
 	KeyRange.prototype.constructor.prototype = IDBKeyRange.prototype;
 	
-	KeyRange.only = function (/*any*/ value ) {
+	KeyRange.only = function (value) {
 		// summary:
 		//		Creates and returns a new key range with both lower and upper set
 		//		to value and both lowerOpen and upperOpen set to false.
-		// value:
+		// value: Key
 		//		The only value.
 		// tag:
 		//		Public
@@ -58,13 +68,13 @@ define(["./Keys",
 		throw new StoreError("DataError", "only");
 	};
 
-	KeyRange.lowerBound = function (/*any*/ lower,/*Boolean*/ open ) {
+	KeyRange.lowerBound = function (lower, open) {
 		// summary:
 		//		Creates and returns a new key range with lower set to lower, lowerOpen
 		//		set to open, upper set to undefined and and upperOpen set to true.
-		// lower:
+		// lower: Key
 		//		The lower bound value.
-		// open:
+		// open: Boolean?
 		//		Set to false if the lower-bound should be included in the key range.
 		//		Set to true if the lower-bound value should be excluded from the key
 		//		range. Defaults to false (lower-bound value is included).
@@ -77,14 +87,14 @@ define(["./Keys",
 		throw new StoreError("DataError", "lowerBound");
 	};
 
-	KeyRange.upperBound = function (/*any*/ upper,/*Boolean*/ open ) {
+	KeyRange.upperBound = function (upper, open) {
 		// summary:
 		//		Creates and returns a new key range with lower set to undefined,
 		//		lowerOpen set to true, upper set to upper and and upperOpen set
 		//		to open.
-		// upper:
+		// upper: Key
 		//		The upper bound value.
-		// open:
+		// open: Boolean?
 		//		Set to false if the upper-bound should be included in the key range.
 		//		Set to true if the upper-bound value should be excluded from the key
 		//		range. Defaults to false (upper-bound value is included).
@@ -97,19 +107,19 @@ define(["./Keys",
 		throw new StoreError("DataError", "upperBound");
 	};
 
-	KeyRange.bound = function (/*any*/ lower,/*any*/ upper,/*Boolean*/ lowerOpen,/*Boolean*/ upperOpen ) {
+	KeyRange.bound = function (lower, upper, lowerOpen, upperOpen ) {
 		// summary:
 		//		Creates and returns a new key range with lower set to lower, lowerOpen
 		//		set to lowerOpen, upper set to upper and upperOpen set to upperOpen.
-		// lower:
+		// lower: Key
 		//		The lower bound value.
-		// upper:
+		// upper: Key
 		//		The upper bound value.
-		// lowerOpen:
+		// lowerOpen: Boolean?
 		//		Set to false if the lower-bound should be included in the key range.
 		//		Set to true if the lower-bound value should be excluded from the key
 		//		range. Defaults to false (lower-bound value is included).
-		// upperOpen:
+		// upperOpen: Boolean?
 		//		Set to false if the upper-bound should be included in the key range.
 		//		Set to true if the upper-bound value should be excluded from the key
 		//		range. Defaults to false (upper-bound value is included).
@@ -124,15 +134,6 @@ define(["./Keys",
 		}
 		throw new StoreError("DataError", "bound");
 	};
-
-	//========================================================================
-	// Internal use ONLY
-	
-	Object.defineProperty( KeyRange, "unbound", {
-		value: function () {
-			return freezeObject( new KeyRange() );
-		}
-	});
 
 	freezeObject(KeyRange);
 	return KeyRange;

@@ -66,6 +66,9 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 						var text = object.toString();
 						var segm = text.match( /\/(.*?)\/([gim]*)$/);
 						return new RegExp(segm[1], segm[2] );						
+					case "Blob":
+					case "File":
+						return object.slice(0, object.size, object.type);
 				}
 				throw new StoreError("DataCloneError", "clone", "objects of type [%{0}] can not be cloned", type);
 			}
@@ -103,7 +106,7 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			} else if (/,/.test(property)) {
 				this.enumerate( object, property.split(/\s*,\s*/), value );
 			} else if (typeof object[property] == "function") {
-//				Object.defineProperty( object, property, {value: object[property], enumerable:false});
+				Object.defineProperty( object, property, {value: object[property], enumerable:false});
 			} else {
 				this.defProp( object, property, {enumerable:value});
 			}
@@ -169,6 +172,9 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 		},
 
 		isObject: function (object) {
+			// summary:
+			//		Returns true if, and only if, an object is a JavaScript key:value
+			//		pairs object
 			return ({}.toString.call(object) == "[object Object]");
 		},
 

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>CORS Extension</title>
+    <style type="text/css">
+      @import "../../dijit/themes/claro/claro.css";
+      @import "../../dijit/themes/claro/document.css";
+      @import "../../dijit/tests/css/dijitTests.css";
+    </style>
+
+    <script type="text/javascript">
+      var dojoConfig = {
+            async: true,
+            parseOnLoad: true,
+            isDebug: true,
+            baseUrl: "../../",
+            packages: [
+              { name: "dojo", location: "dojo" },
+              { name: "doh",  location: "util/doh" },
+              { name: "store",location: "indexedStore" }
+            ]
+      };
+    </script>
+
+    <script type="text/javascript" src="../../dojo/dojo.js"></script>
+    <script type="text/javascript">
+      require([
+        "doh/runner",
+        "dojo/_base/declare",
+        "dojo/_base/lang",
+        "dojo/ready",
+        "store/_base/_Store",
+        "store/_base/_Indexed",
+        "store/_base/_Natural",
+        "store/_base/_Loader",
+				"store/extension/CORS"
+        ], function( doh, declare, lang, ready,
+											_Store, _Indexed, _Natural, _Loader,
+											CORS ) {
+					"use strict";
+					
+					
+					doh.register("Cross Origin Resource Loading", [
+						{
+							name: "Invalid store declaration, Missing dependency",
+							runTest:function (t) {
+								// CORS requires the _Loader class...
+								var Store = declare( [_Store, _Natural, CORS]);
+								try {
+									var store = new Store();
+									t.is(undef, store);		// we should NOT get here....
+								} catch (err) {
+									var abc = err;
+								}
+							}
+						},
+
+						{
+							name: "Invalid store declaration, Wrong order",
+							runTest:function (t) {
+								// Loader must come before any extensions
+								var Store = declare( [_Store, _Natural, CORS, _Loader]);
+								try {
+									var store = new Store();
+									t.is(undef, store);		// we should NOT get here....
+								} catch (err) {
+									var abc = err;
+								}
+							}
+						},
+
+						{
+							name: "Load Source with different origin",
+							timeout: 5000,
+							runTest:function (t) {
+								var Store = declare( [_Store, _Natural, _Loader, CORS]);
+								var store = new Store ( {url:"http://thejekels.com/json/Simpsons.json", keyPath:"name"});
+								var defer = new doh.Deferred();
+
+								store.ready(
+									defer.getTestCallback( 
+										function (store) {
+											t.t ( store.count() > 0 );
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}
+								);
+								return defer;
+							}
+						},
+
+						{
+							// No keyPath, autoIncrement enabled. No new property is added to the
+							// object and the key must be numeric (auto incremented)
+							name: "Load Non existing resource",
+							timeout: 5000,
+							runTest:function (t) {
+								var Store = declare( [_Store, _Natural, _Loader, CORS]);
+								var store = new Store ( {url:"http://NowhereToBeFound.com/WhatNow.json", keyPath:"name"});
+								var defer = new doh.Deferred();
+
+								store.ready(
+									function (err) {
+										defer.errback(err);
+									},
+									defer.getTestCallback( 
+										function (err) {
+											t.is( "RequestError", err.name );
+										}
+									)
+								);
+								return defer;
+							}
+						}
+
+					]);
+
+					ready( function () {
+						doh.run();
+
+					});
+
+
+				}
+      );
+    </script>
+
+  </head>
+
+  <body class="claro">
+    <h1 class="DemoTitle">CORS Extension</h1>
+  </body>
+</html>

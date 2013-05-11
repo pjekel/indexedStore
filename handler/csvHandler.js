@@ -233,32 +233,34 @@ define([], function() {
 			// response:
 			// tag:
 			//		Public
-			var values = [], data = [];
-			var line, tokens, i, j;
+			if (response) {
+				var values = [], data = [];
+				var line, tokens, i, j;
 
-			// dojo 1.8 work-around. dojo/request/xhr calls the data handler regardless
-			// if a network error occured.
-			if (response.status >= 400) {
-				return response;
-			}
-
-			var csvLines = split( (response.data || response.text), self.newline);
-			for(i = 0; i<csvLines.length; i++) {
-				if (line = csvLines[i].trim()) {
-					tokens = split(line, self.delimiter);
-					for (j=0; j<tokens.length; j++) {
-						values.push( stringToValue(tokens[j], self.trim) );
-					}
-
-					if (!self.fieldNames) {
-						self.fieldNames = fieldsToIdentifier( values );
-					} else {
-						data.push( valuesToHash( self.fieldNames, values ));
-					}
-					values = [];
+				// dojo 1.8 work-around. dojo/request/xhr calls the data handler regardless
+				// if a network error occured.
+				if (response.status >= 400) {
+					return response;
 				}
+
+				var csvLines = split( (response.data || response.text), self.newline);
+				for(i = 0; i<csvLines.length; i++) {
+					if (line = csvLines[i].trim()) {
+						tokens = split(line, self.delimiter);
+						for (j=0; j<tokens.length; j++) {
+							values.push( stringToValue(tokens[j], self.trim) );
+						}
+
+						if (!self.fieldNames) {
+							self.fieldNames = fieldsToIdentifier( values );
+						} else {
+							data.push( valuesToHash( self.fieldNames, values ));
+						}
+						values = [];
+					}
+				}
+				return data;
 			}
-			return data;
 		};
 
 		this.set = function (/*String|Object*/ property, /*any?*/ value) {

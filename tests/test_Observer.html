@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Observer</title>
+    <style type="text/css">
+      @import "../../dijit/themes/claro/claro.css";
+      @import "../../dijit/themes/claro/document.css";
+      @import "../../dijit/tests/css/dijitTests.css";
+    </style>
+
+    <script type="text/javascript">
+      var dojoConfig = {
+            async: true,
+            parseOnLoad: true,
+            isDebug: true,
+            baseUrl: "../../",
+            packages: [
+              { name: "dojo", location: "dojo" },
+              { name: "doh",  location: "util/doh" },
+              { name: "store",location: "indexedStore" }
+            ]
+      };
+    </script>
+
+    <script type="text/javascript" src="../../dojo/dojo.js"></script>
+    <script type="text/javascript">
+      require([
+        "doh/runner",
+        "dojo/_base/declare",
+        "dojo/ready",
+        "store/_base/_Store",
+        "store/_base/_Indexed",
+        "store/_base/Listener",
+        "store/_base/Observer",
+				"store/extension/Hierarchy"
+        ], function( doh, declare, ready,
+											_Store, _Indexed, Listener, Observer, Hierarchy ) {
+					"use strict";
+					
+					// IMPORTANT:
+					//		Don't change the number of records without updating any of
+					//		the range and count tests.
+					// - there are 8 unique parents.
+					var data = [
+						{ "name":"Root", "parent":[], "hair":"none" },
+						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
+						{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
+						{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
+						{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
+						{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
+						{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
+						{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },
+						{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },
+						{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
+						{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
+						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
+						{ "name":"Manjula", "age":40, "parent":["Apu"], "hair":"brown"}
+					];
+					var self = this;
+					var undef;
+
+					function listener0() {
+					};
+					function listener1() {
+					};
+					function listener2() {
+					};
+					function listener99() {
+					};
+					
+					doh.register("QueryResults Observer", [
+						{
+							name: "Store without a key path",
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, Hierarchy]);
+								var store = new Store ( {data: data, autoIncrement: true, keyPath:null});
+
+							}
+						},
+
+
+					]);
+
+					ready( function () {
+						doh.run();
+
+					});
+
+
+				}
+      );
+    </script>
+
+  </head>
+
+  <body class="claro">
+    <h1 class="DemoTitle">Observer</h1>
+  </body>
+</html>

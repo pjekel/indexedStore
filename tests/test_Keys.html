@@ -337,7 +337,6 @@
 							runTest:function (t) {
 								var range, keyRange;
 								
-								keyRange = KeyRange.unbound();				// unbound() for internal use ONLY.
 								range = getRange( store, keyRange );
 								t.is( length, range.length );
 								t.is( 0, range.first);

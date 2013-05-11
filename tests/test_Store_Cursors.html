@@ -34,15 +34,16 @@
         "store/_base/_Store",
         "store/_base/_Indexed",
         "store/_base/Keys",
-        "store/_base/KeyRange"
+        "store/_base/KeyRange",
+        "store/_base/Library"
         ], function( doh, declare, lang, QueryResults, ready,
-											_Store, _Indexed, Keys, KeyRange, createError ) {
+											_Store, _Indexed, Keys, KeyRange, Lib ) {
 					"use strict";
 					
 					// IMPORTANT:
 					//		Don't change the number of records without updating any of
 					//		the range and count tests.
-					var data = [
+					var data0 = [
 						{ "name":"Root", "parent":[], "hair":"none" },
 						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
 						{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
@@ -68,6 +69,7 @@
 								var Store = declare( [_Store, _Indexed]);
 								var store = new Store ( {autoIncrement: false, keyPath:null});
 								var keyRange, result, cursor;
+								var data = Lib.clone(data0);
 								var max = data.length;
 								var undef;
 								
@@ -265,6 +267,7 @@
 								var Store = declare( [_Store, _Indexed]);
 								var store = new Store ( {autoIncrement: true, keyPath:null});
 								var keyRange, result, cursor;
+								var data = Lib.clone(data0);
 								var max = data.length;
 								var undef;
 								
@@ -436,6 +439,7 @@
 								var Store = declare( [_Store, _Indexed]);
 								var store = new Store ( {keyPath:"name"});
 								var keyRange, result, cursor;
+								var data = Lib.clone(data0);
 								var max = data.length;
 								var undef;
 								
@@ -556,6 +560,7 @@
 								var Store = declare( [_Store, _Indexed]);
 								var store = new Store ( {keyPath:"name", uppercase: true});
 								var keyRange, result, cursor;
+								var data = Lib.clone(data0);
 								var max = data.length;
 								var undef;
 								

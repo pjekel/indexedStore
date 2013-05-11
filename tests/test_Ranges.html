@@ -76,18 +76,25 @@
 								t.is ("a", keyRange.lower);
 								t.is ("a", keyRange.upper);
 								
-								t.e( Error, KeyRange, "only", [] );
-								t.e( Error, KeyRange, "only", [null] );
-								t.e( Error, KeyRange, "lowerBound", [] );
-								t.e( Error, KeyRange, "lowerBound", [null] );
-								t.e( Error, KeyRange, "upperBound", [] );
-								t.e( Error, KeyRange, "upperBound", [null] );
-								t.e( Error, KeyRange, "bound", [] );
-								t.e( Error, KeyRange, "bound", [null] );
-								t.e( Error, KeyRange, "bound", ["a"] );
-								t.e( Error, KeyRange, "bound", [undef,"a"] );
-								t.e( Error, KeyRange, "bound", ["a",0] );			// String > Number
-
+								// Test if a native IDBKeyRange implementation is being used. If so
+								// skip error testing, this because vendor specific implementations
+								// throw different errors/exceptions.
+								
+								var nativeRange = window.IDBKeyRange || window.webkitIDBKeyRange ||
+																	window.mozIDBKeyRange || window.msIDBKeyRange;
+								if (KeyRange != nativeRange) {
+									t.e( Error, KeyRange, "only", [] );
+									t.e( Error, KeyRange, "only", [null] );
+									t.e( Error, KeyRange, "lowerBound", [] );
+									t.e( Error, KeyRange, "lowerBound", [null] );
+									t.e( Error, KeyRange, "upperBound", [] );
+									t.e( Error, KeyRange, "upperBound", [null] );
+									t.e( Error, KeyRange, "bound", [] );
+									t.e( Error, KeyRange, "bound", [null] );
+									t.e( Error, KeyRange, "bound", ["a"] );
+									t.e( Error, KeyRange, "bound", [undef,"a"] );
+									t.e( Error, KeyRange, "bound", ["a",0] );			// String > Number
+								}
 							}
 						},
 						

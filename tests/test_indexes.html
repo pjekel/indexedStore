@@ -529,7 +529,8 @@
 							timeout: 10000,
 							runTest:function (t) {
 								var Store = declare( [_Store, _Indexed, _Loader]);
-								var store = new Store ( {url:"../json/us-zipcodes-05k.json", suppressEvents: true, keyPath:"zip"});
+								var store = new Store ( {url:"../json/us-zipcodes-05k.json", suppressEvents: true, 
+																				 keyPath:"zip", maxErrors:25 });
 								var defer = new doh.Deferred();
 								
 								store.ready( 

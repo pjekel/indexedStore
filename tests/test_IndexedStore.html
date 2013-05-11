@@ -29,12 +29,13 @@
         "doh/runner",
         "dojo/_base/declare",
         "dojo/_base/lang",
+        "dojo/promise/Promise",
         "dojo/store/util/QueryResults",
         "dojo/ready",
         "store/_base/_Store",
         "store/_base/_Indexed",
         "store/_base/KeyRange"
-        ], function( doh, declare, lang, QueryResults, ready,
+        ], function( doh, declare, lang, Promise, QueryResults, ready,
 											_Store, _Indexed, KeyRange, createError ) {
 					"use strict";
 					
@@ -531,6 +532,72 @@
 
 								// destroy store.
 								store.destroy();
+							}
+						},
+
+						{
+							name: "Store default Query behavour (1)",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ( {keyPath:"name"});
+								
+								// Store is empty but ready.
+								t.is(0, store.count());
+								var result = store.query();
+								t.t( result instanceof Array);
+
+								// destroy store.
+								store.destroy();
+							}
+						},
+
+						{
+							name: "Store default Query behavour (2)",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ( {autoLoad: false, keyPath:"name"});
+								var defer = new doh.Deferred();
+								var max   = data.length;
+
+								// Because the store is not 'ready' (e.g. nothing is loaded yet)
+								// query() should return a dojo/promise/Promise
+								
+								t.is(0, store.count());
+								var result0 = store.query();
+								
+								t.t( result0 instanceof Promise);
+
+								// Next: Load the store...
+								store.load( {data: data});
+
+								// NOTE:
+								//		Because the load request resolves BEFORE _storeReady we
+								// 		have to wait for _storeReady to do this specific test
+								//		otherwise result1 would still return a promise and result0
+								//		will not have been resolved yet.
+								
+								store.ready().then(
+									defer.getTestCallback( 
+										function () {
+											t.is(max, store.count());
+											var result1 = store.query();
+											t.t( result1 instanceof Array);
+
+											// Test if the first query has been resolved and 'total' is
+											// an actual number and no longer a promise.
+
+											t.t(typeof result0.total == "number");
+											t.is(max, result0.total);
+
+											// destroy store.
+											store.destroy();
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}									
+								);
+								return defer;
 							}
 						}
 

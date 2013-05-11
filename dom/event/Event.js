@@ -73,8 +73,10 @@ define(["dojo/_base/lang",
 				if (type) {
 					setEventType(this, type);
 				}
+				if (detail) {
+					this.detail = detail;
+				}
 				this.defaultPrevented = false;
-				this.detail = detail || null;
 				delete this.stopImmediate;
 				delete this.stopDeferred;
 				delete this.stopped;

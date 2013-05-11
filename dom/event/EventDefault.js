@@ -8,7 +8,8 @@
 //	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["../../error/createError!../../error/StoreErrors.json"
+define(["../../error/createError!../../error/StoreErrors.json",
+				"../../util/shim/Array"
 			 ], function (createError) {
 
 // module:
@@ -23,18 +24,17 @@ define(["../../error/createError!../../error/StoreErrors.json"
 		this.after  = [];
 	}
 
-	function addAction (/*String*/ aspect, /*String*/ type, /*Function*/ action,
-												/*context*/ scope /*[, arg1[, arg2[, ...]]]*/ )  {
+	function addAction (aspect, type, action, scope /*[, arg1[, arg2[, ...]]]*/ )  {
 		// summary:
 		//		Associate a default action with an event type. The default action can be
 		//		triggered either 'before' or 'after' the event is dispatched depending
 		//		on the aspect parameter.
-		// aspect:
+		// aspect: String
 		//		Identifies when the default action is called, that is, either 'before'
 		//		or 'after' the event is dispatched.
-		// type:
+		// type: String
 		//		Specifies the event type for which a default action is being registered.
-		// action:
+		// action: Function
 		//		The function called as the default action for the event type. The action
 		//		is called as:
 		//
@@ -42,13 +42,24 @@ define(["../../error/createError!../../error/StoreErrors.json"
 		//
 		//		the optional arguments is the variable list of arguments following the
 		//		scope parameter.
-		// scope:
+		// scope: Object?
 		//		The scope to use when calling the default action. When specified the
 		//		'this' object for the action routine will be the scope.
 		// tag:
 		//		Private
 
-		if (typeof type === "string") {
+		if (type instanceof String || typeof type == "string") {
+			if (/,/.test(type)) {
+				// Type is a comma separated string...
+				var args  = Array.prototype.slice.call(arguments);
+				var types = type.split(/\s*,\s*/);
+				types.forEach( function (type) {
+					args[1] = type;
+					addAction.apply(this, args);
+				}, this );
+				return;
+			}
+
 			if (typeof action === "function") {
 				var optinalArgs = Array.prototype.slice.call(arguments,4);
 				var actionList  = eventActions[type] || new ActionList();
@@ -64,10 +75,13 @@ define(["../../error/createError!../../error/StoreErrors.json"
 		}
 	}
 
-	return {
+	var action = {
 
-		after: function (/*String*/ type, /*Function*/ action, /*context*/ scope ) {
+		after: function (type, action, scope) {
 			// summary:
+			// type: String
+			// action: Function
+			// scope: Object?
 			// tag:
 			//		Public
 			var args = Array.prototype.slice.call(arguments, 0);
@@ -75,8 +89,11 @@ define(["../../error/createError!../../error/StoreErrors.json"
 			addAction.apply( this, args );
 		},
 
-		before: function (/*String*/ type, /*Function*/ action, /*context*/ scope ) {
+		before: function (type, action, scope) {
 			// summary:
+			// type: String
+			// action: Function
+			// scope: Object?
 			// tag:
 			//		Public
 			var args = Array.prototype.slice.call(arguments, 0);
@@ -84,16 +101,66 @@ define(["../../error/createError!../../error/StoreErrors.json"
 			addAction.apply( this, args );
 		},
 
+		clear: function (type) {
+			// summary:
+			//		Clear the default action(s) associated with an event type.
+			// type: String?
+			//		Event type, if specified the default action for the given event
+			//		type are removed. If ommitted, all default actions are removed.
+			// tag:
+			//		Public
+			if (type) {
+				if (type instanceof String || typeof type == "string") {
+					if (/,/.test(type)) {
+						// Type is a comma separated string...
+						var args  = Array.prototype.slice.call(arguments);
+						var types = type.split(/\s*,\s*/);
+						types.forEach( function (type) {
+							this.clear(type);
+						}, this);
+						return;
+					}
+					delete eventActions[type];
+				} else {
+					throw new StoreError( "Parameter", "clear", "type is missing or not a string" );
+				}
+			} else {
+				eventActions = {};
+			}
+		},
+
+		has: function (type, aspect) {
+			// summary:
+			// type: String
+			// aspect: String?
+			// tag:
+			//		Public
+			var actions = eventActions[type];
+			var total = 0;
+			if (actions) {
+				total = actions.before.length + actions.after.length;
+				if (aspect) {
+					if (actions = actions[aspect]) {
+						total = actions.length;
+					} else {
+						total = 0;
+					}
+				}
+			}
+			return !!total;
+		},
+		
 		trigger: function (event, aspect) {
 			// summary:
-			//		Trigger all registered default actions associated with a specific event
-			//		type. If an action callback invokes event.preventDefault() all remaining
-			//		action callbacks will be skipped.
-			// event:
-			//		The event for which the default action(s) are triggered. The event itself
-			//		is passed to the action callback as the first argument.
-			// aspect:
-			//		The aspect determines which action type is triggered, 'before' or 'after'.
+			//		Trigger all registered default actions associated with a specific
+			//		event type. If an action callback invokes event.preventDefault()
+			//		all remaining action callbacks will be skipped.
+			// event: Event
+			//		The event for which the default action(s) are triggered. The event
+			//		itself is passed to the action callback as the first argument.
+			// aspect: String
+			//		The aspect determines which action type is triggered, 'before' or 
+			//		'after'.
 			// tag:
 			//		Public
 
@@ -103,7 +170,7 @@ define(["../../error/createError!../../error/StoreErrors.json"
 			if (actionList) {
 				actionList[aspect].some( function (action) {
 					try {
-						actionArgs = action.args;
+						actionArgs = action.args.slice();
 						actionArgs.unshift(event);
 						action.action.apply( (action.scope || event.target), actionArgs );
 					} catch(err) {
@@ -114,5 +181,7 @@ define(["../../error/createError!../../error/StoreErrors.json"
 			}
 		}
 	}
+
+	return action;
 
 });

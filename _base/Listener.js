@@ -16,16 +16,19 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 
 	var StoreError = createError( "Listener" );		// Create the StoreError type.
 
-	function Listener (/*Function*/ callback,/*Object*/ options,/*Object*/ thisArg) {
+	function Listener (callback, options, thisArg) {
 		// summary:
 		//		Create a Listener object.
-		// callback:
+		// callback: Function
 		//		Callback function 
-		// options:
+		// options: Object?
 		//		A JavaScript key:value pairs object. The object properties may vary
-		//		based on the listener type.
-		// thisArg:
+		//		based on the listener type. The options are passed to the callback
+		//		as the first argument.
+		// thisArg: Object?
 		//		Object to use as this when executing callback.
+		// returns: Listener
+		//		An new instance of a Listener object
 		// tag:
 		//		Private
 		if (typeof callback != "function") {

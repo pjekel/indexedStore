@@ -16,12 +16,14 @@ define([], function(){
 	function Record(key, value) {
 		// summary:
 		//		Definition of an IndexedDB record.
-		// key:
+		// key: Key
 		//		The key by which the record can be retrieved. Please refer to:
 		//		http://www.w3.org/TR/IndexedDB/#key-construct for the definition
 		//		of valid keys.
-		// value:
+		// value: Object
 		//		Record value (a JavaScript key:value pairs object).
+		// returns: Record
+		//		A new instance of a Record object.
 		// tag:
 		//		Public
 		this.key   = key;
@@ -29,8 +31,6 @@ define([], function(){
 	}
 	
 	Record.prototype.destroy = function () {
-		this.value = null;
-		this.key   = null;
 		this._destroyed = true;	
 	}
 	

@@ -9,7 +9,6 @@
 //
 
 define(["dojo/_base/declare",
-				"dojo/store/util/QueryResults",
 				"../_base/Cursor",
 				"../_base/Keys",
 				"../_base/KeyRange",
@@ -18,8 +17,8 @@ define(["dojo/_base/declare",
 				"../_base/Record",
 				"../error/createError!../error/StoreErrors.json",
 				"../dom/event/Event"
-			 ], function (declare, QueryResults, Cursor, Keys, KeyRange, Lib, 
-										 Location, Record, createError, Event) {
+			 ], function (declare, Cursor, Keys, KeyRange, Lib, Location, Record,
+										 createError, Event) {
 	"use strict";
 	// module:
 	//		IndexedStore/_base/_Indexed
@@ -116,12 +115,14 @@ define(["dojo/_base/declare",
 		//===================================================================
 		// IndexedDB procedures
 
-		_deleteKeyRange: function (/*Key|KeyRange*/ key ) {
+		_deleteKeyRange: function (key) {
 			// summary:
 			//		Remove all records from store whose key is in the key range.
-			// key:
+			// key: Key|KeyRange
 			//		Key identifying the record to be deleted. The key arguments can also
 			//		be an KeyRange.
+			// returns: Boolean
+			//		true on successful completion otherwise false.
 			// tag:
 			//		Private
 			var i, deleted = false;
@@ -138,13 +139,15 @@ define(["dojo/_base/declare",
 			return !!deleted;
 		},
 
-		_deleteRecord: function (/*Record*/ record, /*Number*/ recNum ) {
+		_deleteRecord: function (record, recNum ) {
 			// summary:
 			//		Delete a single record from the store.
-			// record:
+			// record: Record
 			//		Record to be deleted
-			// recNum:
+			// recNum: Number
 			//		Record number (index).
+			// returns: Boolean
+			//		true on successful completion otherwise false.
 			// tag:
 			//		Private
 			try {
@@ -172,11 +175,11 @@ define(["dojo/_base/declare",
 			return false;
 		},
 
-		_indexRecord: function (/*Record*/ record) {
+		_indexRecord: function (record) {
 			// summary:
 			//		Add the record to each store index. If any of the indexes throws an
 			//		exception reverse the index operation and re-throw the error.
-			// record:
+			// record: Record
 			//		Record to index.
 			// exceptions:
 			// tag:
@@ -194,13 +197,11 @@ define(["dojo/_base/declare",
 			}
 		},
 
-		_retrieveRecord: function (/*any*/ key ) {
+		_retrieveRecord: function (key) {
 			// summary:
 			//		Retrieve the first record from the store whose key matches key and
 			//		return a locator object if found.
-			// store:
-			//		The Store to retrieve the record from.
-			// key:
+			// key: Key|KeyRange
 			//		Key identifying the record to be retrieved. The key arguments can also
 			//		be an KeyRange.
 			// returns:
@@ -220,10 +221,10 @@ define(["dojo/_base/declare",
 			return Keys.search(this, key);
 		},
 
-		_removeFromIndex: function (/*Record*/ record) {
+		_removeFromIndex: function (record) {
 			// summary:
 			//		Remove a record from all indexes including the local index.
-			// record:
+			// record: Record
 			//		Record to be removed.
 			// tag:
 			//		Private
@@ -238,16 +239,16 @@ define(["dojo/_base/declare",
 			}
 		},
 
-		_storeRecord: function (/*any*/ value,/*PutDirectives*/ options) {
+		_storeRecord: function (value, options) {
 			// summary:
 			//		Add a record to the store. Throws a StoreError of type ConstraintError
 			//		if the key already exists and overwrite flag is set to true.
 			// NOTE:
 			//		Indexed stores do not include location information in events as the
 			//		record location is not related to any natural order.
-			// value:
+			// value: Any
 			//		Record value property
-			// options:
+			// options: PutDirectives
 			//		Optional, PutDirectives
 			// returns:
 			//		Record key.
@@ -316,10 +317,10 @@ define(["dojo/_base/declare",
 		//=========================================================================
 		// Public IndexedStore/api/store API methods
 
-		count: function (/*any*/ key) {
+		count: function (key) {
 			// summary:
 			//		Count the total number of objects that share the key or key range.
-			// key:
+			// key: Key|KeyRange
 			//		Key identifying the record to be retrieved. The key arguments can
 			//		also be an KeyRange.
 			// returns:
@@ -339,14 +340,15 @@ define(["dojo/_base/declare",
 			return this.total;
 		},
 		
-		openCursor: function (/*Key|KeyRange?*/ keyRange, /*DOMString?*/ direction) {
+		openCursor: function (keyRange, direction) {
 			// summary:
 			//		Open a new cursor. A cursor is a transient mechanism used to iterate
 			//		over multiple records in the store.  A cursor does NOT contain any
-			//		store data and therefore does NOT have a length property.
-			// keyRange:
+			//		store data and therefore does NOT have a length property like a Range
+			//		does.
+			// keyRange: Key|KeyRange?
 			//		The key range to use as the cursor's range.
-			// direction:
+			// direction: DOMString?
 			//		The cursor's required direction. Valid options are: 'next', 'nextunique',
 			//		'prev' or 'prevunique'.
 			// returns:

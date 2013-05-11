@@ -10,7 +10,6 @@
 
 define(["dojo/_base/declare",
 				"dojo/_base/lang",
-				"dojo/store/util/QueryResults",
 				"./Keys",
 				"./KeyRange",
 				"./Library",
@@ -18,8 +17,8 @@ define(["dojo/_base/declare",
 				"./Record",
 				"../error/createError!../error/StoreErrors.json",
 				"../dom/event/Event"
-			 ], function (declare, lang, QueryResults, Keys, KeyRange, Lib, Location, 
-										 Record, createError, Event) {
+			 ], function (declare, lang, Keys, KeyRange, Lib, Location, Record,
+										 createError, Event) {
 	"use strict";
 	// module:
 	//		IndexedStore/_base/_Natural
@@ -120,13 +119,13 @@ define(["dojo/_base/declare",
 		//===================================================================
 		// IndexedDB procedures
 
-		_deleteKeyRange: function (/*KeyRange|Key*/ key ) {
+		_deleteKeyRange: function (key) {
 			// summary:
 			//		Remove all records from store whose key is in the key range.
-			// key:
+			// key: KeyRange|Key
 			//		Key identifying the record to be deleted. The key arguments can also
 			//		be an KeyRange.
-			// returns:
+			// returns: Boolean
 			//		true on successful completion otherwise false.
 			// tag:
 			//		Private
@@ -158,13 +157,15 @@ define(["dojo/_base/declare",
 			return deleted;
 		},
 
-		_deleteRecord: function (/*Record*/ record, /*Number*/ recNum ) {
+		_deleteRecord: function (record, recNum) {
 			// summary:
 			//		Delete a single record from the store.
-			// record:
+			// record: Record
 			//		Record to be deleted
-			// recNum:
+			// recNum: Number
 			//		Record number (index).
+			// returns: Boolean
+			//		true on successful completion otherwise false.
 			// tag:
 			//		Private
 
@@ -193,25 +194,24 @@ define(["dojo/_base/declare",
 			return false;
 		},
 
-		_getInRange: function (/*KeyRange*/ keyRange) {
+		_getInRange: function (keyRange) {
 			// summary:
-			//		Get the record numbers of all records within the key range. 
-			//		Note: on large datasets this can be expensive in terms of
-			//		performance.
-			// keyRange:
+			//		Get the record numbers, in store order, of all records within the
+			//		given key range.
+			// keyRange: KeyRange
 			//		Instance of KeyRange
-			// returns:
+			// returns: Number[]
 			//		An array of record numbers.
 			// tag:
 			//		Private
-			var recIdx = [], idxKey, keyVal, recNum;
+			var i, max = this._records.length;
+			var recIdx = [], keyVal;
+			
 			if (keyRange instanceof KeyRange) {
-				for (idxKey in this._index) {
-					// Get the real key, which may be numeric, from the record.
-					recNum = this._index[idxKey];
-					keyVal = this._records[recNum].key;
+				for (i = 0; i < max; i++) {
+					keyVal = this._records[i].key;
 					if (Keys.inRange( keyVal, keyRange )) {
-						recIdx.push(recNum);
+						recIdx.push(i);
 					}
 				}
 			}
@@ -222,9 +222,10 @@ define(["dojo/_base/declare",
 			// summary:
 			//		Add the record to each store index. If any of the indexes throws an
 			//		exception reverse the index operation and re-throw the error.
-			// record:
+			// record: Record
 			//		Record to index.
-			// exceptions:
+			// recNum: Number
+			//		Record number
 			// tag:
 			//		Private
 			var name, index;
@@ -244,14 +245,14 @@ define(["dojo/_base/declare",
 			this._index[record.key] = recNum;
 		},
 
-		_moveRecord: function (/*Record*/ record,/*Number*/ from,/*Number*/ to) {
+		_moveRecord: function (record, from, to) {
 			// summary:
 			//		Move a record within the natural order of the store.
-			// record:
+			// record: Record
 			//		Record to be moved.
-			// from:
+			// from: Number
 			//		Current record location
-			// to:
+			// to: Number
 			//		New record location
 			// tag:
 			//		Private
@@ -280,14 +281,14 @@ define(["dojo/_base/declare",
 			this.total = max;
 		},
 
-		_retrieveRecord: function (/*any*/ key ) {
+		_retrieveRecord: function (key) {
 			// summary:
 			//		Retrieve the first record from the store whose key matches key and
 			//		return a locator object if found.
-			// key:
+			// key: Key|KeyRange
 			//		Key identifying the record to be retrieved. The key arguments can also
 			//		be an KeyRange.
-			// returns:
+			// returns: Location
 			//		A location object. (see the ./_base/Location module for detais).
 			// tag:
 			//		Private
@@ -317,10 +318,10 @@ define(["dojo/_base/declare",
 			return new Location( this, max-1, -1, max );
 		},
 
-		_removeFromIndex: function (/*Record*/ record) {
+		_removeFromIndex: function (record) {
 			// summary:
 			//		Remove a record from all indexes including the local index.
-			// record:
+			// record: Record
 			//		Record to be removed.
 			// tag:
 			//		Private
@@ -337,15 +338,15 @@ define(["dojo/_base/declare",
 			}
 		},
 
-		_storeRecord: function (/*any*/ value, /*PutDirectives*/ options) {
+		_storeRecord: function (value, options) {
 			// summary:
 			//		Add a record to the store. Throws a StoreError of type ConstraintError
 			//		if the key already exists and noOverwrite is set to true.
-			// value:
+			// value: Any
 			//		Record value property
-			// options:
+			// options: PutDirectives
 			//		Optional, PutDirectives
-			// returns:
+			// returns: Key
 			//		Record key.
 			// tag:
 			//		Private
@@ -423,13 +424,13 @@ define(["dojo/_base/declare",
 		//=========================================================================
 		// Public IndexedStore/api/store API methods
 
-		count: function (/*any*/ key) {
+		count: function (key) {
 			// summary:
 			//		Count the total number of objects that share the key or key range.
-			// key:
+			// key: Key|KeyRange
 			//		Key identifying the record to be retrieved. The key arguments can
 			//		also be an KeyRange.
-			// returns:
+			// returns: Number
 			//		Total number of records matching the key or key range. If the key
 			//		argument is omitted the total number of records in the store is
 			//		returned.

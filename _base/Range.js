@@ -19,23 +19,23 @@ define(["./Keys",
 	var clone    = Lib.clone;
 	var undef;
 	
-	function Range(/*Store|Index*/ source,/*Key|KeyRange*/ keyRange,/*String*/ direction,
-									/*Boolean*/ duplicates, /*Boolean*/ keysOnly) {
+	function Range(source, keyRange, direction, duplicates, keysOnly) {
 		// summary:
 		//		Retrieve the objects or keys in range of a given key range.
-		// source:
+		// source: Store|Index
 		//		Instance of Store or Index.
-		// keyRange:
-		// direction:
+		// keyRange: Key|KeyRange?
+		//		Key or key range defining the record or key range to retrieve.
+		// direction: String?
 		//		The range required direction. Valid options are: 'next', 'nextunique',
 		//		'prev' or 'prevunique'. (default is 'next').
-		// duplicates:
+		// duplicates: Boolean?
 		//		Detrmines if duplicate keys are allowed in the range. If false, all
 		//		duplicate key entries are removed from the range. (default is true).
-		// keysOnly:
+		// keysOnly: Boolean?
 		//		If true, the record (object) keys are returned otherwise the objects
 		//		(record values) are returned. (default is false).
-		// returns:
+		// returns: Object[]|Key[]
 		//		An array of objects or key values. The order of the objects or keys
 		//		is determined by the direction.
 		// tag:
@@ -47,6 +47,7 @@ define(["./Keys",
 			var unique     = /unique$/.test(direction) || false;
 			var duplicates = duplicates != undef ? !!duplicates : true;
 			var keysOnly   = keysOnly != undef ? !!keysOnly : false;
+			var store      = source.type == "store" ? source : source.store;
 			var results    = [];
 			
 			if (!Lib.isDirection( direction )) {
@@ -58,8 +59,6 @@ define(["./Keys",
 						throw new StoreError( "TypeError", "constructor" );
 					}
 					keyRange = KeyRange.only( source.uppercase ? Keys.toUpperCase(keyRange) : keyRange );
-				} else {
-					keyRange = KeyRange.unbound();
 				}
 			}			
 			var records, value, range, keys = [];
@@ -76,29 +75,28 @@ define(["./Keys",
 				if (!ascending) { records.reverse();}
 				switch (source.type) {
 					case "store":
-						records.forEach( function (record) {
+						results = records.map( function (record) {
 							value = keysOnly ? record.key : record.value;
-							results.push(source._clone ? clone(value) : value);
-						}, this);
+							return source._clone ? clone(value) : value;
+						});
 						break;
 					case "index":
 						records.forEach( function (record) {
-							var value = ascending ? record.value : clone(record.value).reverse();
+							var value = ascending ? record.value : record.value.slice().reverse();
 							keys = keys.concat( unique ? value[0] : value );
 						});
 						if (!duplicates) {
 							// Remove all duplicate keys
 							keys = Keys.purgeKey(keys);
 						}
-						var store = source.store;
-						keys.forEach( function (key) {
-							value = keysOnly ? key : store.get(key);
-							results.push(store._clone ? clone(value) : value);
-						}, this);
+						results = keys.map( function (key) {
+							return keysOnly ? (store._clone ? clone(key) : key) : store.get(key);
+						});
 						break;
 				};	/* end switch() */
 			}
 			results.direction = direction;
+			results.revision  = store.revision;
 			results.keyRange  = keysOnly;
 			return results;
 		} else {

@@ -17,34 +17,33 @@ define([], function () {
 
 	var undef;
 
-	function Location(/*Index|Store*/ source, ls, eq, gt ) {
+	function Location(source, ls, eq, gt ) {
 		// summary:
-		//		Record location object
-		// description:
-		//		A location object holds indexing (location) information for a given
-		//		record key. The default location object looks like:
+		//		A Record location object holds indexing (location) information for a
+		//		given record. The default location object looks like:
 		//
 		//		location dictionary = {
 		//			record = null;
+		//			value = null;
 		//			key = null
 		//			ls = -1;
 		//			eq = -1;
 		//			gt = 0;
 		//		};
 		//
-		//		ls:
-		//			The index of the last instance of a record whose key is less then
-		//			the key searched for. (typically eq-1 if a match was found).
-		//		eq:
-		//			Index of the record with an exact key match. If no match is found
-		//			eq equals -1.
-		//		gt:
-		//			The index of the first record whose key is greater then the key
-		//			searched for.
-		//
-		// source:
+		// source: Store|Index
 		//		The location source which is either an Index or IDBOjectStore.
-		//
+		// ls: Number?
+		//		The index of the last instance of a record whose key is less then
+		//		the key searched for. (typically eq-1 if a match was found).
+		// eq: Number?
+		//		Index of the record with an exact key match. If no match is found
+		//		eq equals -1.
+		// gt: Number?
+		//		The index of the first record whose key is greater then the key
+		//		searched for.
+		// returns: Location
+		//		A new instance of a Location object.
 		// tag:
 		//		Public
 
@@ -56,6 +55,5 @@ define([], function () {
 		this.value  = this.record && this.record.value;
 		this.key    = this.record && this.record.key;
 	}
-
 	return Location;
 });

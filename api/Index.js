@@ -149,19 +149,6 @@ define(["dojo/_base/declare",
 			//		Public
 		},
 
-		query: function (/*Object*/ query,/*QueryOptions?*/ options) {
-			// summary:
-			//		Queries the index for objects.
-			// query: Object
-			//		The query to use for retrieving objects from the store.
-			// options:
-			//		The optional arguments to apply to the resultset.
-			// returns: dojo/store/api/Store.QueryResults
-			//		The results of the query, extended with iterative methods.
-			// tag:
-			//		Public
-		},
-		
 		ready: function (/*Function?*/ callback,/*Function?*/ errback,/*thisArg*/ scope) {
 			// summary:
 			//		Execute the callback when the store has been loaded. If an error

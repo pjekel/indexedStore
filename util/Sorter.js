@@ -13,15 +13,16 @@ define(["../_base/Library",
 			 ], function(Lib, createError) {
 		"use strict";
 	// module:
-	//		store/util/Sorter
+	//		indexedStore/util/Sorter
+	// summary:
 
 	var StoreError = createError("Sorter");
 	var getProp    = Lib.getProp;
 	
-	function Sorter(/*Object[]*/ data,/*Store.QueryOptions*/ options ) {
+	function Sorter (data, options) {
 		//summary:
-		// objects:
-		// options:
+		// data: Object[]
+		// options: Store.QueryOptions?
 		// tag:
 		//		Public
 		"use strict";
@@ -62,7 +63,7 @@ define(["../_base/Library",
 			}
 			objects.sort( sortFnc );
 		}
-		// Paginate the query result
+		// Paginate the result
 		if (options && (options.start || options.count)) {
 			objects = objects.slice(options.start || 0, (options.start || 0) + (options.count || Infinity));
 		}

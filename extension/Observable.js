@@ -9,13 +9,14 @@
 //
 
 define(["dojo/_base/declare",
+				"dojo/when",
 				"../_base/Keys",
 				"../_base/KeyRange",
 				"../_base/Library",
-				"../_base/Listener",
 				"../_base/Observer",
-				"../error/createError!../error/StoreErrors.json"
-			 ], function (declare, Keys, KeyRange, Lib, Listener, Observer, createError) {
+				"../error/createError!../error/StoreErrors.json",
+				"../listener/Listener"
+			 ], function (declare, when, Keys, KeyRange, Lib, Observer, createError, Listener) {
 	
 	// module:
 	//		store/extension/Observable
@@ -72,7 +73,7 @@ define(["dojo/_base/declare",
 				
 				Lib.protect( this );		// Hide own private proeprties.
 			} else {
-				throw new StoreError( "MethodMissing", "constructor", "base class '_Natural' or '_Indexed' must be loaded first");
+				throw new StoreError( "Dependency", "constructor", "base class '_Natural' or '_Indexed' must be loaded first");
 			}
 		},
 		
@@ -136,7 +137,10 @@ define(["dojo/_base/declare",
 			
 			// Test if the results can be iterated.
 			if (results && typeof results.forEach == "function") {
-				results.observe  = observe;
+				results.revision = when( results, function () {
+					return (results.revision = store.revision);
+				});
+				results.observe = observe;
 			}
 			return results;
 		},
@@ -181,7 +185,10 @@ define(["dojo/_base/declare",
 			
 			// Test if the results can be iterated.
 			if (results && typeof results.forEach == "function") {
-				results.observe  = observe;
+				results.revision = when( results, function () {
+					return (results.revision = store.revision);
+				});
+				results.observe = observe;
 			}
 			return results;
 		}

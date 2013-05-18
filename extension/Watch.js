@@ -9,13 +9,13 @@
 //
 
 define(["dojo/_base/declare",
-				"../_base/Callback",
+				"../_base/Eventer",
 				"../_base/Keys",
 				"../_base/Library",
-				"../_base/Listener",
 				"../dom/event/Event",
-				"../error/createError!../error/StoreErrors.json"
-			 ], function (declare, Callback, Keys, Lib, Listener, Event, createError) {
+				"../error/createError!../error/StoreErrors.json",
+				"../listener/ListenerList"
+			 ], function (declare, Eventer, Keys, Lib, Event, createError, ListenerList) {
 	"use strict";
 	
 	// module:
@@ -23,19 +23,22 @@ define(["dojo/_base/declare",
 	// summary:
 
 	var StoreError = createError( "Watch" );			// Create the StoreError type.
-
-	var Watch = {
+	var isString   = Lib.isString;
+	
+	var Watch = declare( null, {
 
 		//=========================================================================
 		// constructor
 		
 		constructor: function (kwArgs) {
 			this._watchList = [];								// List of properties to watch for.
-			this._spotters  = new Callback();
+			this._spotters  = new ListenerList();
 			
-			var listener = new Listener( this._watchProperty, null, this );
-			this._callbacks.add( "write", listener );		// Add callback to the store.
-
+			// Add callback to the store.
+			this._listeners.addListener( "write", this._watchProperty, this );
+			if (this.eventer instanceof Eventer) {
+				this.eventer.registerEvent("set");
+			}
 			if (!this._clone) {
 				console.warn("Watch Extension only works when object cloning is enabled");
 			}
@@ -48,11 +51,11 @@ define(["dojo/_base/declare",
 		//=========================================================================
 		// Private methods
 
-		_watchProperty: function (cbOpt, key, newObj, oldObj, at) {
+		_watchProperty: function (action, key, newObj, oldObj, at) {
 			// summary:
 			//		Test if any of the object properties being monitored have changed.
 			//		This method is called immediately after the store is updated.
-			// cbOpt: Any
+			// action: String
 			// key: Key
 			//		Object key
 			// newObj: Object
@@ -68,17 +71,11 @@ define(["dojo/_base/declare",
 				var oldVal = Lib.getProp( prop, oldObj );
 				if (Keys.cmp(newVal, oldVal)) {
 					// Notify all listeners.
-					store._spotters.fire(prop, newObj, prop, newVal, oldVal);
+					store._spotters.trigger(prop, newObj, prop, newVal, oldVal);
 					// Create a DOM4 style custom event.
-					if (!store.suppressEvents) {
-						var event = new Event("set", 
-							{	detail: {	
-								item: newObj,
-								property: prop,
-								newValue: newVal, 
-								oldValue: oldVal }
-							});
-						store.dispatchEvent( event );
+					if (this.eventable && !store.suppressEvents) {
+						var props = {	item: newObj,	property: prop,	newValue: newVal, oldValue: oldVal};
+						this.emit( "set", props, true );
 					}
 				}
 			};
@@ -131,7 +128,7 @@ define(["dojo/_base/declare",
 					return handles;
 				}
 				// Comma separated list of properties.
-				if (property instanceof String || typeof property == "string") {
+				if (isString(property)) {
 					if (/,/.test(property)) {
 						return this.watch( property.split(/\s*,\s*/), callback );
 					}
@@ -142,8 +139,11 @@ define(["dojo/_base/declare",
 						this._watchList.push(property);
 					}
 					if (callback) {
-						var listener = new Listener(callback, null, thisArg );
-						this._spotters.add( property, listener );
+						this._spotters.addListener( property, callback, thisArg );
+					} else {
+						if (!this.eventable) {
+							throw new StoreError("ParameterMissing", "watch", "store is not eventable, callback required");
+						}
 					}
 				} else {
 					throw new StoreError("TypeError", "watch", "invalid property");
@@ -174,7 +174,7 @@ define(["dojo/_base/declare",
 					}, this);
 					return;
 				}
-				if (property instanceof String || typeof property == "string") {
+				if (isString(property)) {
 					if (/,/.test(property)) {
 						return this.unwatch( property.split(/\s*,\s*/), callback );
 					}
@@ -184,20 +184,9 @@ define(["dojo/_base/declare",
 					var remProp  = true;
 					if (spotters.length) {
 						if (callback) {
-							// Remove individual callback.
-							if (callback instanceof Listener) {
-								this._spotters.remove( property, callback);
-							} else {
-								var listener = this._spotters.getByCallback(property, callback);
-								if (listener) {
-									this._spotters.remove( property, listener);
-								}
-							}
+							this._spotters.removeListener( property, callback);
 						} else {
-							// Remove all listeners.
-							spotters.forEach( function (listener) {
-								this._spotters.remove(property, listener);
-							}, this);
+							this._spotters.clear(property);
 						}
 						remProp = !this._spotters.getByType(property).length;
 					}
@@ -213,8 +202,8 @@ define(["dojo/_base/declare",
 			}
 		}
 
-	};	/* end Watch {} */
+	});	/* end Watch {} */
 	
-	return declare( null, Watch );
+	return Watch;
 
 });	/* end define() */

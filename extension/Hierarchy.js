@@ -9,16 +9,12 @@
 //
 
 define(["dojo/_base/declare",
-				"dojo/_base/lang",
-				"dojo/store/util/QueryResults",
-				"dojo/aspect",
 				"../_base/Keys",
 				"../_base/Library",
-				"../_base/Listener",
 				"../_base/Range",
-				"../error/createError!../error/StoreErrors.json"
-			 ], function (declare, lang, QueryResults, aspect, Keys, Lib, Listener,
-			               Range, createError) {
+				"../error/createError!../error/StoreErrors.json",
+				"../util/QueryResults"
+			 ], function (declare, Keys, Lib, Range, createError, QueryResults) {
 
 	var StoreError = createError( "Hierarchy" );		// Create the StoreError type.
 	var isObject   = Lib.isObject;
@@ -353,35 +349,19 @@ define(["dojo/_base/declare",
 			var data  = (arguments.length > 2 ?	arguments[2] : null);
 			var defer = this.waiting || this.loader.loading;
 			var store = this;
-			var objects, results;
 
-			// NOTE: 
-			//		defer is either boolean false or a dojo/promise/Promise. Explicitly
-			//		test 'defer' and only use when() when we really have to.
-
+			// NOTE: defer is either boolean false or a dojo/promise/Promise.
 			if (defer == false || data) {
-				objects = store.queryEngine(query, options)(data || store._records);
-				results = QueryResults( store._clone ? clone(objects) : objects );
-				results.revision = store.revision;
-				// As opposed to the default indexedStore/util/QueryEngine, alternative
-				// query engines may, or may not, set the 'total' property on the query
-				// result.
-				if (!("total" in results)) {
-					results.total = results.length;
-				}
-			} else {
-				// Store is not ready or a load request is in progress.
-				results = QueryResults( 
-					when (defer, function () {
-						objects = store.queryEngine(query, options)(store._records);
-						return store._clone ? clone(objects) : objects;
-					})
-				);
-				when( results, function (objects) {
-					results.revision = store.revision;
-					results.total    = ("total" in objects) ? objects.total : objects.length;
-				});
+				var objects = store.queryEngine(query, options)(data || store._records);
+				return QueryResults( store._clone ? clone(objects) : objects );
 			}
+			// Store is not ready or a load request is in progress.
+			var results = QueryResults( 
+				when (defer, function () {
+					var objects = store.queryEngine(query, options)(store._records);
+					return store._clone ? clone(objects) : objects;
+				})
+			);
 			return results;
 		},
 

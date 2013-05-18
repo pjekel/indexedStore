@@ -53,7 +53,7 @@ define(["dojo/_base/lang",
 
 	var transactions = [];			// List of all transactions.
 	var activeTrans  = [];			// List of active transactions.
-
+	
 	function TransManager () {
 		// summary:
 		//		This function implements a synchronous Transaction Manager. Please
@@ -264,6 +264,9 @@ define(["dojo/_base/lang",
 			var transaction = new Transaction( stores, callback, mode, timeout);
 			execute( transaction );		
 		}
+
+		EventTarget.call(this);
+
 	}	/* end TransManager() */
 
 	TransManager.prototype = new EventTarget();

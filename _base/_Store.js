@@ -12,8 +12,6 @@ define(["dojo/_base/declare",
 				"dojo/_base/lang",
 				"dojo/Deferred",
 				"dojo/when",
-				"dojo/store/util/QueryResults",
-				"./Callback",
 				"./FeatureList",
 				"./Index",
 				"./Library",
@@ -26,11 +24,13 @@ define(["dojo/_base/declare",
 				"../dom/event/Event",
 				"../dom/event/EventTarget",
 				"../dom/string/DOMStringList",
+				"../listener/ListenerList",
 				"../util/QueryEngine",
+				"../util/QueryResults",
 				"../util/shim/Array"						 // ECMA-262 Array shim
-			 ], function (declare, lang, Deferred, when, QueryResults, Callback, FeatureList,
-										 Index, Lib, Loader, Keys, KeyRange, Range, Record, createError,
-										 Event, EventTarget, DOMStringList, QueryEngine ) {
+			 ], function (declare, lang, Deferred, when, FeatureList, Index, Lib, Loader, 
+			               Keys, KeyRange, Range, Record, createError, Event,	EventTarget,
+			               DOMStringList, ListenerList, QueryEngine, QueryResults ) {
 	"use strict";
 	// module:
 	//		IndexedStore/_base/_Store
@@ -198,8 +198,13 @@ define(["dojo/_base/declare",
 		//		The property name to use as the object identity property. The value of
 		//		this property should be unique. If the object being added to the store
 		//		does NOT have this property it will be added to the object.
+		//		The idProperty is supported for dojo/store compatibility only, use
+		//		keyPath instead.
 		idProperty: "id",
 
+		// indexes: Object|Object[]
+		//		A JavaScript key:value pairs object defining an index
+		//		index = { name: String, keyPath: KeyPath, options: Object? }
 		indexes: null,
 
 		// keyPath: String|String[]
@@ -274,12 +279,12 @@ define(["dojo/_base/declare",
 			// Mixin the keyword arguments.
 			declare.safeMixin( this, kwArgs );
 
-			this._autoIndex   = 1;
-			this._callbacks   = new Callback();
-			this._clone       = true;						// Handout only cloned objects
-			this._indexes     = {};
-			this._records     = [];
-			this._storeReady  = new Deferred();
+			this._autoIndex  = 1;
+			this._clone      = true;						// Handout only cloned objects
+			this._indexes    = {};
+			this._listeners  = new ListenerList();
+			this._records    = [];
+			this._storeReady = new Deferred();
 
 			// NOTE: keyPath = null is allowed...
 			if (kwArgs && "keyPath"in kwArgs) {
@@ -317,7 +322,8 @@ define(["dojo/_base/declare",
 					}
 				}, this);
 			}
-			Lib.writable( this, "type, features", false );
+			Lib.defProp( this, "emit", {value: function () {}, enumerable: false, configurable: true });
+			Lib.writable( this, "name, type, features", false );
 			Lib.protect( this );	// Hide own private properties.
 
 			this.features.add("store");
@@ -344,7 +350,8 @@ define(["dojo/_base/declare",
 					} 
 				}, this );
 			}
-			// If no loader is installed mark the store as 'ready'.
+
+			// If LoaderPlus is not installed use the default loader.
 			if (!this.features.has("loader")) {
 				if (this.autoLoad) {
 					this.load();
@@ -490,15 +497,15 @@ define(["dojo/_base/declare",
 
 		clear: function () {
 			// summary:
-			//		Clear all records from the the store and associated indexes.
+			//		Remove all records from the the store and associated indexes.
 			// tag:
 			//		Public
 			
 			this._assertStore( this, "clear", true );
 			this.revision++;
 			this._clearRecords();
-			this._callbacks.fireWithOptions("clear");
-			this.dispatchEvent( new Event( "clear" ) );
+			this._listeners.trigger("clear");
+			this.emit("clear");
 		},
 		
 		close: function (clear) {
@@ -515,11 +522,10 @@ define(["dojo/_base/declare",
 				this._storeReady = new Deferred();
 				this.waiting = this._storeReady.promise;
 			}
-			this.dispatchEvent( new Event( "close" ) );
-			var clearStore = !!(clear || this.clearOnClose);
-			if (!!clearStore) {
-				this._clearRecords();
-				this.total = 0;
+			this._listeners.trigger("close");
+			this.emit( "close" );
+			if ( !!(clear || this.clearOnClose) ) {
+				this.clear();
 			}
 		},
 
@@ -575,7 +581,7 @@ define(["dojo/_base/declare",
 
 		deleteIndex: function (name) {
 			// summary:
-			//		Destroys the index with the given name.
+			//		Destroy the index with the given name.
 			// name: DOMString
 			//		The name of an existing index.
 			// tag:
@@ -607,11 +613,22 @@ define(["dojo/_base/declare",
 			for(name in this._indexes) {
 				this.deleteIndex(name);
 			}
+			this._listeners.clear();
 			this._indexes   = {};
 			this.indexNames = null;
-			this.callbacks  = null;
 		},
+/*
+		emit: function (type, properties, custom) {
+			// summary:
+			// type: String
+			// properties: Object?
+			// custom: Boolean?
+			// tag:
+			//		Public
 
+			// Placeholder ONLY, see indexedStore/extension/Eventable
+		},
+*/		
 		get: function (key) {
 			// summary:
 			//		Retrieves an object by its key
@@ -661,7 +678,10 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Public
 
+			var defer = this.waiting || this.loader.loading;
 			var range = keyRange, dir = "next";
+			var store = this;
+
 			if (arguments.length > 1) {
 				if (arguments[1] && Lib.isDirection(arguments[1])) {
 					dir = arguments[1];
@@ -669,7 +689,14 @@ define(["dojo/_base/declare",
 					throw new StoreError("DataError", "getRange");
 				}
 			}
-			return QueryResults( Range( this, range, dir, false, false ) );
+
+			var results = QueryResults ( 
+				when (defer, function () {
+					var objects = Range( store, range, dir, false, false );
+					return store._clone ? clone(objects) : objects;
+				})
+			);
+			return results;
 		},
 
 		index: function (name){
@@ -702,26 +729,32 @@ define(["dojo/_base/declare",
 			// another attempt.
 			if (this._storeReady.isRejected()) {
 				this._storeReady = new Deferred();
+				this.waiting     = this._storeReady.promise;
 			}
 
 			var directives = {
 				data: this.data
 			};
-			var options = lang.mixin( directives, options);
-			var promise = this.loader.load(options);
-			var store   = this;
-
+			var options  = lang.mixin( directives, options);
+			var suppress = this.suppressEvents;
+			var store    = this;
+			var promise;
+			
+			this.suppressEvents = true;
+			promise = this.loader.load(options);
 			promise.always( function () {
+				store.suppressEvents = suppress;
 				store.data = null;
 			});
 			promise.then( 
 				function () {
 					setTimeout( function () {
+						store.emit( "load" );
 						store._storeReady.resolve(store);
 					}, 0);
 					store.waiting = false;
-				}, 
-				this._storeReady.reject 
+				},
+				store._storeReady.reject
 			);
 			return promise;
 		},
@@ -759,40 +792,15 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Public
 
-			// If the reserved argument data is specified the query is performed on
-			// the data argument only. (INTERNAL USE ONLY)
-
 			var defer = this.waiting || this.loader.loading;
 			var store = this;
-			var objects, results;
 
-			// NOTE: 
-			//		defer is either boolean false or a dojo/promise/Promise. Explicitly
-			//		test 'defer' and only use when() when we really have to.
-
-			if (defer == false) {
-				objects = store.queryEngine(query, options)(store._records);
-				results = QueryResults( store._clone ? clone(objects) : objects );
-				results.revision = store.revision;
-				// As opposed to the default indexedStore/util/QueryEngine, alternative
-				// query engines may, or may not, set the 'total' property on the query
-				// result.
-				if (!("total" in results)) {
-					results.total = results.length;
-				}
-			} else {
-				// Store is not ready or a load request is in progress.
-				results = QueryResults( 
-					when (defer, function () {
-						objects = store.queryEngine(query, options)(store._records);
-						return store._clone ? clone(objects) : objects;
-					})
-				);
-				when( results, function (objects) {
-					results.revision = store.revision;
-					results.total    = ("total" in objects) ? objects.total : objects.length;
-				});
-			}
+			var results = QueryResults ( 
+				when (defer, function () {
+					var objects = store.queryEngine(query, options)(store._records);
+					return store._clone ? clone(objects) : objects;
+				})
+			);
 			return results;
 		},
 
@@ -846,7 +854,7 @@ define(["dojo/_base/declare",
 		setData: function (data) {
 			// summary:
 			//		Clear the store and load the data. This method is provided for
-			//		dojo/store/Memory compatibility only
+			//		dojo/store/Memory compatibility only (See also load())
 			// data: Object[]?
 			//		An array of objects.
 			// tag:

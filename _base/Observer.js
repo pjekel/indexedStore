@@ -11,14 +11,13 @@
 define(["dojo/_base/declare",
 				"dojo/Deferred",
 				"dojo/when",
-				"../_base/Callback",
 				"../_base/Keys",
 				"../_base/KeyRange",
 				"../_base/Library",
-				"../_base/Listener",
-				"../error/createError!../error/StoreErrors.json"
-			 ], function (declare, Deferred, when, Callback, Keys, KeyRange, Lib,
-										 Listener, createError) {
+				"../error/createError!../error/StoreErrors.json",
+				"../listener/ListenerList"
+			 ], function (declare, Deferred, when, Keys, KeyRange, Lib, createError, 
+			               ListenerList) {
 	
 	// module:
 	//		store/_base/Observer
@@ -161,7 +160,7 @@ define(["dojo/_base/declare",
 			//		Public
 			
 			if (updater) {
-				callbacks.add( C_LISTENER[obsType], listener );
+				callbacks.addListener( C_LISTENER[obsType], listener );
 				return {
 					remove: function () {
 						self.removeListener(listener);
@@ -181,8 +180,8 @@ define(["dojo/_base/declare",
 			//		Private
 
 			// Remove the Observer callbacks from the store.
-			store._callbacks.remove( "write, delete", updater );
-			store._callbacks.remove( "clear", cleaner );
+			updater.remove();
+			cleaner.remove();
 
 			callbacks.clear();
 			updater  = null;
@@ -199,6 +198,8 @@ define(["dojo/_base/declare",
 			// callback: Function?
 			//		Function called when the Observer is done (released).
 			// returns: dojo/promise/Promise
+			//		A dojo/promise/Promise which resolves assoon as the last listener
+			//		is removed from the Observer.
 			// tag:
 			//		Public
 			if (callback) {
@@ -225,11 +226,11 @@ define(["dojo/_base/declare",
 			}
 		}
 		
-		this.update = function (cbOpts, key, newObj, oldObj, at) {
+		this.update = function (action, listener, key, newObj, oldObj, at) {
 			// summary:
 			//		This method is called whenever the content of the store changed.
-			// cbOpts: Object
-			//		Callback options. (See IndexedStore/_base/Listener)
+			// action: String
+			// listener: Listener
 			// key: Key
 			//		Object key
 			// newObj: Object
@@ -380,16 +381,13 @@ define(["dojo/_base/declare",
 			}
 		}
 
-		var updater   = new Listener( this.update, null, source );
-		var cleaner   = new Listener( this.clear, null, source );
-
-		var callbacks = new Callback();
+		var callbacks = new ListenerList();
 		var deferred  = new Deferred();
 		var self      = this;
 		
-		// Register the observer with the store.
-		store._callbacks.add( "write, delete", updater );
-		store._callbacks.add( "clear", cleaner );
+		// Register observer callbacks with the store.
+		var updater = store._listeners.addListener( "write, delete", this.update, source );
+		var cleaner = store._listeners.addListener( "clear", this.clear, source );
 	}
 	
 	return Observer;

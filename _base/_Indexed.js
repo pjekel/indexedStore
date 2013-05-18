@@ -15,10 +15,9 @@ define(["dojo/_base/declare",
 				"../_base/Library",
 				"../_base/Location",
 				"../_base/Record",
-				"../error/createError!../error/StoreErrors.json",
-				"../dom/event/Event"
+				"../error/createError!../error/StoreErrors.json"
 			 ], function (declare, Cursor, Keys, KeyRange, Lib, Location, Record,
-										 createError, Event) {
+										 createError) {
 	"use strict";
 	// module:
 	//		IndexedStore/_base/_Indexed
@@ -30,15 +29,6 @@ define(["dojo/_base/declare",
 	//
 	//			http://www.w3.org/TR/IndexedDB/#cursor-concept
 	//
-	//		As each store comes with a query engine you can combine cursors and the
-	//		query engine to perform some powerful queries. You can, for example,
-	//		pass a cursor directly to the query engine:
-	//
-	//	|	var range  = KeyRange.bound("Bart", "Homer");
-	//	| var cursor = store.openCursor( range );
-	//	| var query  = {type:"parent", hair:"blond"}
-	//	| var result = store.queryEngine(query)(cursor); 
-	//
 	// restrictions:
 	//		Stores based on the _Indexed class do NOT support the PutDirective
 	//		'before'. If a natural record order is required by your application
@@ -48,7 +38,7 @@ define(["dojo/_base/declare",
 	//		The _Indexed base class does NOT determine if a store can have an index
 	//		or not, it merely determines the internal record structure, but because
 	//		the records are structures in a binary tree the store itself can be used
-	//		as an index itself.
+	//		as an index.
 	//
 	// example:
 	//	|	require(["dojo/_base/declare",
@@ -165,11 +155,10 @@ define(["dojo/_base/declare",
 				this.total = this._records.length;
 				this.revision++;
 				
-				this._callbacks.fireWithOptions("delete", key, null, value, recNum );
+				this._listeners.trigger("delete", key, null, value, recNum );
 
-				if (!this.suppressEvents) {
-					var event = new Event("delete", {detail:{item: value}});
-					this.dispatchEvent(event);
+				if (this.eventable && !this.suppressEvents) {
+					this.emit( "delete", {item: value}, true );
 				}
 			}
 			return false;
@@ -300,16 +289,15 @@ define(["dojo/_base/declare",
 			this.revision++;
 			
 			// Check if any extension added a callback.
-			this._callbacks.fireWithOptions("write", keyVal, value, curVal, at, options );
+			this._listeners.trigger("write", keyVal, value, curVal, at, options );
 
 			// Next, event handling ....
-			if (!this.suppressEvents) {
+			if (this.eventable && !this.suppressEvents) {
 				if (curRec) {
-					event = new Event( "change", {detail:{item: value, oldItem: curVal}});
+					this.emit( "change", {item: value, oldItem: curVal}, true);
 				} else {
-					event = new Event( "new", {detail:{item: value}});
+					this.emit( "new", {item: value}, true);
 				}
-				this.dispatchEvent( event );
 			}
 			return keyVal;
 		},

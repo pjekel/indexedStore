@@ -10,10 +10,12 @@
 
 define(["dojo/_base/declare",
 				"dojo/_base/lang",
+				"dojo/Deferred",
 				"./Library",
 				"./LoaderPlus",
+				"../dom/event/Event",
 				"../error/createError!../error/StoreErrors.json"
-			 ], function (declare, lang, Lib, Loader, createError) {
+			 ], function (declare, lang, Deferred, Lib, Loader, Event, createError) {
 	
 	// module:
 	//		indexedStore/_base/_Loader
@@ -125,8 +127,9 @@ define(["dojo/_base/declare",
 			//		See constructor
 			// tag:
 			//		Private
-			this.inherited(arguments);
 
+			this.inherited(arguments);
+			// Register the data handler if any.
 			if (this.dataHandler) {
 				var handler = this.dataHandler;
 				var type, options;
@@ -138,7 +141,6 @@ define(["dojo/_base/declare",
 				}
 				this.loader.register( (type || this.handleAs), handler, options);
 			}
-
 			if (this.autoLoad) {
 				this.load();
 			}
@@ -159,6 +161,7 @@ define(["dojo/_base/declare",
 			// another attempt.
 			if (this._storeReady.isRejected()) {
 				this._storeReady = new Deferred();
+				this.waiting     = this._storeReady.promise;
 			}
 
 			var directives = { 
@@ -170,22 +173,27 @@ define(["dojo/_base/declare",
 				maxErrors: Number(this.maxErrors) || 0,
 				progress: this.progress || false
 			};
-			var options = lang.mixin( directives, options );
-			var promise = this.loader.load( options );
-			var store   = this;
+			var options  = lang.mixin( directives, options );
+			var suppress = this.suppressEvents;
+			var store    = this;
+			var promise;
 			
+			this.suppressEvents = true;
+			promise = this.loader.load( options );
 			promise.always( function () {
+				store.suppressEvents = suppress;
 				store.data = null;
-				store.url  = null;
+				store.url = null;
 			});
 			promise.then( 
 				function () {
 					setTimeout( function () {
+						store.emit( "load" );
 						store._storeReady.resolve(store);
 					}, 0);
 					store.waiting = false;
-				}, 
-				this._storeReady.reject 
+				},
+				store._storeReady.reject
 			);
 			return promise;
 		}

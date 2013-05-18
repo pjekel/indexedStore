@@ -15,10 +15,9 @@ define(["dojo/_base/declare",
 				"./Library",
 				"./Location",
 				"./Record",
-				"../error/createError!../error/StoreErrors.json",
-				"../dom/event/Event"
+				"../error/createError!../error/StoreErrors.json"
 			 ], function (declare, lang, Keys, KeyRange, Lib, Location, Record,
-										 createError, Event) {
+										 createError) {
 	"use strict";
 	// module:
 	//		IndexedStore/_base/_Natural
@@ -184,11 +183,10 @@ define(["dojo/_base/declare",
 				this.total = this._records.length;
 				this.revision++;
 				
-				this._callbacks.fireWithOptions("delete", key, null, value, recNum );
+				this._listeners.trigger("delete", key, null, value, recNum );
 
-				if (!this.suppressEvents) {
-					var event  = new Event("delete", {detail:{item: value, at:-1, from:recNum}});
-					this.dispatchEvent(event);
+				if (this.eventable && !this.suppressEvents) {
+					this.emit("delete", {item: value, at:-1, from:recNum}, true);
 				}
 			}
 			return false;
@@ -406,17 +404,15 @@ define(["dojo/_base/declare",
 			this.revision++;
 			
 			// Check if any extension added a callback.
-			this._callbacks.fireWithOptions("write", keyVal, value, curVal, at, options );
+			this._listeners.trigger("write", keyVal, value, curVal, at, options );
 
 			// Next, Event handling ....
-			if (!this.suppressEvents) {
+			if (this.eventable && !this.suppressEvents) {
 				if (curRec) {
-					event = new Event( "change", {detail:{item: value, oldItem: curVal}});
+					this.emit( "change", {item: value, oldItem: curVal, at: location.at}, true);
 				} else {
-					event = new Event( "new", {detail:{item: value}});
+					this.emit( "new", {item: value, at: location.at}, true);
 				}
-				lang.mixin( event.detail, location );
-				this.dispatchEvent( event );
 			}
 			return keyVal;
 		},

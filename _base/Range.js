@@ -16,7 +16,6 @@ define(["./Keys",
 
 	var StoreError = createError( "Range" );		// Create the StoreError type.
 	var isObject = Lib.isObject;
-	var clone    = Lib.clone;
 	var undef;
 	
 	function Range(source, keyRange, direction, duplicates, keysOnly) {
@@ -60,7 +59,8 @@ define(["./Keys",
 					}
 					keyRange = KeyRange.only( source.uppercase ? Keys.toUpperCase(keyRange) : keyRange );
 				}
-			}			
+			}
+			
 			var records, value, range, keys = [];
 			// In case of a Natural store we have to iterate all records.
 			if (source.type == "store" && source.features.has("natural")) {
@@ -76,8 +76,7 @@ define(["./Keys",
 				switch (source.type) {
 					case "store":
 						results = records.map( function (record) {
-							value = keysOnly ? record.key : record.value;
-							return source._clone ? clone(value) : value;
+							return keysOnly ? record.key : record.value;
 						});
 						break;
 					case "index":
@@ -90,13 +89,12 @@ define(["./Keys",
 							keys = Keys.purgeKey(keys);
 						}
 						results = keys.map( function (key) {
-							return keysOnly ? (store._clone ? clone(key) : key) : store.get(key);
+							return keysOnly ? key : store._retrieveRecord(key).record.value;
 						});
 						break;
 				};	/* end switch() */
 			}
 			results.direction = direction;
-			results.revision  = store.revision;
 			results.keyRange  = keysOnly;
 			return results;
 		} else {

@@ -10,20 +10,18 @@
 
 define(["dojo/_base/lang",
 				"dojo/Deferred",
-				"dojo/store/util/QueryResults",
+				"dojo/when",
 			  "./Cursor",
 			  "./Keys",
 			  "./KeyRange",
 			  "./Library",
 				"./Range",
 			  "./Record",
-			  "../dom/event/Event",
-			  "../dom/event/EventTarget",
 				"../error/createError!../error/StoreErrors.json",
 				"../util/QueryEngine",
-			 ], function (lang, Deferred, QueryResults, Cursor, Keys, KeyRange, 
-										 Lib, Range, Record, Event, EventTarget,
-										 createError, QueryEngine) {
+				"../util/QueryResults"
+			 ], function (lang, Deferred, when, Cursor, Keys, KeyRange, Lib, Range, Record, 
+			               createError, QueryEngine, QueryResults) {
 	"use strict";
 
 	//module:
@@ -34,15 +32,14 @@ define(["dojo/_base/lang",
 	//			http://www.w3.org/TR/IndexedDB/#index-sync
 	
 	// Define default index properties.
-	var IDBIndexOptions = { unique: false, 
-	                        multiEntry: false, 
-	                        uppercase: false, 
-	                        async: false };
-
+	var IDBIndexOptions = { unique: false, multiEntry: false, uppercase: false, async: false };
+	
 	var StoreError = createError( "Index" );		// Create the StoreError type.
 	var isObject = Lib.isObject;
-	var debug = dojo.config.isDebug || false;
+	var clone    = Lib.clone;
 	var undef;
+	
+	var debug = dojo.config.isDebug || false;
 	
 	function Index (store, name, keyPath, optionalParameters) {
 		// summary:
@@ -148,14 +145,11 @@ define(["dojo/_base/lang",
 			}
 		}
 
-		function onStoreEvent (evt) {
+		function onStoreLoad( type ) {
 			// summary:
-			//		Local store event handler.
-			// evt: Event
-			//		Store event.
 			// tag:
-			//		Private
-			switch( evt.type ) {
+			//		private, callback
+			switch( type ) {
 				case "loadStart":
 					this.loading = true;
 					this._updates = 0;
@@ -480,7 +474,10 @@ define(["dojo/_base/lang",
 			// tag:
 			//		Public
 
+			var defer = this.store.waiting || this.store.loader.loading;
 			var range = keyRange, dir = "next", dup = true;
+			var index = this;
+			
 			if (arguments.length > 1) {
 				if (arguments[1] !== null) {
 					if (Lib.isDirection(arguments[1])) {
@@ -496,8 +493,16 @@ define(["dojo/_base/lang",
 				}
 			}
 			dup = dup != undef ? !!dup : true;
-			var results = Range( this, range, dir, dup, false );
-			return QueryResults( results );
+
+			var results = QueryResults ( 
+				when (defer, function () {
+					var objects = Range( index, range, dir, dup, false );
+					return index.store._clone ? clone(objects) : objects;
+				})
+			);
+			results.direction = dir;
+			results.keyRange  = false;
+			return results;
 		};
 
 		this.getKeyRange = function (keyRange, direction, duplicates) {
@@ -515,7 +520,10 @@ define(["dojo/_base/lang",
 			// tag:
 			//		Public
 
+			var defer = this.store.waiting || this.store.loader.loading;
 			var range = keyRange, dir = "next", dup = true;
+			var index = this;
+			
 			if (arguments.length > 1) {
 				if (arguments[1] !== null) {
 					if (Lib.isDirection(arguments[1])) {
@@ -531,8 +539,16 @@ define(["dojo/_base/lang",
 				}
 			}
 			dup = dup != undef ? !!dup : true;
-			var results = Range( this, range, dir, dup, true );
-			return QueryResults( results );
+
+			var results = QueryResults ( 
+				when (defer, function () {
+					var objects = Range( index, range, dir, dup, true );
+					return index.store._clone ? clone(objects) : objects;
+				})
+			);
+			results.direction = dir;
+			results.keyRange  = true;
+			return results;
 		};
 
 		this.openCursor = function (keyRange, direction) {
@@ -635,7 +651,8 @@ define(["dojo/_base/lang",
 			// If keyPath is and Array and the multiEntry property is true throw an
 			// exception of type NotSupportedError.
 			if (keyPath instanceof Array && !!indexOptions.multiEntry) {
-				throw new StoreError("NotSupportedError", "constructor", "KeyPath cannot be an array when multiEntry is enabled");
+				var message = "KeyPath cannot be an array when multiEntry is enabled";
+				throw new StoreError("NotSupportedError", "constructor", message);
 			}
 			this._indexReady = new Deferred();
 			this._records    = [];
@@ -656,8 +673,8 @@ define(["dojo/_base/lang",
 			var async = !!indexOptions.async;
 			var index = this;
 
-			// Add the event listeners
-			store.on("loadStart, loadCancel, loadEnd, loadFailed", lang.hitch( this, onStoreEvent ));
+			// Register callbacks with the store.
+			store._listeners.addListener( "loadStart, loadCancel, loadEnd, loadFailed", onStoreLoad, this );
 
 			if (async) {
 				setTimeout( function () {
@@ -672,9 +689,6 @@ define(["dojo/_base/lang",
 		}
 
 	} /* end StoreIndex */
-
-	Index.prototype = new EventTarget();
-	Index.prototype.constructor = Index;
 
 	return Index;
 

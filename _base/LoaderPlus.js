@@ -3,11 +3,9 @@ define(["dojo/_base/lang",
 				"dojo/request",
 				"dojo/request/handlers",
 				"./Library",
-				"../dom/event/Event",
 				"../error/createError!../error/StoreErrors.json",
 				"../util/QueryEngine"
-			 ], function (lang, Deferred, request, handlers, Lib, Event, createError,
-			               QueryEngine) {
+			 ], function (lang, Deferred, request, handlers, Lib, createError, QueryEngine) {
 
 	// module
 	//		indexedStore/_base/LoaderPlus
@@ -19,8 +17,9 @@ define(["dojo/_base/lang",
 	//			2 - Multiple load requests.
 	//			2 - Support for Custom Data Handlers
 	//			3 - Pre-load object filtering
-	//			4 - Enhanced error handling (set error limits).
-	//			5 - Load request cancelation
+	//			4 - Report progress
+	//			5 - Enhanced error handling (set error limits).
+	//			6 - Load request cancelation
 	//
 	//		If these additional features are not required by your store, simply
 	//		use the default loader: indexedStore/_base/LoaderBase
@@ -137,7 +136,7 @@ define(["dojo/_base/lang",
 					}
 				}
 				try {
-					store.dispatchEvent( new Event ("loadStart", {detail:{store:store, request:defer}}) );
+					store._listeners.trigger("loadStart");
 					if (options.url) {
 						store._clone = false;
 					}
@@ -186,7 +185,7 @@ define(["dojo/_base/lang",
 			// tag:
 			//		private
 			if (!defer.isFulfilled()) {
-				store.dispatchEvent( new Event ("loadFailed", { detail: { store:store, error: err}}) 	);
+				store._listeners.trigger("loadFailed");
 				defer.reject(err);
 			}
 			defer.error  = err;
@@ -283,7 +282,7 @@ define(["dojo/_base/lang",
 			// tag:
 			//		private
 			if (!defer.abort) {
-				store.dispatchEvent( new Event ("loadEnd", {detail:{store:store}}) );
+				store._listeners.trigger("loadEnd");
 				loadProgress(100, 100, defer);
 				defer.resolve(store);
 				loadNext();
@@ -323,9 +322,11 @@ define(["dojo/_base/lang",
 			queue = [];
 
 			if (active) {
+				active.error = reason;
 				active.cancel(reason);
 			}
 			while (request = pending.shift()) {
+				request.defer.error = reason;
 				request.defer.cancel(reason);
 			}
 		};
@@ -348,15 +349,13 @@ define(["dojo/_base/lang",
 			var options = lang.mixin( clone(LoadDirectives), options );
 			var ldrDef  = new Deferred( function (reason) {
 				if (ldrDef == active) {
-					store.dispatchEvent( new Event ("loadCancel", { detail: 
-							{ store:store, error: reason}
-						}) 
-					);
+					store._listeners.trigger("loadCancel");
 					ldrDef.error = reason;
 					ldrDef.abort = true;
 					loadNext();
 				}
 			});
+			// Create a load request and queue it.
 			var request = { defer: ldrDef, options: options }
 			queue.push( request );
 
@@ -434,15 +433,15 @@ define(["dojo/_base/lang",
 
 		Lib.protect( this );
 
-		// Listen for store close and clear events. Whenever a store is closed or
-		// cleared the active and all pending load requests, if any, are canceled.
+		// Register callbacks with the store. Whenever a store is closed or cleared
+		// the active and all pending load requests, if any, are canceled.
 		
-		store.on("clear, close", function (event) {
-			var message = "load request was canceled due to a store " + event.type;
-			var reason  = new StoreError( "RequestCancel", "cancel", message);
-			loader.cancel(reason);
-		});
-
+		store._listeners.addListener("close, clear", function () {
+				var message = "load request was canceled due to a store clear or close operation"
+				var reason  = new StoreError( "RequestCancel", "cancel", message);
+				loader.cancel(reason);
+			}
+		);
 	}
 	
 	return Loader;

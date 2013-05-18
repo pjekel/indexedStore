@@ -10,9 +10,8 @@
 define(["dojo/_base/lang",
 				"dojo/Deferred",
 				"./Library",
-				"../dom/event/Event",
 				"../error/createError!../error/StoreErrors.json",
-			 ], function (lang, Deferred, Lib, Event, createError) {
+			 ], function (lang, Deferred, Lib, createError) {
 
 	// module
 	//		indexedStore/_base/LoaderBase
@@ -61,18 +60,18 @@ define(["dojo/_base/lang",
 				var i, max = data.length;
 
 				loader.loading = ldrDef.promise;
-				store.dispatchEvent( new Event ("loadStart", {detail:{store:store}}) );
+				store._listeners.trigger("loadStart");
 				try {
 					for (i=0; i<max; i++) {
 						store._storeRecord( data[i], flags );
 					}
 					loader.loading = false;
-					store.dispatchEvent( new Event ("loadEnd", {detail:{store:store}}) );
+					store._listeners.trigger("loadEnd");
 					ldrDef.resolve(store);
 				} catch (err) {
 					loader.loading = false;
 					loader.error   = err;
-					store.dispatchEvent( new Event ("loadFailed", { detail: { store:store, error: err}}) 	);
+					store._listeners.trigger("loadFailed");
 					ldrDef.reject(err);
 				}
 			} else {

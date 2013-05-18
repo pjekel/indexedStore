@@ -23,6 +23,7 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 
 		clone: function clone (object, strict) {
 			// html structured cloning algorithm. (no type map support)
+			var strict = strict != undef ? !!strict : true;
 			var memory = [];
 
 			function inMemory(memory, object) {
@@ -62,10 +63,8 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 						return obj;
 					case "Date":
 						return new Date( object.valueOf() );
-					case "Regexp":
-						var text = object.toString();
-						var segm = text.match( /\/(.*?)\/([gim]*)$/);
-						return new RegExp(segm[1], segm[2] );						
+					case "RegExp":
+						return new RegExp(object);
 					case "Blob":
 					case "File":
 						return object.slice(0, object.size, object.type);
@@ -74,6 +73,15 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			}
 			var clone = cloneObj( object, memory );
 			return clone;
+		},
+
+		copy: function (object) {
+			// summary:
+			//		create a shallow copy
+			if (object === null || !(object instanceof Object)) {
+				return object;
+			}
+			return this.mixin(object.constructor(), object);
 		},
 
 		debug: function ( text )	{
@@ -139,7 +147,7 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			//		JavaScript object
 			// tag:
 			//		Private
-			if (this.isObject(object) || object instanceof Array) {
+			if (this.isObject(object) || object instanceof Array || object === window) {
 				var segm = propPath.split(".");
 				var p, i = 0;
 
@@ -178,6 +186,25 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			return ({}.toString.call(object) == "[object Object]");
 		},
 
+		isString: function(item) {
+			return (typeof item == "string" || item instanceof String);
+		},
+
+		mixin: function (dest, objects) {
+			var k, o, s, i=1, empty = {};
+			var d = dest || {};
+
+			while (o = arguments[i++]) {
+				for (k in o) {
+					s = o[k];
+					if(!(k in d) || (d[k] !== s && (!(k in empty) || empty[k] !== s))){
+						d[k] = s
+					}
+				}
+			}
+			return d;
+		},
+
 		protect: function (object) {
 			var props = Object.keys(object).filter( function(prop) {	return /^_/.test(prop);} );
 //			this.enumerate( object, props, false );
@@ -192,7 +219,7 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			// value:
 			// tag:
 			//		Private
-			if (this.isObject(object) || object instanceof Array) {
+			if (this.isObject(object) || object instanceof Array || object === window) {
 				var segm = propPath.split(".");
 				var prop = segm.pop();
 

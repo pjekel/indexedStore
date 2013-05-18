@@ -34,9 +34,12 @@
         "store/_base/_Store",
         "store/_base/_Indexed",
         "store/_base/Keys",
-        "store/_base/KeyRange"
+        "store/_base/KeyRange",
+        "store/_base/Library",
+        "store/_base/Range",
+        "store/_base/Record"
         ], function( doh, declare, lang, QueryResults, ready,
-											_Store, _Indexed, Keys, KeyRange ) {
+											_Store, _Indexed, Keys, KeyRange, Lib, Range, Record ) {
 					"use strict";
 					
 					// IMPORTANT:
@@ -167,6 +170,33 @@
 								t.e( Error, index, "getKeyRange", [null, null] );
 								t.e( Error, index, "getKeyRange", [keyRange, null] );
 								t.e( Error, index, "getKeyRange", [null, "what?"] );
+							}
+						},
+
+						{
+							name: "Range values",
+							runTest:function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ({data: data, keyPath:"name"});
+								var range;
+
+								var index = store.createIndex("parent", "parent", {multiEntry: true});
+
+								// Test if Range only returns Objects and not instances of Record
+								range = Range( store );
+								range.forEach( function (obj) {
+									t.t ( Lib.isObject(obj) && !(obj instanceof Record));
+								});
+								range = Range( index );
+								range.forEach( function (obj) {
+									t.t ( Lib.isObject(obj) && !(obj instanceof Record));
+								});
+								// Get a key range, no duplicates
+								range = Range( index, null, null, false, true );
+								range.forEach( function (key) {
+									t.t (typeof key == "string");
+								});
+
 							}
 						},
 

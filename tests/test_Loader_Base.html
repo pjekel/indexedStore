@@ -30,12 +30,13 @@
         "dojo/_base/declare",
         "dojo/_base/lang",
 				"dojo/promise/all",
+				"dojo/promise/Promise",
         "dojo/ready",
         "store/_base/_Store",
         "store/_base/_Indexed",
         "store/_base/_Natural",
 				"store/extension/Hierarchy"
-        ], function( doh, declare, lang, promiseAll, ready,
+        ], function( doh, declare, lang, promiseAll, Promise, ready,
 											_Store, _Indexed, _Natural, Hierarchy ) {
 					"use strict";
 					
@@ -406,32 +407,6 @@
 						},
 
 						{
-							// Test dispatching of internal 'loadEnd' event
-							name: "Deferred Load Dataset (6), load event",
-							timeout: 2000,
-							runTest:function (t) {
-								var Store = declare( [_Store, _Natural]);
-								var store = new Store ( {autoLoad: false, autoIncrement: true, keyPath:null});
-								var defer = new doh.Deferred();
-								var max   = data.length;
-
-								store.on("loadEnd", defer.getTestCallback (
-									function (evt) {
-										var evtStore = evt.detail.store;
-										t.is( store, evtStore );
-										t.is( max, evtStore.count() );
-									})
-								)
-
-								setTimeout( function () {
-									store.load( {data: data} );
-								}, 100);
-								
-								return defer;
-							}
-						},
-
-						{
 							name: "Load data with duplicate keys no overwrite flag set",
 							timeout: 1000,
 							runTest:function (t) {
@@ -485,6 +460,40 @@
 										defer.errback(err);
 									}
 								);
+								return defer;
+							}
+						},
+
+						{
+							name: "Issue Query before store ready",
+							timeout: 10000,
+							runTest:function (t) {
+								var Store = declare( [_Store, _Natural]);
+								var store = new Store ( {autoLoad: false, autoIncrement: true, keyPath:null});
+								var defer = new doh.Deferred();
+
+								// issue a query BEFORE the store is ready.
+								var results = store.query();
+								t.t (results instanceof Promise);
+								
+								store.load( {data: data} );
+								store.ready( 
+									function () {
+										results.then (
+											defer.getTestCallback( 
+												function (obj) {
+													t.t (typeof obj.total == "number");
+												}
+											),
+											function (err) {
+												defer.errback("QueryResults should have resolved");
+											}
+										);
+									},
+									function () {
+										defer.errback("Store should not have failed to get ready...");
+									}
+								)
 								return defer;
 							}
 						}

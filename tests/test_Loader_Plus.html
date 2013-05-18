@@ -31,6 +31,7 @@
         "dojo/_base/lang",
         "dojo/ready",
 				"dojo/promise/all",
+				"dojo/promise/Promise",
 				"dojo/request/handlers",
         "store/_base/_Store",
         "store/_base/_Indexed",
@@ -40,7 +41,7 @@
         "store/_base/KeyRange",
 				"store/extension/Hierarchy",
 				"store/handler/csvHandler"
-        ], function( doh, declare, lang, ready, promiseAll, handlers, 
+        ], function( doh, declare, lang, ready, promiseAll, Promise, handlers, 
 											_Store, _Indexed, _Natural, _Loader,
 											Keys, KeyRange, Hierarchy, csvHandler ) {
 					"use strict";
@@ -426,34 +427,8 @@
 						},
 
 						{
-							// Test dispatching of internal 'loadEnd' event
-							name: "Deferred Load Dataset (6), load event",
-							timeout: 2000,
-							runTest:function (t) {
-								var Store = declare( [_Store, _Natural, _Loader]);
-								var store = new Store ( {autoLoad: false, autoIncrement: true, keyPath:null});
-								var defer = new doh.Deferred();
-								var max   = data.length;
-
-								store.on("loadEnd", defer.getTestCallback (
-									function (evt) {
-										var evtStore = evt.detail.store;
-										t.is( store, evtStore );
-										t.is( max, evtStore.count() );
-									})
-								)
-
-								setTimeout( function () {
-									store.load( {data: data} );
-								}, 100);
-								
-								return defer;
-							}
-						},
-
-						{
-							name: "Deferred Load Dataset (7), Mulitple load request",
-							timeout: 5000,
+							name: "Deferred Load Dataset (6), Mulitple load request",
+							timeout: 10000,
 							runTest:function (t) {
 								var Store = declare( [_Store, _Natural, _Loader]);
 								var store = new Store ( {autoLoad: false, autoIncrement: true, keyPath:null});
@@ -472,6 +447,46 @@
 									function (err) {
 										defer.errback(err);
 									}
+								);
+								return defer;
+							}
+						},
+
+						{
+							name: "Mulitple load request cancelation",
+							timeout: 10000,
+							runTest:function (t) {
+								var Store = declare( [_Store, _Natural, _Loader]);
+								var store = new Store ( {autoLoad: false, autoIncrement: true, keyPath:null});
+								var defer = new doh.Deferred();
+
+								// Issue multiple load request.
+								var req = [
+									store.load( {url:"../json/us-zipcodes-00-05k.json"} ),
+									store.load( {url:"../json/us-zipcodes-05-10k.json"} ),
+									store.load( {url:"../json/us-zipcodes-10-15k.json"} )
+								];
+								// Close the store which should cancel the active and all pending
+								// load requests. (similar to calling store.loader.cancel() )
+								store.close(true);
+
+								store.ready( 
+									function (err) {
+										defer.errback(err);
+									},
+									defer.getTestCallback( 
+										function () {
+											req.forEach( function (request) {
+												t.t ( request.isCanceled() );
+											});
+											// Store should be empty..
+											t.is (0, store.count() );
+
+											// Issueing a new load request should reset '_storeReady'
+											store.load( {url:"../json/us-zipcodes-00-05k.json"} );
+											t.is ( false, store._storeReady.isFulfilled() );
+										}
+									)
 								);
 								return defer;
 							}
@@ -683,6 +698,82 @@
 								);
 								return defer;
 							}
+						},
+
+						{
+							name: "Issue Query before store ready",
+							timeout: 10000,
+							runTest:function (t) {
+								var Store = declare( [_Store, _Natural, _Loader]);
+								var store = new Store ( {autoLoad: false, autoIncrement: true, keyPath:null});
+								var defer = new doh.Deferred();
+
+								// issue a query BEFORE the store is ready.
+								var results = store.query();
+								t.t (results instanceof Promise);
+								
+								store.load( {url:"../json/Simpsons.json"} );
+								store.ready( 
+									function () {
+										results.then (
+											defer.getTestCallback( 
+												function (obj) {
+													// QueryResults total property should have resolved to
+													// a number (see indexedStore/util/QueryResults)
+													t.t (typeof results.total == "number");
+													t.t (typeof obj.total == "number");
+												}
+											),
+											function (err) {
+												defer.errback("QueryResults should have resolved");
+											}
+										);
+									},
+									function () {
+										defer.errback("Store should not have failed to get ready...");
+									}
+								)
+								return defer;
+							}
+						},
+						
+						{
+							name: "Issue Query before store ready, than close store.",
+							timeout: 10000,
+							runTest:function (t) {
+								var Store = declare( [_Store, _Natural, _Loader]);
+								var store = new Store ( {autoLoad: false, autoIncrement: true, keyPath:null});
+								var defer = new doh.Deferred();
+
+								// issue a query BEFORE the store is ready.
+								var results = store.query();
+								t.t (results instanceof Promise);
+								
+								store.load( {url:"../json/Simpsons.json"} );
+								store.close(true);
+
+								// The store should fail to get ready because of the store closure.
+								store.ready( 
+									function () {
+										defer.errback("Store should not get ready...");
+									},
+									function () {
+										// Store failed to get ready, go test the QueryResult which should
+										// also fail...
+										results.then (
+											function (err) {
+												defer.errback("Should not get here...");
+											},
+											defer.getTestCallback( 
+												function (err) {
+													t.is ("RequestCancelError", err.name);
+												}
+											)
+										);
+									}
+								)
+								return defer;
+							}
 						}
 
 					]);
@@ -691,7 +782,6 @@
 						doh.run();
 
 					});
-
 
 				}
       );

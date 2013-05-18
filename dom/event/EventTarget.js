@@ -9,21 +9,26 @@
 //
 
 define(["dojo/_base/lang",
+				"./EventDefaults",
 				"./Event",
-				"./EventDefault",
+				"../../_base/Library",
+				"../../listener/Actions",
+				"../../listener/Listener",
+				"../../listener/ListenerList",
 				"../../error/createError!../../error/StoreErrors.json"
-			], function (lang, Event, EventDefault, createError) {
-"use strict";
+			], function (lang, EventDefaults, Event, Lib, Actions, Listener, ListenerList, createError) {
+	"use strict";
+
 	// module:
-	//		indexedDB/EventTarget
+	//		indexedStore/dom/event/EventTarget
+	// summary:
+	//		Implements the DOM 3/4 EventTarget interface
 	//
 	//	http://www.w3.org/TR/dom/		(DOM4)
 	//	http://www.w3.org/TR/DOM-Level-3-Events/
 
-	// Requires JavaScript 1.8.5
-	var defineProperty = Object.defineProperty;
 	var StoreError = createError("EventTarget");		// Create the StoreError type.
-	var undef;
+	var isString   = Lib.isString;
 	
 	var PROPERTY = "parentNode";
 	var NONE            = 0,
@@ -31,188 +36,183 @@ define(["dojo/_base/lang",
 			AT_TARGET       = 2,
 			BUBBLING_PHASE  = 3;
 
-	var BEFORE = 0,
-			AFTER  = 1;
+	var nativeEvent = window.Event;
 
-	function validatePath(/*EventTarget[]*/ path, /*EventTarget*/ target ) {
+	function copyEvent( nativeEvent ) {
+		// summary:
+		//		Copy a native event object converting it to an Event object. Copying
+		//		the native event it will unlock all read-only properties.
+		// nativeEvent: native Event
+		// returns: Event
+		//		Instance of an Event object.
+		// tag:
+		//		Private
+		var key, newEvt, orgEvt = nativeEvent;
+		try {
+			newEvt = new Event();
+			for (key in orgEvt) {
+				// copy all properties excluding all functions.
+				if (typeof orgEvt[key] != "function") {
+					newEvt[key] = orgEvt[key];
+				}
+			}
+			Lib.writable( newEvt, "isTrusted, timeStamp", false );
+		} catch (err) {
+			// Oops, too bad, go fish...
+			return null;
+		}
+		return newEvt;
+	}
+
+	function propagate (path, phase, event) {
+		// summary:
+		//		Iterate the propagation path for the event.
+		// path: EventTarget[]
+		//		The propagation path which is an array of event targets.
+		// phase: Number
+		//		Propagation phase. The phase is either CAPTURING_PHASE, AT_TARGET or
+		//		BUBBLING_PHASE
+		// event: Event
+		//		Event to be dispatched.
+		// tag:
+		//		Private
+		var ct, i = 0, e = event;
+
+		while( (ct = path[i++]) && !e.stopPropagate) {
+			if (ct instanceof EventTarget) {
+				e.currentTarget = ct;
+				e.eventPhase = phase;			
+				try {
+					var lstn = ct.getEventListeners(e.type, phase);
+					if (lstn && lstn.length) {
+						var l, j = 0;
+						while ( (l = lstn[j++]) && !e.stopImmediate) {
+							// Make sure the event propagation is not interrupted and that any
+							// exceptions thrown inside a handler are caught here.
+							try {
+								var cb = l.callback || (l.scope || window)[l.bind];
+								if (cb) {
+									cb.call( ct, e );
+								}
+							} catch(err) {
+								console.error( err );
+								e.error = err;
+							}
+						}
+					}
+				} catch (e) {
+					// Probably not an instance of EventTarget
+					console.error( err );
+				} 
+			}
+		}
+		return !e.stopPropagate;
+	}
+
+	function validatePath (path, target) {
 		// summary:
 		//		Validate the propagation path. This function is called whenever a specific
 		//		path is specified when dispatching an event. Each target in the path must
 		//		be an instance of EventTarget. If the path is the event target itself or
 		//		an empty array the event is only fired at the target.
-		// path:
+		// path: EventTarget[]
 		//		Event target or an array of event targets.
-		// target:
+		// target: EventTarget
 		//		The Event target.
 		// tag:
 		//		private
 		var path = (path instanceof Array) ? path : [path];
 		var validPath = path.filter( function(evtTarget) {
-											return ( (evtTarget instanceof EventTarget) && evtTarget != target);
-										});
-		return validPath;
-	}
-
-	function propagate(/*EventTarget[]*/ path, /*Number*/ eventPhase, /*Event*/ event ) {
-		// summary:
-		// path:
-		//		The propagation path which is an array of event targets.
-		// eventPhase:
-		//		Propagation phase. The eventPhase is either CAPTURING_PHASE, AT_TARGET or
-		//		BUBBLING_PHASE
-		// event:
-		//		Event to be dispatched.
-		// tag:
-		//		Private
-		event.eventPhase = eventPhase;
-		path.some( function (currentTarget) {
-//			if (currentTarget instanceof EventTarget) {
-				var listeners = currentTarget._getEventListener(event.type);
-				if (listeners) {
-					event.currentTarget = currentTarget;
-					listeners.some( function (listener) {
-						if ((eventPhase == CAPTURING_PHASE && !listener.useCapture) ||
-								(eventPhase == BUBBLING_PHASE && listener.useCapture)) {
-							return;
-						}
-						// Make sure the event propagation is not interrupted and that any
-						// exceptions thrown inside a handler are caught here.
-						try {
-							listener.handleEvent.call( currentTarget, event );
-						} catch(err) {
-							console.error( err );
-							event.error = err;
-						}
-						return event.stopImmediate;
-					});
-				}
-//			}
-			return event.stopped;
+			return ( evtTarget instanceof EventTarget && evtTarget != target);
 		});
-		return !event.stopped;
-	}
-
-	var EventListener = function (handleEvent, useCapture) {
-		// summary:
-		//		Create a simple local EventListener object.
-		//		http://www.w3.org/TR/DOM-Level-3-Events/#interface-EventListener
-		// handleEvent:
-		//		The method to be called whenever an event occurs of the event type for
-		//		which the EventListener interface was registered.
-		// useCapture:
-		//		If true, the method handleEvent is triggered in the capture and target
-		//		phases only, i.e., the event listener will not be triggered during the
-		//		bubbling phase.
-		// tag:
-		//		Private
-		this.handleEvent = handleEvent;
-		this.useCapture  = !!useCapture;
+		return validPath;
 	}
 
 	function EventTarget() {
 		// summary:
-		//		Implements the DOM Level 3 and DOM4 EvenTarget interface.
+		//		Implements the DOM Level 3/4 EvenTarget interface.
 		//		http://www.w3.org/TR/dom/#interface-eventtarget
 		// tag:
 		//		Public
 
-		var eventTypes = {};
+		var lists = {
+			bubbling: new ListenerList(),
+			capture: new ListenerList()
+		}
 		
-		defineProperty( this, "parentNode", {	enumerable: false, 	writable: true });
-		defineProperty( this, "eventable", {value: true, enumerable: true});
+		Lib.defProp( this, "parentNode", {	enumerable: false, 	writable: true });
 
-		this._getEventListener = function (/*String*/ type ) {
+		this.getEventListeners = function (type, phase) {
 			// summary:
 			//		Return the list of event listeners for a given event type.
-			// type:
-			return lang.clone(eventTypes[type]);
+			// type: String?
+			//		The event type
+			// phase: Number?
+			//		The event propagation phase. The propagation phase can be either:
+			//		CAPTURING_PHASE (1), AT_TARGET (2) and BUBBLING_PHASE (3).
+			// returns: Object|Array
+			//		See indexedStore/listener/ListenerList.getByType()
+			// tag:
+			//		Public
+			var list = (phase == CAPTURING_PHASE) ? lists.capture : lists.bubbling;
+			return list.getByType(type); 
 		}
-		defineProperty( this, "_getEventListener", {enumerable: false});
 
-		this.addEventListener = function (/*String*/ type, /*EventListener*/ listener, /*Boolean?*/ useCapture) {
+		this.addEventListener = function (type, callback, useCapture) {
 			// summary:
 			//		Registers an event listener, depending on the useCapture parameter,
 			//		on the capture phase of the DOM event flow or its target and bubbling
 			//		phases.
-			// type:
-			//		Specifies the Event.type associated with the event for which the user
+			// type: String
+			//		Specifies the type associated with the event for which the listener
 			//		is registering.
-			// listener:
-			//		The listener parameter must be either an object that implements the
+			// callback: EventListener|Function
+			//		The callback parameter must be either an object that implements the
 			//		EventListener interface, or a function.
-			// useCapture:
+			// useCapture: Boolean?
 			//		If true, useCapture indicates that the user wishes to add the event
 			//		listener for the capture and target phases only, i.e., this event
 			//		listener will not be triggered during the bubbling phase. If false,
-			//		the event listener must only be triggered during the target and bubbling
+			//		the event listener is only be triggered during the target and bubbling
 			//		phases.
+			// returns: Object
+			//		An object which has a remove method which can be called to remove
+			//		the listener.
 			// tag:
 			//		Public
-			if (typeof type === "string" && (listener && lang.isFunction(listener.handleEvent || listener))) {
-				// Remove any existing entry as only one per listener is allowed.
-				this.removeEventListener( type, listener, useCapture );
-				var handleEvent = listener.handleEvent || listener;
-				var listenerObj = new EventListener( handleEvent, useCapture  );
-				var listeners   = eventTypes[type];
-				var target      = this;
-				if (listeners) {
-					listeners.push(listenerObj);
-				} else {
-					eventTypes[type] = [listenerObj];
-				}
-				// Return a dojo style 'remove' object.
-				return { remove:
-										function() {
-											target.removeEventListener(type, listener, useCapture);
-										}
-								};
-			}
+
+			var eventList = !!useCapture ? lists.capture : lists.bubbling;
+			return eventList.addListener( type, callback );
 		};
 
-		this.on = function (/*String*/ type, /*EventListener*/ listener) {
+		this.on = function (/*String*/ type, /*EventListener*/ callback) {
 			// summary:
 			//		Registers an event listener. This method is to provide support for
-			//		the dojo/on module but can also be use as an alias for addEventListener.
-			//		However, this method only registers event listeners for the bubble phase.
-			// type:
+			//		dojo/on but can also be use as an alias for addEventListener.
+			//		However, this method only registers event listeners for the bubble
+			//		phase.
+			// type: String
 			//		Specifies the Event.type associated with the event for which the user
 			//		is registering. Type is either a string or a list of comma separated
 			//		types.
-			// listener:
-			//		The listener parameter must be either an object that implements the
+			// callback: EventListener|Function
+			//		The callback parameter must be either an object that implements the
 			//		EventListener interface, or a function.
 			// tag:
 			//		Public
-			if (type && listener) {
-				// Check if the type parameter is a comma separated string.
-				var types = type.split(/\s*,\s*/);
-				if (types.length > 1) {
-					var handles = [];
-					types.forEach( function (type) {
-						handles.push(this.addEventListener( type, listener, false ));
-					}, this);
-					handles.remove = function(){
-						for(var i = 0; i < handles.length; i++){
-							handles[i].remove();
-						}
-					};
-					return handles;
-				}
-				return this.addEventListener( type, listener, false );
-			}
+			return this.addEventListener (type, callback, false);
 		};
 
-		this.removeEventListener = function (/*String*/ type, /*EventListener|Function*/ listener,
-																					/*Boolean?*/ useCapture) {
+		this.removeEventListener = function (type, callback, useCapture) {
 			// summary:
 			//		Removes an event listener. Calling removeEventListener with arguments
 			//		which do not identify any currently registered EventListener on the
 			//		EventTarget has no effect.
-			// type:
-			//		Specifies the Event.type for which the user registered the event listener.
-			// listener:
+			// type: String
+			//		Specifies the type for which the user registered the event listener.
+			// callback: EventListener
 			//		The EventListener to be removed.
-			// useCapture:
+			// useCapture: Boolean?
 			//		Specifies whether the EventListener being removed was registered for
 			//		the capture phase or not. If a listener was registered twice, once
 			//		for the capture and target phases and once for the target and bubbling
@@ -222,38 +222,28 @@ define(["dojo/_base/lang",
 			//		versa.
 			// tag:
 			//		Public
-			if (typeof type === "string" && (listener && lang.isFunction(listener.handleEvent || listener))) {
-				var handleEvent = listener.handleEvent || listener;
-				var listeners   = eventTypes[type];
-				var useCapture  = !!useCapture;
-				if (listeners) {
-					listeners.some( function (listenerObj, index) {
-						if (listenerObj.handleEvent === handleEvent && listenerObj.useCapture === useCapture) {
-							listeners.splice(index, 1);
-							return true;
-						}
-					});
-					if (listeners.length == 0) {
-						delete eventTypes[type];
-					}
-				}
-			}
+
+			var eventList = !!useCapture ? lists.capture : lists.bubbling;
+			eventList.removeListener( type, callback );
 		};
 
-		this.dispatchEvent = function (/*Event*/ event, /*EventTarget[]?*/ propagationPath) {
+		this.dispatchEvent = function (event, propagationPath) {
 			// summary:
-			//		Dispatches an event into the implementation's event model. If no path
-			//		was specified it will be compiled using the existing hierarchy.
-			// event:
+			//		Dispatches an event into the implementation's event model. If no
+			//		path is specified it is compiled using the existing hierarchy.
+			// event: Event
 			//		The event to be dispatched.
-			// propagationPath:
+			// propagationPath: EventTarget[]?
 			//		The event propagation path. If omitted, the propagtion path is the
-			//		list of all ancestors of the event target. (See PROPERTY).
+			//		list of all ancestors of the event target. (See PROPERTY). Several
+			//		standards allow applications to explicitly specify the propagation
+			//		path of an event. For example, the IndexedDB standard.
+			//		The propagationPath is typically used with non-DOM objects.
 			// tag:
 			//		Public
 
-				if (event.eventPhase === NONE && event.type) {
-				if (event.type) {
+			if (event instanceof Event && event.type) {
+				if (!event.dispatch && event.eventPhase == NONE) {		
 					var parent = this[PROPERTY];
 					var result = false;
 					var path   = [];
@@ -266,41 +256,47 @@ define(["dojo/_base/lang",
 							parent = parent[PROPERTY];
 						}
 					}
-					event.target = this;
+					event.dispatch = true;
+					event.target   = this;
 
 					// Trigger any default actions required BEFORE dispatching
 					if (!event.defaultPrevented) {
-						EventDefault.trigger(event, "before");
+						EventDefaults.trigger(event.type, "before");
 					}
-
-					if (!event.stopped) {
-						if (propagate(path, CAPTURING_PHASE, event)) {
-							if (propagate([this], AT_TARGET, event) && event.bubbles) {
-								propagate(path.reverse(), BUBBLING_PHASE, event);
+					if (!event.stopPropagate) {
+						// If there is no propagation path simply fire the event at the
+						// target (e.g. 'this');
+						if (!path.length) {
+							propagate([this], AT_TARGET, event);
+						} else {
+							if (propagate(path, CAPTURING_PHASE, event)) {
+								if (propagate([this], AT_TARGET, event) && event.bubbles) {
+									propagate(path.reverse(), BUBBLING_PHASE, event);
+								}
 							}
 						}
 					}
 					// Trigger any default actions required AFTER dispatching
 					if (!event.defaultPrevented) {
-						EventDefault.trigger(event, "after");
+						EventDefaults.trigger(event.type, "after");
 					} else {
 						result = true;
 					}
 					// Reset the event allowing it to be re-dispatched.
-					event.currentTarget = null;
-					event.eventPhase    = NONE;
+					event.dispatch = false;
 					event.initEvent();
-
-				} else {
-					throw new StateError( "InvalidStateError", "dispatchEvent" );
+					return result;			
 				}
+				throw new StoreError( "InvalidStateError", "dispatchEvent" );
 			} else {
-				throw new StoreError( "TypeError", "dispatchEvent", "invalid event");
+				if (event instanceof nativeEvent) {
+					if (event = copyEvent(event)) {
+						return this.dispatchEvent( event, propagationPath);
+					}
+				}
 			}
-			return result;
+			throw new StoreError( "TypeError", "dispatchEvent", "invalid event");
 		};
-
-//		this.ownerDocument = document;
 
 	} /* end EventTarget() */
 

@@ -8,78 +8,103 @@
 //	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["dojo/_base/lang",
-				"../../error/createError!../../error/StoreErrors.json"
-			 ], function(lang, createError){
+define(["../../_base/Library",
+				"../../error/createError!../../error/StoreErrors.json",
+				"../../util/shim/Date"		// Date.now()
+			 ], function(Lib, createError){
+	"use strict";
+	
+	// module:
+	//		indexedStore/dom/event/Event
+	//
+	//	http://www.w3.org/TR/dom/		(DOM4)
+	//	http://www.w3.org/TR/DOM-Level-3-Events/
 
-// module:
-//		indexedDB/Event
-//
-//	http://www.w3.org/TR/dom/		(DOM4)
-//	http://www.w3.org/TR/DOM-Level-3-Events/
-
-	var defineProperty = Object.defineProperty;
 	var StoreError = createError("Event");		// Create the StoreError type.
-	var EVENT_INIT = { bubbles: false, cancelable: false, detail: null };
+
+	var EVENT_FLAGS = ["dispatch", "stopDeferred", "stopImmediate", "stopPropagate"];
+	var EVENT_INIT  = { bubbles: false, cancelable: false, detail: null };
+
+	var isObject = Lib.isObject;
+	var isEmpty  = Lib.isEmpty;
+	var isString = Lib.isString;
+	var mixin    = Lib.mixin; 
+	
+	var NONE            = 0,
+			CAPTURING_PHASE = 1,
+			AT_TARGET       = 2,
+			BUBBLING_PHASE  = 3;
 
 	function setEventType( event, type ) {
-		if (typeof type === "string") {
+		// summary:
+		//		Validate and set the event type.
+		// event: Event
+		// type: String
+		// tag:
+		//		Private
+		if (isString(type)) {
 			event.type = type;
+			return type;
 		}  else {
 			throw new StoreError( "TypeError", "setEventType", "invalid event type");
 		}
 	}
 
-	function Event (/*String*/ type, /*object?*/ properties) {
+	function Event (type, properties) {
 		// summary:
-		//		Implements a DOM level 3 event
-		// type:
+		//		Implements a DOM level 4 event
+		// type: String
 		//		Event type.
-		// properties:
+		// properties: Object?
 		// tag:
 		//		Public
 
+		// allow for copying an event: (e.g. new Event(event) )
+		if (type instanceof Event) {
+			return mixin(this,type);
+		}
+
+		// Public properties
 		this.currentTarget    = null;
 		this.target           = null;
 		this.bubbles          = false;
 		this.cancelable       = false;
-		this.timestamp        = new Date();
-		this.eventPhase       = 0;
+		this.timeStamp        = Date.now();
+		this.eventPhase       = NONE;
 		this.isTrusted        = false;				// False by default...
-		this.dispatch         = false;
 		this.type             = "";
 		this.defaultPrevented = false;
-		this.detail           = null;
-
-		defineProperty (this, "date", {writable:false});
-		defineProperty (this, "isTrusted", {writable:false});
 
 		this.initEvent = function (type, bubbles, cancelable, detail) {
 			// summary:
 			//		For legacy support only (use event properties instead).
-			// type:
+			// type: String?
 			//		Specifies Event.type, the name of the event type.
-			// bubbles:
+			// bubbles: Boolean?
 			//		Specifies Event.bubbles. This parameter overrides the intrinsic
 			//		bubbling behavior of the event.
-			// cancelable:
+			// cancelable: Boolean?
 			//		Specifies Event.cancelable. This parameter overrides the intrinsic
 			//		cancelable behavior of the event.
+			// detail: Object?
+			//		Event details in case of a custom event.
 			// tag:
 			//		Public
-			if (!this.eventPhase) {
+			if (!this.dispatch) {
 				this.cancelable = (cancelable !== undefined ? !!cancelable : this.cancelable);
 				this.bubbles    = (bubbles    !== undefined ? !!bubbles    : this.bubbles);
-				if (type) {
-					setEventType(this, type);
-				}
-				if (detail) {
+				this.type       = type ? setEventType(this, type) : this.type;
+
+				if (detail && isObject(detail) && !isEmpty(detail)) {
 					this.detail = detail;
 				}
+				this.currentTarget    = null;
 				this.defaultPrevented = false;
-				delete this.stopImmediate;
-				delete this.stopDeferred;
-				delete this.stopped;
+				this.eventPhase       = NONE;
+				this.stopDeferred     = false;
+				this.stopImmediate    = false;
+				this.stopPropagate    = false;
+				this.target           = null;
 			}
 		}
 
@@ -94,7 +119,6 @@ define(["dojo/_base/lang",
 			//		Public
 			if (this.cancelable) {
 				this.defaultPrevented = true;
-				this.cancelable = false;
 			}
 		}
 
@@ -104,8 +128,8 @@ define(["dojo/_base/lang",
 			//		dispatch, including any remaining candiate event listeners.
 			// tag:
 			//		Public
+			this.stopPropagate = true;
 			this.stopImmediate = true;
-			this.stopped       = true;
 		}
 
 		this.stopPropagation = function () {
@@ -114,15 +138,22 @@ define(["dojo/_base/lang",
 			//		remaining candiate event listeners.
 			// tag:
 			//		Public
-			this.stopDeferred = true;
-			this.stopped      = true;
+			this.stopPropagate = true;
+			this.stopDeferred  = true;
 		}
 
-		lang.mixin( this, properties);
-		if (type) {
-			setEventType( this, type );
+		// Add private flags
+		EVENT_FLAGS.forEach( function (flag) {
+			Lib.defProp( this, flag, {value:false, enumerable: false, writable:true});
+		}, this);
+
+		if (arguments.length) {
+			mixin( this, properties);
+			this.type = type ? setEventType( this, type ) : "";
+
+			Lib.writable( this, "isTrusted, timeStamp", false );
 		}
-		defineProperty (this, "detail", {writable:false});
 	}
+	
 	return Event;
 });

@@ -1,0 +1,1 @@
+define(["./Array", "./Date", "./Object"], function () {});

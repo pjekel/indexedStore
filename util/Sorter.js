@@ -9,7 +9,7 @@
 //
 
 define(["../_base/Library",
-				"../error/createError!store/error/StoreErrors.json",
+				"../error/createError!store/error/StoreErrors.json"
 			 ], function(Lib, createError) {
 		"use strict";
 	// module:

@@ -11,8 +11,7 @@
 define(["./Listener",
 				"./ListenerList",
 				"../_base/Library",
-				"../error/createError!../error/StoreErrors.json",
-				"../util/shim/Array"
+				"../error/createError!../error/StoreErrors.json"
 			 ], function (Listener, ListenerList, Lib, createError) {
 	"use strict";
 	

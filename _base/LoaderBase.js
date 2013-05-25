@@ -7,11 +7,10 @@
 //	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
 //	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
-define(["dojo/_base/lang",
-				"dojo/Deferred",
+define(["dojo/Deferred",
 				"./Library",
-				"../error/createError!../error/StoreErrors.json",
-			 ], function (lang, Deferred, Lib, createError) {
+				"../error/createError!../error/StoreErrors.json"
+			 ], function (Deferred, Lib, createError) {
 
 	// module
 	//		indexedStore/_base/LoaderBase
@@ -26,6 +25,7 @@ define(["dojo/_base/lang",
 	var StoreError = createError("Loader");		// Create the StoreError type.
 	var isObject   = Lib.isObject;
 	var clone      = Lib.clone;
+	var mixin      = Lib.mixin;
 
 	var LoadDirectives = { 
 		// data: Array
@@ -51,7 +51,7 @@ define(["dojo/_base/lang",
 			// returns: dojo/promise/Promise
 			// tag:
 			//		public
-			var options = lang.mixin( clone(LoadDirectives), options );
+			var options = mixin( clone(LoadDirectives), options );
 			var flags   = options.overwrite ? {overwrite:true} : null;
 			var data    = options.data || [];
 			var ldrDef  = new Deferred();
@@ -60,18 +60,19 @@ define(["dojo/_base/lang",
 				var i, max = data.length;
 
 				loader.loading = ldrDef.promise;
-				store._listeners.trigger("loadStart");
+				store._trigger("loadStart");
 				try {
 					for (i=0; i<max; i++) {
 						store._storeRecord( data[i], flags );
 					}
 					loader.loading = false;
-					store._listeners.trigger("loadEnd");
+					loader.count++;
+					store._trigger("loadEnd");
 					ldrDef.resolve(store);
 				} catch (err) {
 					loader.loading = false;
 					loader.error   = err;
-					store._listeners.trigger("loadFailed");
+					store._trigger("loadFailed");
 					ldrDef.reject(err);
 				}
 			} else {
@@ -85,6 +86,7 @@ define(["dojo/_base/lang",
 		// Public properties
 		this.loading = false;
 		this.error   = null;
+		this.count   = 0;
 
 	} /* end Loader() */
 

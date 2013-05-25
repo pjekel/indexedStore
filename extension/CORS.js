@@ -9,14 +9,13 @@
 //
 
 define(["dojo/_base/declare",
-				"dojo/_base/lang",
 				"dojo/has",
 				"dojo/Deferred",
 				"dojo/request",
 				"dojo/request/handlers",
 				"../_base/LoaderPlus",
 				"../error/createError!../error/StoreErrors.json"
-			 ], function (declare, lang, has, Deferred, request, handlers, Loader, createError ) {
+			 ], function (declare, has, Deferred, request, handlers, Loader, createError ) {
 	"use strict";
 	
 	// module:

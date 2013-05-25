@@ -11,11 +11,11 @@
 define(["./Keys",
 				"./KeyRange",
 				"./Library",
-				"../error/createError!../error/StoreErrors.json",
+				"../error/createError!../error/StoreErrors.json"
 			 ], function (Keys, KeyRange, Lib, createError) {
-
+	"use strict";
+	
 	var StoreError = createError( "Range" );		// Create the StoreError type.
-	var isObject = Lib.isObject;
 	var undef;
 	
 	function Range(source, keyRange, direction, duplicates, keysOnly) {

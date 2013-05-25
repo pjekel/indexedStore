@@ -30,6 +30,7 @@ define(["exports",
 	//			IndexedStore/_base/KeyRange
 
 	var StoreError = createError( "Keys" );			// Create the StoreError type.
+	var isString   = Lib.isString;
 	var undef;
 	
 	exports.cmp = function cmp ( key1, key2, strict ) {
@@ -522,8 +523,7 @@ define(["exports",
 			if (key instanceof Array) {
 				return key.every( exports.validKey );
 			}
-			return (key instanceof String || typeof key === "string" ||
-							 (typeof key === "number" && !isNaN(key)) ||
+			return (isString(key) || (typeof key === "number" && !isNaN(key)) ||
 							 (key instanceof Date && !isNaN(key.getTime())));
 		}
 		return false;
@@ -541,7 +541,7 @@ define(["exports",
 		//		Public
 		
 		function splitPath (keyPath) {
-			if (typeof keyPath == "string") {
+			if (isString(keyPath)) {
 				if (keyPath != "") {
 					var properties = keyPath.split(".");
 					return properties.every( function (prop) {

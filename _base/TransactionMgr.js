@@ -8,12 +8,10 @@
 //	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["dojo/_base/lang",
-				"./Library",
+define(["./Library",
 				"./Transaction",
-				"../dom/event/EventTarget",
-				"../util/shim/Array"
-			 ], function (lang, Lib, Transaction, EventTarget) {
+				"../dom/event/EventTarget"
+			 ], function (Lib, Transaction, EventTarget) {
 	"use strict";
 
 	// module:
@@ -44,6 +42,7 @@ define(["dojo/_base/lang",
 	//		of stores and indexes, there is no support for 'versionchange' type
 	//		transactions.
 
+	var	TRANSACTION_MANAGER = "dojo.indexedStore.TransactionMgr";
 	var debug = dojo.config.isDebug || false;
 	var transId = 1;
 	var IDLE    = 0,
@@ -273,9 +272,9 @@ define(["dojo/_base/lang",
 	TransManager.prototype.constructor = TransManager;
 
 	// Make sure we have only one instance of TransManager
-	var manager = lang.getObject( "dojo.store.TransactionMgr", false);
+	var manager = Lib.getProp( TRANSACTION_MANAGER, window);
 	if (!manager) {
-		manager = lang.setObject("dojo.store.TransactionMgr", new TransManager());
+		manager = Lib.setProp( TRANSACTION_MANAGER, new TransManager(), window);
 	}
 
 	return manager;

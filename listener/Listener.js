@@ -11,13 +11,16 @@
 define(["../_base/Library",
 				"../error/createError!../error/StoreErrors.json"
 			 ], function (Lib, createError) {
-
+	"use strict";
+	
 	// module:
 	//		indexedStore/listener/Listener
 	// summary:
 
 	var StoreError = createError( "Listener" );		// Create the StoreError type.
+	var isString   = Lib.isString;
 	var mixin      = Lib.mixin;
+	var undef;
 	
 	function Listener (callback, scope /*[,arg0 [,arg1, ..., argn]]*/) {
 		// summary:
@@ -34,28 +37,27 @@ define(["../_base/Library",
 		// tag:
 		//		Public
 
-		this.callback = null;
-
+		// calling Listener() or new Listener() has the same effect.
+		if (!(this instanceof Listener)) {
+			return Listener.apply(new Listener(), arguments);
+		}
+		this.listener = callback;
 		if (arguments.length > 0) {
 			if (callback instanceof Listener) {
 				mixin (this, callback);
-			} else if (typeof callback == "string" || callback instanceof String) {
-				this.bind = callback;
-			} else if (typeof callback == "function") {
-				this.callback = callback;
-			} else {
+			} else if (isString(callback)) {
+				// allow for late binding.
+				this.bindName = callback;
+				this.listener = undef;
+			}
+			if (this.listener && !(this.listener instanceof Function)) {
 				throw new StoreError("TypeError", "Listener", "callback is not a callable object");
 			}
 			if (arguments.length > 2) {
+				// save optional arguments...
 				this.args = Array.prototype.slice.call(arguments,2);
 			}
-			if (scope) this.scope   = scope;
-
-			// Define the DOM EventListener interface
-			Lib.defProp( this, "handleEvent", { 
-				get: function () { return this.callback; },
-				enumerable: true
-			});
+			if (scope) this.scope = scope;
 		}
 		return this;
 	}

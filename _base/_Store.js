@@ -9,7 +9,6 @@
 //
 
 define(["dojo/_base/declare",
-				"dojo/_base/lang",
 				"dojo/Deferred",
 				"dojo/when",
 				"./FeatureList",
@@ -21,15 +20,13 @@ define(["dojo/_base/declare",
 				"./Range",
 				"./Record",
 				"../error/createError!../error/StoreErrors.json",
-				"../dom/event/Event",
 				"../dom/event/EventTarget",
 				"../dom/string/DOMStringList",
 				"../listener/ListenerList",
 				"../util/QueryEngine",
-				"../util/QueryResults",
-				"../util/shim/Array"						 // ECMA-262 Array shim
-			 ], function (declare, lang, Deferred, when, FeatureList, Index, Lib, Loader, 
-			               Keys, KeyRange, Range, Record, createError, Event,	EventTarget,
+				"../util/QueryResults"
+			 ], function (declare, Deferred, when, FeatureList, Index, Lib, Loader, 
+			               Keys, KeyRange, Range, Record, createError, EventTarget,
 			               DOMStringList, ListenerList, QueryEngine, QueryResults ) {
 	"use strict";
 	// module:
@@ -157,6 +154,7 @@ define(["dojo/_base/declare",
 	var StoreError = createError( "_Store" );			// Create the StoreError type.
 	var isObject   = Lib.isObject;								// Test for [object Object];
 	var clone      = Lib.clone;										// HTML5 structured clone.
+	var mixin      = Lib.mixin;
 	var uniqueId   = 0;
 	var undef;
 	
@@ -295,7 +293,7 @@ define(["dojo/_base/declare",
 			this.keyPath     = this.idProperty;
 			this.loader      = new Loader(this);
 			this.name        = this.name || "store_" + uniqueId++;
-			this.revision    = 0;
+			this.revision    = 1;			// Initial reservation must be > 0 (See Observer).
 			this.total       = 0;
 			this.transaction = null;
 			this.type        = "store";
@@ -322,7 +320,7 @@ define(["dojo/_base/declare",
 					}
 				}, this);
 			}
-			Lib.defProp( this, "emit", {value: function () {}, enumerable: false, configurable: true });
+			Lib.defProp( this, "_emit", {value: function () {}, enumerable: false, configurable: true });
 			Lib.writable( this, "name, type, features", false );
 			Lib.protect( this );	// Hide own private properties.
 
@@ -414,6 +412,15 @@ define(["dojo/_base/declare",
 			}
 		},
 
+		_register: function ( action, listener, scope ) {
+			// summary:
+			return this._listeners.addListener( action, listener, scope );
+		},
+
+		_trigger: function (action) {
+			this._listeners.trigger.apply(this, arguments);
+		},
+
 		//===================================================================
 		// IndexedDB procedures
 
@@ -489,7 +496,7 @@ define(["dojo/_base/declare",
 
 			if (object) {
 				this._assertStore( this, "add", true );
-				options = lang.mixin( options, {overwrite: false} );
+				options = mixin( options, {overwrite: false} );
 				return this._storeRecord( object, options );
 			}
 			throw new StoreError( "DataError", "add" );
@@ -502,10 +509,11 @@ define(["dojo/_base/declare",
 			//		Public
 			
 			this._assertStore( this, "clear", true );
-			this.revision++;
 			this._clearRecords();
-			this._listeners.trigger("clear");
-			this.emit("clear");
+			this.revision++;
+
+			this._trigger("clear");
+			this._emit("clear");
 		},
 		
 		close: function (clear) {
@@ -522,8 +530,8 @@ define(["dojo/_base/declare",
 				this._storeReady = new Deferred();
 				this.waiting = this._storeReady.promise;
 			}
-			this._listeners.trigger("close");
-			this.emit( "close" );
+			this._trigger("close");
+			this._emit( "close" );
 			if ( !!(clear || this.clearOnClose) ) {
 				this.clear();
 			}
@@ -613,22 +621,11 @@ define(["dojo/_base/declare",
 			for(name in this._indexes) {
 				this.deleteIndex(name);
 			}
-			this._listeners.clear();
+			this._listeners.removeListener();			// Remove all listeners...
 			this._indexes   = {};
 			this.indexNames = null;
 		},
-/*
-		emit: function (type, properties, custom) {
-			// summary:
-			// type: String
-			// properties: Object?
-			// custom: Boolean?
-			// tag:
-			//		Public
 
-			// Placeholder ONLY, see indexedStore/extension/Eventable
-		},
-*/		
 		get: function (key) {
 			// summary:
 			//		Retrieves an object by its key
@@ -715,6 +712,18 @@ define(["dojo/_base/declare",
 			}
 		},
 		
+		isLoaded: function () {
+			// summary:
+			//		Test if the store has finished loaded.
+			// returns: Boolean
+			//		true if the store successfully completed at least one load request
+			//		and currently has no load request in progress, otherwise false.
+			// tag:
+			//		Public
+			var defer = this.waiting || this.loader.loading;
+			return (defer === false ? true : false);
+		},
+		
 		load: function (options) {
 			// summary:
 			//		Load a set of objects into the store.
@@ -735,7 +744,7 @@ define(["dojo/_base/declare",
 			var directives = {
 				data: this.data
 			};
-			var options  = lang.mixin( directives, options);
+			var options  = mixin( directives, options);
 			var suppress = this.suppressEvents;
 			var store    = this;
 			var promise;
@@ -749,7 +758,7 @@ define(["dojo/_base/declare",
 			promise.then( 
 				function () {
 					setTimeout( function () {
-						store.emit( "load" );
+						store._emit( "load" );
 						store._storeReady.resolve(store);
 					}, 0);
 					store.waiting = false;
@@ -772,7 +781,7 @@ define(["dojo/_base/declare",
 			//		Public
 			if (object) {
 				this._assertStore( this, "put", true );
-				options = lang.mixin( {overwrite: true}, options );
+				options = mixin( {overwrite: true}, options );
 				return this._storeRecord( object, options );
 			}
 			throw new StoreError("DataError", "put");
@@ -809,11 +818,11 @@ define(["dojo/_base/declare",
 			//		Execute the callback when the store has been loaded. If an error
 			//		is detected that will prevent the store from getting ready errback
 			//		is called instead.
-			// note:
+			// NOTE:
 			//		When the promise returned resolves it merely indicates one of
 			//		potentially many load requests was successful. To keep track of
 			//		a specific load request use the promise returned by the load()
-			//		function instead. (See IndexedStore/_base/_Loader for details).
+			//		function instead. (See Load() for details).
 			// callback: Function?
 			//		Function called when the store is ready.
 			// errback: Function?
@@ -829,9 +838,9 @@ define(["dojo/_base/declare",
 			//		Public
 			if (callback || errback || progress) {
 				this._storeReady.then(
-					callback ? lang.hitch( (scope || this), callback) : null, 
-					errback  ? lang.hitch( (scope || this), errback)  : null,
-					progress ? lang.hitch( (scope || this), progress) : null
+					callback ? callback.bind(scope) : null,
+					errback  ? errback.bind(scope)  : null,
+					progress ? progress.bind(scope) : null
 				);
 			}
 			return this._storeReady.promise;

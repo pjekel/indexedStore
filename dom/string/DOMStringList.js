@@ -38,7 +38,6 @@ define ([], function () {
 		return items;
 	}
 
-	// Requires JavaScript 1.8.5
 	function DOMStringList() {
 		// summary:
 		//		Implements the DOMStringList

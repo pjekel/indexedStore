@@ -49,11 +49,11 @@ define(["dojo/_base/lang",
 			if (type) {
 				if (type instanceof Array) {
 					type.forEach(  function (type) {
-						clearListener(type);
+						removeAll(type);
 					}, this);
 				} else if (isString(type)) {
 					if (/,/.test(type)) {
-						clearListener(type.split(/\s*,\s*/) );
+						removeAll(type.split(/\s*,\s*/) );
 					}	else {
 						var lsByType = listeners[type];
 						if (lsByType) {
@@ -65,7 +65,7 @@ define(["dojo/_base/lang",
 					throw new StoreError("Parameter", "removeAll", "invalid type argument");
 				}
 			} else {
-				listeners = [];
+				listeners = {};
 				self.length = 0;
 			}
 		}
@@ -85,6 +85,9 @@ define(["dojo/_base/lang",
 			// tag:
 			//		Public
 
+			if (destroyed) {
+				throw new StoreError("InvalidState", "addListener", "ListenerList was destroyed");
+			}
 			if (listener) {
 				if (type instanceof Array) {
 					type.forEach( function(type) {
@@ -113,6 +116,17 @@ define(["dojo/_base/lang",
 			} else {
 				throw new StoreError("Parameter", "addListener", "listener argument required");
 			}
+		};
+
+		this.destroy = function () {
+			// summary:
+			//		Destroy the listenerList. Effectively all registered listeners are
+			//		removed from the list.
+			// tag:
+			//		Public
+			this.actions = null;
+			removeAll();
+			destroyed = true;
 		};
 
 		this.getByType = function (type) {
@@ -149,9 +163,9 @@ define(["dojo/_base/lang",
 				var listener;
 				
 				if (lsByType) {
-					lsByType.some( function (handler, idx) {
-						if (handler.callback == callback) {
-							listener = lsByType[idx];
+					lsByType.some( function (l, i) {
+						if (l.listener == callback) {
+							listener = lsByType[i];
 							return true;
 						}
 					});
@@ -191,10 +205,10 @@ define(["dojo/_base/lang",
 					} else {
 						var lsByType = listeners[type];
 						if (lsByType) {
-							lsByType.some( function (handler, idx) {
-								if ((handler.bind == listener.bind && handler.scope == listener.scope) ||
-										(handler.callback == listener.callback)) {
-									lsByType.splice(idx, 1);
+							lsByType.some( function (l, i) {
+								if ((l.bindName && (l.bindName == listener.bindName && l.scope == listener.scope)) ||
+										(l.listener == listener.listener)) {
+									lsByType.splice(i, 1);
 									self.length--;
 									return true;
 								}
@@ -220,6 +234,8 @@ define(["dojo/_base/lang",
 			if (actions) {
 				if (typeof actions.after == "function" && typeof actions.before == "function") {
 					this.actions = actions;
+				} else {
+					throw new StoreError("Parameter", "setActions", "invalid actions argument");
 				}
 			}
 		};
@@ -239,16 +255,17 @@ define(["dojo/_base/lang",
 			//		Listener type.
 			// tag:
 			//		Public
+
 			if (isString(type)) {
 				var lst = listeners[type];
 				var act = self.actions && self.actions.trigger(type,"before");
 				if (lst) {
-					var vargs = Array.prototype.slice.call(arguments, 1);
 					var a, c, i, T, l;
 					for (i=0; i<lst.length;i++) {
 						l = lst[i], T = l.scope;
-						c = l.callback || (T || window)[l.bind];
-						a = l.args ? [].concat(type, l.args, vargs) : arguments;
+						c = l.listener || (T || window)[l.bindName];						
+						a = l.args ? [].concat(type, l.args, Array.prototype.slice.call(arguments, 1))
+											 : arguments;
 						if (c instanceof Function) {
 							c.apply( T, a );
 						}
@@ -260,6 +277,7 @@ define(["dojo/_base/lang",
 			}
 		};
 
+		var destroyed = false;
 		var listeners = {};
 		var self = this;
 

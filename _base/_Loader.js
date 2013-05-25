@@ -9,13 +9,11 @@
 //
 
 define(["dojo/_base/declare",
-				"dojo/_base/lang",
 				"dojo/Deferred",
 				"./Library",
 				"./LoaderPlus",
-				"../dom/event/Event",
 				"../error/createError!../error/StoreErrors.json"
-			 ], function (declare, lang, Deferred, Lib, Loader, Event, createError) {
+			 ], function (declare, Deferred, Lib, Loader, createError) {
 	
 	// module:
 	//		indexedStore/_base/_Loader
@@ -23,6 +21,7 @@ define(["dojo/_base/declare",
 
 	var StoreError = createError("Loader");		// Create the StoreError type.
 	var isObject   = Lib.isObject;
+	var mixin      = Lib.mixin;
 	
 	var _Loader = declare(null, {
 		// summary:
@@ -173,7 +172,7 @@ define(["dojo/_base/declare",
 				maxErrors: Number(this.maxErrors) || 0,
 				progress: this.progress || false
 			};
-			var options  = lang.mixin( directives, options );
+			var options  = mixin( directives, options );
 			var suppress = this.suppressEvents;
 			var store    = this;
 			var promise;
@@ -188,7 +187,7 @@ define(["dojo/_base/declare",
 			promise.then( 
 				function () {
 					setTimeout( function () {
-						store.emit( "load" );
+						store._emit( "load" );
 						store._storeReady.resolve(store);
 					}, 0);
 					store.waiting = false;

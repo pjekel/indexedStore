@@ -10,13 +10,9 @@
 
 define(["dojo/_base/declare",
 				"dojo/when",
-				"../_base/Keys",
-				"../_base/KeyRange",
-				"../_base/Library",
 				"../_base/Observer",
-				"../error/createError!../error/StoreErrors.json",
-				"../listener/Listener"
-			 ], function (declare, when, Keys, KeyRange, Lib, Observer, createError, Listener) {
+				"../error/createError!../error/StoreErrors.json"
+			 ], function (declare, when, Observer, createError) {
 	
 	// module:
 	//		store/extension/Observable
@@ -31,10 +27,9 @@ define(["dojo/_base/declare",
 	//	|	define(["dojo/_base/declare",
 	//	|         "store/_base/_Store",
 	//	|	        "store/_base/_Indexed",
-	//	|	        "store/_base/_Loader",
 	//	|	        "store/extension/Observable"
-	//	|	       ], function  (declare, _Store, _Indexed, _Loader, Observable) {
-	//	|	  var MyStore = declare([_Store, _Indexed, _Loader, Observable]);
+	//	|	       ], function  (declare, _Store, _Indexed, Observable) {
+	//	|	  var MyStore = declare([_Store, _Indexed, Observable]);
 	//	|	  var store = new MyStore({data: someData});
 	//	|	               ..
 	//	|	  function listener(object, removedFrom, insertedInto) {
@@ -55,10 +50,8 @@ define(["dojo/_base/declare",
 	//	|	});
 	
 	var StoreError = createError( "Observable" );		// Create the StoreError type.
-	var isObject   = Lib.isObject;
-	var undef;
 	
-	var Observable = {
+	var Observable = declare(null, {
 
 		//=========================================================================
 		// constructor
@@ -67,13 +60,11 @@ define(["dojo/_base/declare",
 			// Either the base class store/_base/_Natural or store/_base/_Indexed is
 			// required.
 			if (this.features.has("indexed, natural")) {
-
 				this.features.add("observable");
 				this.observable = true;
-				
-				Lib.protect( this );		// Hide own private proeprties.
 			} else {
-				throw new StoreError( "Dependency", "constructor", "base class '_Natural' or '_Indexed' must be loaded first");
+				var message = "base class '_Natural' or '_Indexed' must be loaded first";
+				throw new StoreError("Dependency", "constructor", message);
 			}
 		},
 		
@@ -93,20 +84,20 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Public
 
-			function observe (callback, includeUpdates, thisArg) {
+			function observe (listener, includeUpdates, scope) {
 				// summary:
 				//		The observe method added to the query results, that is, if the
-				//		query results has a forEach method. When called the callback is
+				//		query results has a forEach method. When called the listener is
 				//		registered with the Observer and will be notified of changes to
 				//		results set.
-				// callback: Function
-				//		The callback called when the query results changed or when an
+				// listener: Listener|Function
+				//		The listener called when the query results changed or when an
 				//		object being part of the query results has changed.
 				// includeUpdates: Boolean?
-				//		If true, the callback will also be notified when an object that
+				//		If true, the listener will also be notified when an object that
 				//		is part of the results set has simply changed.
-				// thisArg: Object?
-				//		Object to use as this when executing callback.
+				// scope: Object?
+				//		Object to use as 'this' when executing listener.
 				// returns: Object
 				//		An object with a remove() method. The remove method can be used
 				//		to remove the listener from the Observer object.
@@ -114,31 +105,25 @@ define(["dojo/_base/declare",
 				//		Public
 				
 				if (!observer) {
-					observer = new Observer(store, results, keyRange, direction);
+					observer = new Observer(store, results, keyRange, direction, revision);
 					observer.done( function () { observer = null;	});
 				}
-				var listOpts = {updates: !!includeUpdates};
-				var listener = new Listener(callback, listOpts, thisArg);
-				observer.addListener(listener);
+				return observer.addListener(listener, includeUpdates, scope);
+			}
 
-				return {
-					remove: function () { 
-						observer.removeListener(listener ); 
-					}
-				};
-			}	/* end observe() */
-
-			var results   = this.inherited(arguments);		// Call parent getRange()
+			var results   = this.inherited(arguments);		// Call 'parent' getRange()
 			var direction = direction || "next";
 			var keyRange  = keyRange;
 			var store     = this;
 			var observer  = null;
-			var handle    = null;
+			var revision  = 0;
 			
 			// Test if the results can be iterated.
 			if (results && typeof results.forEach == "function") {
+				// Don't set the revision until the QueryResults resolves.
 				results.revision = when( results, function () {
-					return (results.revision = store.revision);
+					revision = revision || store.revision;
+					return revision;
 				});
 				results.observe = observe;
 			}
@@ -147,7 +132,7 @@ define(["dojo/_base/declare",
 
 		query: function (query, options) {
 			// summary:
-			//		Queries the store for objects. The query result get an additional
+			//		Queries the store for objects. The query result gets an additional
 			//		method called observe which, when called, starts monitoring the
 			//		query result for any changes.
 			// query: Object?
@@ -159,42 +144,35 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Public
 
-			function observe (callback, includeUpdates, thisArg) {
+			function observe (listener, includeUpdates, scope) {
 				// summary:
 				//		See getRange.observer()
 				if (!observer) {
-					observer = new Observer(store, results, query, options );
+					observer = new Observer(store, results, query, options, revision);
 					observer.done( function () { observer = null;	});
 				}
-				var listOpts = {updates: !!includeUpdates};
-				var listener = new Listener(callback, listOpts, thisArg);
-				observer.addListener(listener);
+				return observer.addListener(listener, includeUpdates, scope);
+			}
 
-				return {
-					remove: function () { 
-						observer.removeListener(listener); 
-					}
-				};
-			}	/* end observe() */
-
-			var results  = this.inherited(arguments);	// Call parent query()
+			var results  = this.inherited(arguments);	// Call 'parent' query()
 			var options  = options || {};
 			var store    = this;
 			var observer = null;
-			var handle   = null;
+			var revision = 0;
 			
 			// Test if the results can be iterated.
 			if (results && typeof results.forEach == "function") {
 				results.revision = when( results, function () {
-					return (results.revision = store.revision);
+					revision = revision || store.revision;
+					return revision;
 				});
 				results.observe = observe;
 			}
 			return results;
 		}
 
-	};	/* end Observable {} */
+	});	/* end declare() */
 	
-	return declare( null, Observable);
+	return Observable;
 
 });	/* end define() */

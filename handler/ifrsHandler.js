@@ -10,8 +10,8 @@
 
 define(["dojo/_base/lang",
 				"dojo/date/stamp",
-				"dojo/json",
-				"../util/shim/Array"], function(lang, dateStamp, JSON) {
+				"dojo/json"
+			 ], function(lang, dateStamp, JSON) {
 	"use strict";
 
 	// module:

@@ -8,18 +8,15 @@
 //	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["../error/createError!../error/StoreErrors.json"], function (createError) {
+define(["../error/createError!../error/StoreErrors.json", 
+				"../shim/shims"
+			 ], function (createError) {
 
 	var StoreError = createError( "Library" );
-  var definable  = true;
+	var _toString  = Object.prototype.toString;
   var undef;
   
-	if (typeof Object.defineProperty != "function") {
-		definable = false;
-//		throw new Error("JavaScript 1.8.5. or higher required to run the Store module");
-	}	
-
-	var Library = {
+	var Lib = {
 
 		clone: function clone (object, strict) {
 			// html structured cloning algorithm. (no type map support)
@@ -28,9 +25,9 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 
 			function inMemory(memory, object) {
 				var obj;
-				memory.some( function(entry) {
-					if (entry.inObj === object) {
-						obj = entry.outObj;
+				memory.some( function(e) {
+					if (e.inObj === object) {
+						obj = e.outObj;
 						return true;
 					}
 				});
@@ -41,11 +38,10 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 				if (object === null || !(object instanceof Object)) {
 					return object;
 				}
-				if (obj = inMemory(memory,object)) {
+				if ( (obj = inMemory(memory,object)) ) {
 					return obj;
 				}
-				var type = {}.toString.call(object);
-				type = type.match(/\[\w+\s+(.*?)\]$/)[1];
+				var type = _toString.call(object).slice(8,-1);
 				switch (type) {
 					case "Object":
 					case "Array":
@@ -91,15 +87,7 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 		},
 
 		defProp: function (object, prop, desc) {
-			if (definable) {
-				// Can't have 'value' and getter or setter (compatibility mode only).
-				if (desc && "value" in desc && ("set" in desc || "get" in desc)) {
-					delete desc.value;
-				}
-				Object.defineProperty( object, prop, desc );
-			} else {
-				object[prop] = (desc && desc.value != undef) ? desc.value : undef;
-			}
+			Object.defineProperty( object, prop, desc );
 		},
 
 		enumerate: function (/*Object*/ object,/*String|String[]*/ property,/*Boolean*/ value ) {
@@ -107,47 +95,32 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			// object:
 			// property:
 			// value:
-			if (property instanceof Array) {
-				property.forEach( function (prop) {
-					this.enumerate( object, prop, value );
-				}, this);
-			} else if (/,/.test(property)) {
-				this.enumerate( object, property.split(/\s*,\s*/), value );
-			} else if (typeof object[property] == "function") {
-				Object.defineProperty( object, property, {value: object[property], enumerable:false});
-			} else {
-				this.defProp( object, property, {enumerable:value});
+			if (object && property) {
+				if (property instanceof Array) {
+					property.forEach( function (prop) {
+						this.enumerate( object, prop, value );
+					}, this);
+				} else if (/,/.test(property)) {
+					this.enumerate( object, property.split(/\s*,\s*/), value );
+				} else if (typeof object[property] == "function") {
+					Object.defineProperty( object, property, {value: object[property], enumerable:false});
+				} else {
+					this.defProp( object, property, {enumerable:!!value});
+				}
 			}
 		},
 
-		freeze: function (object) {
-			if (defineable) {
-				Object.freeze(object);
-			}
-		},
-
-		getObjectClass: function (object) {
-			// summary:
-			// object:
-			// tag:
-			//		Public
-			var strName = Object.prototype.toString.call(object);
-			var matches = strName.match(/\[object\s(\w+)\]/);
-			if (matches && matches.length == 2) {
-				return matches[1];
-			}
-		},
-
-		getProp: function (/*String*/ propPath,/*Object|Array*/ object ) {
+		getProp: function (propPath, object) {
 			// summary:
 			//		Return property value identified by a dot-separated property path
-			// propPath:
+			// propPath: String
 			//		A dot (.) separated property name like: feature.attribute.type
-			// object:
+			// object: (Object|Array)?
 			//		JavaScript object
 			// tag:
 			//		Private
-			if (this.isObject(object) || object instanceof Array || object === window) {
+			object = object || window;
+			if (Lib.isObject(object) || object instanceof Array || object === window) {
 				var segm = propPath.split(".");
 				var p, i = 0;
 
@@ -179,15 +152,48 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			return true;
 		},
 
-		isObject: function (object) {
+		isObject: function (obj) {
 			// summary:
 			//		Returns true if, and only if, an object is a JavaScript key:value
 			//		pairs object
-			return ({}.toString.call(object) == "[object Object]");
+			return (obj && _toString.call(obj).slice(8,-1) == "Object");
 		},
 
-		isString: function(item) {
-			return (typeof item == "string" || item instanceof String);
+		isString: function(obj) {
+			return (_toString.call(obj).slice(8,-1) == "String");
+		},
+
+		move: function (objAry, from, to, value) {
+			// summary:
+			//		Insert, relocate or delete an value in an array of objects
+			// objAry:
+			//		Array of objects
+			// from: Number
+			//		Array index number of the value to be moved. If 'from' equals -1
+			//		no value in the array is moved.
+			// to: Number
+			//		New array index number of the value. If 'to' equals -1 no value
+			//		is inserted into the array.
+			// value: any?
+			//		If specified, the value to be inserted into the array, otherwise
+			//		the value at the 'from' location is used.
+			// tag:
+			//		Public
+			var org, val = value;
+			if (val || from != to) {
+				if (from > -1) {
+					if ((org = objAry.splice(from,1)[0]) && !val) {
+						val = org;
+					}
+				}
+				if (val && to > -1) {
+					to = from > -1 ? (from < to ? --to : to) : to;
+					objAry.splice(to, 0, val);	// Insert new or updated value.
+				}
+			} else {
+				val = from > -1 ? objAry[from] : undef;
+			}
+			return val;
 		},
 
 		mixin: function (dest, objects) {
@@ -210,15 +216,16 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 //			this.enumerate( object, props, false );
 		},
 		
-		setProp: function (/*String*/ propPath,/*any*/ value, /*Object|Array*/ object ) {
+		setProp: function (propPath,/*any*/ value, object) {
 			// summary:
 			//		Set the property value
-			// propPath:
+			// propPath: String
 			//		A dot (.) separated property name like: feature.attribute.type
-			// object:
+			// object: (Object|Array)?
 			// value:
 			// tag:
 			//		Private
+			object = object || window;
 			if (this.isObject(object) || object instanceof Array || object === window) {
 				var segm = propPath.split(".");
 				var prop = segm.pop();
@@ -242,7 +249,7 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 			// property:
 			// value:
 
-			if (property) {
+			if (object && property) {
 				if (property instanceof Array) {
 					property.forEach( function (prop) {
 						this.writable( object, prop, value );
@@ -257,6 +264,6 @@ define(["../error/createError!../error/StoreErrors.json"], function (createError
 
 	};
 
-	return Library;
+	return Lib;
 	
 });

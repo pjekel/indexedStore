@@ -15,9 +15,11 @@ define(["dojo/_base/declare",
 				"../_base/KeyRange",
 				"../_base/Library",
 				"../error/createError!../error/StoreErrors.json",
+				"../listener/Listener",
 				"../listener/ListenerList"
 			 ], function (declare, Deferred, when, Keys, KeyRange, Lib, createError, 
-			               ListenerList) {
+			               Listener, ListenerList) {
+	"use strict";
 	
 	// module:
 	//		store/_base/Observer
@@ -40,9 +42,8 @@ define(["dojo/_base/declare",
 	//		QueryResults objects.
 	// example:
 	//	|	require(["store/_base/Observer",
-	//	|	          store/_base/Listener",
 	//	|	                 ...
-	//	|	        ], function (Observer, Listener, ... ) {
+	//	|	        ], function (Observer, ... ) {
 	//	|
 	//	|	  function bingo (object, from, into) {
 	//	|	    console.log( object.name+" was moved from: "+from+" to: "+to );
@@ -54,24 +55,26 @@ define(["dojo/_base/declare",
 	//	|	  observer.done( function () {
 	//	|	    observer = null;
 	//	|	  });
-	//	|	  var listener = new Listener( bingo, {updates: true} );
-	//	|	  var listHndl = observer.addListener( listener );
+	//	|	  var handle = observer.addListener( bingo, true );
 	//	|	                 ...
 	//	|	  var homer = store.get("Homer");
 	//	|	  homer.hair = "blond";
 	//	|	  store.put( homer );
 	//	|	                 ...
-	//	|	  listHndl.remove();	// Remove listener from the Observer.
+	//	|	  handle.remove();	// Remove listener from the Observer.
 	//	|	});
 	//
 	//	See the Observable extension for some implmentation examples.
 	
 	var StoreError = createError( "Observer" );		// Create the StoreError type.
 	var isObject   = Lib.isObject;
+	var isString   = Lib.isString;
+	var clone      = Lib.clone;
+	var move       = Lib.move;
 	var undef;
 	
-	var C_LISTENER = ["query", "range"];					// Types of Listeners
-	var C_QUERY = 0,															// QueryResult types
+	var C_TYPE  = ["query", "range"];					// Types of Listeners
+	var C_QUERY = 0,													// QueryResult types
 			C_RANGE = 1;
 
 	function locate (source, results, key) {
@@ -101,32 +104,10 @@ define(["dojo/_base/declare",
 		return -1;
 	}
 
-	function move (results, from, to, object) {
-		// summary:
-		//		Insert, relocate or delete an object in an array of objects.
-		// results: Object[]
-		//		An array of objects
-		// from: Number
-		//		If greater than -1 it indicates the current location of the object.
-		// to: Number
-		//		if greater than -1 it indicates the new location of the object.
-		// object: Object
-		//		The new object replacing the current object.
-		// tag:
-		//		Private
-		if (from > -1) {
-			results.splice(from,1);
-		}
-		if (to > -1) {
-			to = from > -1 ? (from < to ? --to : to) : to;
-			results.splice(to, 0, object);	// Insert new or updated object.
-		}
-	}
-
 	function Observer (source, results, range, directives, revision) {
 		// summary:
 		//		An Observer is an object capable of monitoring query or range results
-		//		of type dojo/store/util/QueryResults. IndexedStore methods that return
+		//		of type indexedStore/util/QueryResults. The store methods that return
 		//		a QueryResults object are: query() and getRange().
 		// source: Store|Index
 		// results: dojo.store.util.QueryResults
@@ -139,103 +120,35 @@ define(["dojo/_base/declare",
 		//		is considered a Store.QueryOptions object.
 		// revision: Number?
 		//		The store revision at the time the results (QueryResults) object
-		//		was created. If not specified the results object is checked for a
+		//		resolved. If not specified the results object is checked for the
 		//		revision property.
-		//		Note: the revision is not necessarily the current store revision.
 		// tag:
 		//		Private
 		"use strict";
 		
-		this.addListener = function (listener) {
+		function clear () {
 			// summary:
-			//		Add a listener to the Observer. Observers can have many listeners
-			//		but only one per callback therefore, adding multiple listeners
-			//		who have the same callback address has no effect.
-			// listener: Listener
-			//		Instance of a Listener object.
-			// returns: Object
-			//		An object with a remove() method. The remove() method is used to
-			//		remove the listener from the Observer.
-			// tag:
-			//		Public
-			
-			if (updater) {
-				callbacks.addListener( C_LISTENER[obsType], listener );
-				return {
-					remove: function () {
-						self.removeListener(listener);
-					}
-				}
-			} else {
-				throw new StoreError("InvalidState", "addListener", "Observer has been released");
-			}
-		};
-		
-		this.clear = function () {
-			// summary:
-			//		This method is called whenever the store at which the Observer is
-			//		registered is cleared. Clearing a store immediately renders every
-			//		Observer for that store out-of-date.
+			//		This method is called when the store associated with this Observer
+			//		is cleared or when the QueryResults object is out-of-date.
+			//		Clearing a store immediately renders all observers for that store
+			//		out-of-date.
 			// tag:
 			//		Private
 
-			// Remove the Observer callbacks from the store.
-			updater.remove();
-			cleaner.remove();
-
-			callbacks.clear();
-			updater  = null;
-			cleaner  = null;
-			revision = -1;
-
-			deferred.resolve();
+			self.destroy();
 		};
 		
-		this.done = function (callback) {
+		function update (action, key, newObj, oldObj, at) {
 			// summary:
-			//		Returns a promise which resolves as soon as the Observer is done,
-			//		that is, when the last registered listener has been removed.
-			// callback: Function?
-			//		Function called when the Observer is done (released).
-			// returns: dojo/promise/Promise
-			//		A dojo/promise/Promise which resolves assoon as the last listener
-			//		is removed from the Observer.
-			// tag:
-			//		Public
-			if (callback) {
-				if (typeof callback == "function") {
-					return deferred.then(callback);
-				} else {
-					throw new StoreError("TypeError", "done", "callback is not a callable object");
-				}
-			}
-			return deferred.promise;
-		}
-		
-		this.removeListener = function (listener) {
-			// summary:
-			//		Remove an existing listener from the Observer. After removing the
-			//		last registered listener the Observer is released.
-			// listener: Listener
-			//		Instance of a Listener object.
-			// tag:
-			//		Public
-			callbacks.remove( C_LISTENER[obsType],listener );
-			if (!callbacks.length) {
-				self.clear();
-			}
-		}
-		
-		this.update = function (action, listener, key, newObj, oldObj, at) {
-			// summary:
-			//		This method is called whenever the content of the store changed.
+			//		This method is called whenever the content of the store is updated,
+			//		that is, when the store performed a write or delete operations.
 			// action: String
-			// listener: Listener
+			//		Store operation performed, either "write" or "delete"
 			// key: Key
 			//		Object key
 			// newObj: Object
 			//		The new object, that is, the value portion of a record. If null it
-			//		indicates the record has been deleted from the store.
+			//		indicates a record has been deleted from the store.
 			// oldObj: Object
 			//		The old object, that is, the value portion of a record. If null it
 			//		indicates a new record was inserted into the store.
@@ -243,18 +156,27 @@ define(["dojo/_base/declare",
 			//		The store index number of the record containing newObj.
 			// tag:
 			//		Private, callback
-			return when( results, function (results) {
+
+			// Ignore update notifications until we have a revision number indicating
+			// the QueryResults has been resolved.
+			if (!revision) {
+				return;
+			}
+			when( results, function (dataset) {
 				if (++revision != store.revision) {
-					// Store updates were made prior to observing the query results.
-					self.clear();	// Cleanup
-					throw new StoreError("InvalidState", "update", "Query or range is out of date due to previous store changes");
+					// Store updates were made prior to observing the query or range results.
+					clear();	// Cleanup
+					var message = "Query or range is out of date due to previous store changes";
+					throw new StoreError("InvalidState", "update", message);
 				}
+				var object  = newObj || oldObj;
 				var added   = newObj && !oldObj;
 				var deleted = !newObj;
 
-				var count   = results.length;
-				var from    = (!added ? locate(store, results, key) : -1);
 				var atEnd   = true;
+				var count   = dataset.length;
+				var from    = !added ? locate(store, dataset, key) : -1;
+				var temp    = from;
 				var into    = -1;
 
 				if (!deleted) {
@@ -263,37 +185,46 @@ define(["dojo/_base/declare",
 						case C_QUERY:
 							var atEnd = count != options.count;
 							if (queryFnc) {
-								// First test if the new/updated object matches the query to being with.
-								// If so, go find it's new location in the results set.
-								if (matches ? matches(newObj) : queryFnc([newObj])) {
+								// First test if the new/updated object matches the query to being
+								// with. If so, go find it's new location in the results set.
+								if (matches ? matches(newObj) : queryFnc([newObj]).length) {
+									object = store._clone ? clone(newObj) : newObj;
 									if (from < 0) {
-										from = results.push(newObj) - 1;
+										temp = dataset.push(object) - 1;
 									} else {
-										results[from] = newObj;
+										dataset[from] = object;
 									}
-									into = locate(store, queryFnc(results), key );
+									into = locate(store, queryFnc(dataset), key );
 								}
 							} else {
 								// Store has no query engine !!!
-								into = added ? results.push(newObj) - 1 : from;
+								object = store._clone ? clone(newObj) : newObj;
+								into = added ? dataset.length : from;
+								if (into > -1) {
+									dataset[into] = object;
+								}
 							}
 							break;
 
 						case C_RANGE:
 							if (!index) {
-								// A range is based on object keys and because the primary key of an object
-								// can't change without deleting the object first only new objects can alter
-								// the range order.
-								if (added && Keys.inRange(key, range)) {
-									for(into = 0; into < count; into++) {
-										var match = Keys.cmp( key, store.getIndentity(results[into]) );
-										if ((ascending && match < 0) || (!ascending && match > 0)) {
-											break;
+								// A range is based on object keys and because the primary key of
+								// an object can't change without deleting the object first, only
+								// new objects can alter the range order.
+								if (Keys.inRange(key, range)) {
+									object = store._clone ? clone(newObj) : newObj;
+									if (added) {
+										for(into = 0; into < count; into++) {
+											var match = Keys.cmp( key, store.getIdentity(dataset[into]) );
+											if ((ascending && match < 0) || (!ascending && match > 0)) {
+												break;
+											}
 										}
+									} else {
+										// It's an update therefore no change in object order.
+										dataset[from] = object;
+										into = from;
 									}
-								} else {
-									// It's an update therefore no change in object order.
-									into = from;
 								}
 							} else {
 								// TODO: Needs additional work
@@ -306,25 +237,138 @@ define(["dojo/_base/declare",
 							break;
 					}
 				}
+				// Move object into the correct location. If results is paginated and
+				// the object was moved into the first or last position we assume it
+				// belongs to either the previous or next page.
 				if (from != into) {
-					if ( (options.start > 0 && into == 0) || (!atEnd && into == results.length)) {
-						results.splice(into, 1);
+					var increment = from == -1 ? 1 : (into == -1 ? -1 : 0);
+					if ( (options.start > 0 && into == 0) || (!atEnd && into == dataset.length)) {
+						dataset.splice(into, 1);
 						into = -1;
 					} else {
-						move( results, from, into, newObj );	// Insert, delete or relocate object.
+						move( dataset, temp, into, object );	// Insert, delete or relocate object.
 					}
+					// Update the total property. (results and dataset may be different
+					// objects so do both).
+					results.total = dataset.total = dataset.total + increment;
 				}
-				if (from > -1 || into > -1) {
-					// Notify any listeners.
-					var cbByType = callbacks.getByType( C_LISTENER[obsType] );
-					cbByType.forEach( function (listener) {
-						if (from != into || listener.options.updates) {
-							listener.callback.call( listener.scope, newObj, from, into);
+				if (listeners.length && (from > -1 || into > -1)) {
+					listeners.getByType( C_TYPE[obsType] ).forEach( function (lstn) {
+						if (from != into || lstn.updates) {
+							lstn.listener.call( lstn.scope, object, from, into);
 						}
 					});
 				}
 			});
+		}
+		
+		//=======================================================================
+		// Public methods
+
+		this.addListener = function (listener, includeUpdates, scope) {
+			// summary:
+			//		Add a listener to the Observer. Observers can have many listeners
+			//		but only one per callback therefore, adding multiple listeners
+			//		with the same callback address has no effect.
+			// listener: Listener|Function
+			//		Instance of a Listener object or a function.
+			// includeUpdates: Boolean?
+			//		If true, the listener will also be notified when an object that
+			//		is part of the results set has simply changed.
+			// scope: Object?
+			//		Object to use as 'this' when executing callback.
+			// returns: Object
+			//		An object with a remove() method. The remove() method is used to
+			//		remove the listener from the Observer.
+			// tag:
+			//		Public
 			
+			if (destroyed) {
+				throw new StoreError("InvalidState", "addListener", "Observer is destroyed");
+			}
+			if (listener instanceof Listener || listener instanceof Function) {
+				listener = new Listener( listener, scope );
+				listener.updates = !!includeUpdates;
+				listeners.addListener( C_TYPE[obsType], listener );
+				return {
+					remove: function () {
+						self.removeListener(listener);
+					}
+				}
+			}
+			throw new StoreError("TypeError", "addListener", "invalid listener type");
+		};
+		
+		this.destroy = function () {
+			// summary:
+			//		Destroy the Observer. The observer de-register from the store and
+			//		observer listeners are removed. After destroying the Observer no 
+			//		new listeners can be added.
+			// tag:
+			//		Public
+			listeners && listeners.destroy();
+			updater   && updater.remove();
+			cleaner   && cleaner.remove();
+			updater = cleaner = null;
+			// Observer is done, remove all listeners and release resources
+			listeners = null;
+			results   = null;
+			store     = null;
+			index     = null;
+			range     = null;
+			source    = null;
+			
+			destroyed = true;
+			deferred.resolve();
+		};
+		
+		this.done = function (callback) {
+			// summary:
+			//		Returns a promise which resolves as soon as the Observer is done,
+			//		that is, when the last registered listener has been removed.
+			// callback: Function?
+			//		Function called when the Observer is done (released).
+			// returns: dojo/promise/Promise
+			//		A dojo/promise/Promise which resolves as soon as the last listener
+			//		is removed from the Observer.
+			// tag:
+			//		Public
+			if (callback) {
+				if (typeof callback == "function") {
+					return deferred.then(callback);
+				} else {
+					throw new StoreError("TypeError", "done", "callback is not a callable object");
+				}
+			}
+			return deferred.promise;
+		}
+
+		this.getListeners = function () {
+			// summary:
+			//		Get the list of registered listeners.
+			// returns: Array|null
+			//		An array of Listeners or null if the Observer has been destroyed.
+			// tag:
+			//		Public
+			return listeners && listeners.getByType(C_TYPE[obsType]);
+		}
+		
+		this.removeListener = function (listener) {
+			// summary:
+			//		Remove an existing listener from the Observer. After removing the
+			//		last registered listener de-register the Observer from the store.
+			// listener: Listener
+			//		Instance of a Listener object.
+			// tag:
+			//		Public
+			if (listener instanceof Array) {
+				listener.forEach( this.removeListener, this );
+			} else {
+				listeners.removeListener( C_TYPE[obsType],listener );
+				if (!listeners.length) {
+					self.destroy();
+				}
+			}
 		}
 		
 		//=======================================================================
@@ -358,10 +402,11 @@ define(["dojo/_base/declare",
 			}
 			var direction = results.direction || directives || "next";
 			var ascending = /^next/.test(direction) || false;
+			var options   = {};
 		} else {
 			if (range == undef || isObject(range)) {
 				var options = directives || {};
-				var npOpts  = Lib.clone( options );
+				var npOpts  = clone( options );
 				npOpts.start = 0;
 				npOpts.count = 0;
 
@@ -372,22 +417,38 @@ define(["dojo/_base/declare",
 			}
 		}
 
-		// We must have a revision number somewhere....
-		if (revision == undef) {
-			if ("revision" in results && typeof results.revision == "number") {
-				revision = results.revision;
+		// We must have a revision number somewhere. A revision number greater than
+		// zero (0) is an indication the QueryResults has been resolved. Until then
+		// all observations for the QueryResults will be postponed.
+
+		if (!revision) {
+			if ("revision" in results) {
+				// Don't fetch the revision number until QueryResults resolves.
+				when (results, function () {
+					when (results.revision, function (revNum) {
+						if (typeof revNum == "number") {
+							revision = revNum;
+						} else {
+							throw new StoreError( "DataError", "constructor", "revision must be a number" );
+						}
+					});
+				});
 			} else {
-				throw new StoreError( "DataError", "constructor", "invalid or missing revision" );
+				throw new StoreError( "DataError", "constructor", "missing revision number" );
 			}
 		}
 
-		var callbacks = new ListenerList();
+		var listeners = new ListenerList();
 		var deferred  = new Deferred();
+		var destroyed = false;
 		var self      = this;
 		
+		Lib.defProp( this, "results", {	get: function () {return results;},	enumerable: true });
+
 		// Register observer callbacks with the store.
-		var updater = store._listeners.addListener( "write, delete", this.update, source );
-		var cleaner = store._listeners.addListener( "clear", this.clear, source );
+		var updater = store._register( "write, delete", update );
+		var cleaner = store._register( "clear", clear );
+
 	}
 	
 	return Observer;

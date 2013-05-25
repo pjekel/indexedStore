@@ -10,7 +10,7 @@
 
 define(["dojo/_base/lang", 
         "dojo/request",
-        "../util/shim/Array"      // ECMA-262 Array shim
+        "../shim/Array"      // ECMA-262 Array shim
        ], function(lang, request){
 	"use strict";
 

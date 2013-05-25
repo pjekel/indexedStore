@@ -8,13 +8,14 @@
 //	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define (["./_Path",
-				 "../error/createError!../error/StoreErrors.json"
-        ], function (Path, createError) {
+define (["../_base/Library",
+				 "../error/createError!../error/StoreErrors.json",
+         "./_Path"
+        ], function (Lib, createError, Path) {
 	"use strict";
 
-	var defineProperty = Object.defineProperty;
 	var StoreError = createError("PathList");		// Create the StoreError 
+	var defProp    = Lib.defProp;
 
 	function argsToPaths() {
 		// summary:
@@ -171,7 +172,7 @@ define (["./_Path",
 				var paths = argsToPaths.apply(this, arguments );
 				if (paths.length > 0) {
 					paths.forEach( function( item, idx ) {
-						Object.defineProperty( this, this.length+idx, {	value: item, enumerable: true, writable: false	});
+						defProp( this, this.length+idx, {	value: item, enumerable: true, writable: false	});
 						this.length++;
 					}, this);
 				}
@@ -195,11 +196,11 @@ define (["./_Path",
 			throw new StoreError("InvalidType", "some");
 		};
 
-		defineProperty( this, "length", { writable: true,  enumerable: false	});
-		defineProperty( this, "filter", { writable: false, enumerable: false	});
-		defineProperty( this, "forEach",{ writable: false, enumerable: false	});
-		defineProperty( this, "some",   { writable: false, enumerable: false	});
-		defineProperty( this, "push",   { writable: false, enumerable: false	});
+		defProp( this, "length", { writable: true,  enumerable: false	});
+		defProp( this, "filter", { writable: false, enumerable: false	});
+		defProp( this, "forEach",{ writable: false, enumerable: false	});
+		defProp( this, "some",   { writable: false, enumerable: false	});
+		defProp( this, "push",   { writable: false, enumerable: false	});
 
 		this.length = 0;
 		

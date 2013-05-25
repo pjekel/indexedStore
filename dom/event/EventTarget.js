@@ -8,15 +8,12 @@
 //	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["dojo/_base/lang",
-				"./EventDefaults",
-				"./Event",
-				"../../_base/Library",
-				"../../listener/Actions",
-				"../../listener/Listener",
+define(["../../_base/Library",
 				"../../listener/ListenerList",
-				"../../error/createError!../../error/StoreErrors.json"
-			], function (lang, EventDefaults, Event, Lib, Actions, Listener, ListenerList, createError) {
+				"../../error/createError!../../error/StoreErrors.json",
+				"./EventDefaults",
+				"./Event"
+			], function (Lib, ListenerList, createError, EventDefaults, Event) {
 	"use strict";
 
 	// module:
@@ -30,13 +27,8 @@ define(["dojo/_base/lang",
 	var StoreError = createError("EventTarget");		// Create the StoreError type.
 	var isString   = Lib.isString;
 	
-	var PROPERTY = "parentNode";
-	var NONE            = 0,
-			CAPTURING_PHASE = 1,
-			AT_TARGET       = 2,
-			BUBBLING_PHASE  = 3;
-
 	var nativeEvent = window.Event;
+	var PROPERTY = "parentNode";
 
 	function copyEvent( nativeEvent ) {
 		// summary:
@@ -90,7 +82,7 @@ define(["dojo/_base/lang",
 							// Make sure the event propagation is not interrupted and that any
 							// exceptions thrown inside a handler are caught here.
 							try {
-								var cb = l.callback || (l.scope || window)[l.bind];
+								var cb = l.listener || (l.scope || window)[l.bindName];
 								if (cb) {
 									cb.call( ct, e );
 								}
@@ -102,7 +94,7 @@ define(["dojo/_base/lang",
 					}
 				} catch (e) {
 					// Probably not an instance of EventTarget
-					console.error( err );
+					console.error( e );
 				} 
 			}
 		}
@@ -135,6 +127,7 @@ define(["dojo/_base/lang",
 		// tag:
 		//		Public
 
+		// Declare a ListenerList for each event phase..
 		var lists = {
 			bubbling: new ListenerList(),
 			capture: new ListenerList()
@@ -154,7 +147,7 @@ define(["dojo/_base/lang",
 			//		See indexedStore/listener/ListenerList.getByType()
 			// tag:
 			//		Public
-			var list = (phase == CAPTURING_PHASE) ? lists.capture : lists.bubbling;
+			var list = (phase == Event.CAPTURING_PHASE) ? lists.capture : lists.bubbling;
 			return list.getByType(type); 
 		}
 
@@ -243,7 +236,7 @@ define(["dojo/_base/lang",
 			//		Public
 
 			if (event instanceof Event && event.type) {
-				if (!event.dispatch && event.eventPhase == NONE) {		
+				if (!event.dispatch && event.eventPhase == Event.NONE) {		
 					var parent = this[PROPERTY];
 					var result = false;
 					var path   = [];
@@ -267,11 +260,11 @@ define(["dojo/_base/lang",
 						// If there is no propagation path simply fire the event at the
 						// target (e.g. 'this');
 						if (!path.length) {
-							propagate([this], AT_TARGET, event);
+							propagate([this], Event.AT_TARGET, event);
 						} else {
-							if (propagate(path, CAPTURING_PHASE, event)) {
-								if (propagate([this], AT_TARGET, event) && event.bubbles) {
-									propagate(path.reverse(), BUBBLING_PHASE, event);
+							if (propagate(path, Event.CAPTURING_PHASE, event)) {
+								if (propagate([this], Event.AT_TARGET, event) && event.bubbles) {
+									propagate(path.reverse(), Event.BUBBLING_PHASE, event);
 								}
 							}
 						}

@@ -11,15 +11,14 @@
 define(["../_base/Record",
 				"../_base/Library",
 				"../error/createError!../error/StoreErrors.json",
-				"./Sorter",
-				"./shim/Array"
+				"./Sorter"
 			 ], function(Record, Lib, createError, Sorter) {
 		"use strict";
 	// module:
 	//		store/util/QueryEngine
 
 	var StoreError  = createError("QueryEngine");		// Create the StoreError type.
-	var getObjClass = Lib.getObjectClass;
+	var getProp     = Lib.getProp;
 	
 	function anyOf(/*any*/ valueA, /*any[]*/ valueB, /*Boolean*/ ignoreCase ) {
 		// summary:
@@ -72,22 +71,6 @@ define(["../_base/Record",
 			return (valueA.indexOf(valueB) != -1);
 		}
 		return false;
-	}
-
-	function getProp (/*String*/ path,/*Object*/ object ) {
-		// summary:
-		//		Return property value identified by a dot-separated property path
-		// path:
-		//		Dot separated property path like: feature.attribute.type
-		// object:
-		//		JavaScript object
-		var segm = path.split(".");
-		var p, i = 0;
-
-		while(object && (p = segm[i++])) {
-			object = object[p];
-		}
-		return object;
 	}
 
 	function hasPropertyPath( query ) {

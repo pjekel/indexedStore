@@ -12,10 +12,9 @@ define(["dojo/_base/declare",
 				"../_base/Eventer",
 				"../_base/Keys",
 				"../_base/Library",
-				"../dom/event/Event",
 				"../error/createError!../error/StoreErrors.json",
 				"../listener/ListenerList"
-			 ], function (declare, Eventer, Keys, Lib, Event, createError, ListenerList) {
+			 ], function (declare, Eventer, Keys, Lib, createError, ListenerList) {
 	"use strict";
 	
 	// module:
@@ -24,19 +23,60 @@ define(["dojo/_base/declare",
 
 	var StoreError = createError( "Watch" );			// Create the StoreError type.
 	var isString   = Lib.isString;
+	var getProp    = Lib.getProp;
 	
+	function watchProperty (action, key, newObj, oldObj, at) {
+		// summary:
+		//		Test if any of the object properties being monitored have changed.
+		//		This method is called immediately after the store is updated.
+		// action: String
+		//		Store operation performed, always "write'
+		// key: Key
+		//		Object key
+		// newObj: Object
+		//		New object.
+		// oldObj: Object
+		//		Old object.
+		// at: Number
+		// tag:
+		//		Private, callback
+		
+		function test(store, prop, newObj, oldObj ) {
+			var newVal = getProp( prop, newObj );
+			var oldVal = getProp( prop, oldObj );
+			if (Keys.cmp(newVal, oldVal)) {
+				// Notify all listeners, if any.
+				store._spotters.trigger(prop, newObj, newVal, oldVal);
+				// Create a DOM4 style custom event.
+				if (store.eventable && !store.suppressEvents) {
+					var props = {	item: newObj,	property: prop,	newValue: newVal, oldValue: oldVal};
+					store._emit( "set", props, true );
+				}
+			}
+		};
+		
+		if (this._watchList.length && at != -1 && oldObj) {
+			this._watchList.forEach( function (prop) {
+				test(this, prop, newObj, oldObj);
+			}, this );
+		}
+	}
+
 	var Watch = declare( null, {
 
 		//=========================================================================
 		// constructor
 		
 		constructor: function (kwArgs) {
-			this._watchList = [];								// List of properties to watch for.
-			this._spotters  = new ListenerList();
+			this._spotters    = new ListenerList();
+			this._watchHandle = null;
+			this._watchList   = [];								// List of properties to watch for.
 			
-			// Add callback to the store.
-			this._listeners.addListener( "write", this._watchProperty, this );
-			if (this.eventer instanceof Eventer) {
+			// If this is an eventable store regsiter the 'set' event type creating
+			// the 'onSet' method.  Note: the Watch extension does not register any
+			// listener with the store until there is something to watch for.
+
+			if (this.eventable && this.eventer instanceof Eventer) {
 				this.eventer.registerEvent("set");
 			}
 			if (!this._clone) {
@@ -49,45 +89,6 @@ define(["dojo/_base/declare",
 		},
 
 		//=========================================================================
-		// Private methods
-
-		_watchProperty: function (action, key, newObj, oldObj, at) {
-			// summary:
-			//		Test if any of the object properties being monitored have changed.
-			//		This method is called immediately after the store is updated.
-			// action: String
-			// key: Key
-			//		Object key
-			// newObj: Object
-			//		New object.
-			// oldObj: Object
-			//		Old object.
-			// at: Number
-			// tag:
-			//		Private, callback
-			
-			function test(store, prop, newObj, oldObj ) {
-				var newVal = Lib.getProp( prop, newObj );
-				var oldVal = Lib.getProp( prop, oldObj );
-				if (Keys.cmp(newVal, oldVal)) {
-					// Notify all listeners.
-					store._spotters.trigger(prop, newObj, prop, newVal, oldVal);
-					// Create a DOM4 style custom event.
-					if (this.eventable && !store.suppressEvents) {
-						var props = {	item: newObj,	property: prop,	newValue: newVal, oldValue: oldVal};
-						this.emit( "set", props, true );
-					}
-				}
-			};
-			
-			if (this._watchList.length && at != -1 && oldObj) {
-				this._watchList.forEach( function (prop) {
-					test(this, prop, newObj, oldObj);
-				}, this );
-			}
-		},
-
-		//=========================================================================
 		// Public IndexedStore/api/store API methods
 
 		destroy: function () {
@@ -96,20 +97,22 @@ define(["dojo/_base/declare",
 			this._spotters  = null;
 		},
 		
-		watch: function (property, callback, thisArg) {
+		watch: function (property, listener, scope) {
 			// summary:
 			//		Add a property to the list properties being monitored for change.
 			//		If the specified property of an object changes a 'set' event will
-			//		be generated and, if specified, the callback is notified.
+			//		be generated and, if specified, the listener is notified.
 			// property: String|String[]
 			//		Property name or property path. A property path is dot-separated
 			//		string of identifiers like 'a.b.c'.
-			// callback: Function
-			//		Callback, if specified the callback is called when the property of
-			//		a store object changed. The signature of callback is as follows:
-			//			callback( object, property, newValue, oldValue ) 
-			//  thisArg: Object?
-			//		Object to use as this when executing the callback.
+			// listener: Function?
+			//		Callback, if specified the listener is called when the property of
+			//		a store object changed. The signature of listener is as follows:
+			//			listener( object, property, newValue, oldValue )
+			//		The listener argument is required if the store is not eventable.
+			//		(See indexedStore/extension/Eventable)
+			//  scope: Object?
+			//		Object to use as this when executing the listener.
 			// tag:
 			//		Public
 			var self = this;
@@ -117,83 +120,77 @@ define(["dojo/_base/declare",
 			if (property) {
 				// An array of properties...
 				if (property instanceof Array) {
-					var handles = property.map( function (prop) {
-						return this.watch(prop, callback);
-					}, this );
-					handles.remove = function () {
-						handles.forEach( function (handle) {
-							handle.remove();
-						});
-					};
-					return handles;
-				}
-				// Comma separated list of properties.
-				if (isString(property)) {
+					property.forEach( function (prop) {
+						this.watch( prop, listener );
+					}, this);
+				} else if (isString(property)) {
 					if (/,/.test(property)) {
-						return this.watch( property.split(/\s*,\s*/), callback );
+						return this.watch( property.split(/\s*,\s*/), listener );
 					}
-				}
-				// Single property.
-				if (Keys.validPath(property)) {
-					if (this._watchList.indexOf(property) == -1) {
-						this._watchList.push(property);
-					}
-					if (callback) {
-						this._spotters.addListener( property, callback, thisArg );
-					} else {
-						if (!this.eventable) {
-							throw new StoreError("ParameterMissing", "watch", "store is not eventable, callback required");
+					// Single property.
+					if (Keys.validPath(property)) {
+						if (this._watchList.indexOf(property) == -1) {
+							// register the listener with the store.
+							if (!this._watchHandle) {
+								this._watchHandle = this._register( "write", watchProperty, this );
+							}
+							this._watchList.push(property);
 						}
+						if (listener) {
+							this._spotters.addListener( property, listener, scope );
+						} else {
+							if (!this.eventable) {
+								throw new StoreError("ParameterMissing", "watch", "store is not eventable, listener required");
+							}
+						}
+					} else {
+						throw new StoreError("TypeError", "watch", "invalid property path");
 					}
 				} else {
 					throw new StoreError("TypeError", "watch", "invalid property");
 				}
 				return {
 					remove: function () {
-						self.unwatch( property, listener );
+						self.unwatch( property, listener, scope );
 					}
 				}
 			}
 		},
 
-		unwatch: function (property, callback) {
+		unwatch: function (property, listener, scope) {
 			// summary:
 			//		Remove a property name from the list of properties being monitored.
 			// property: String|String[]
 			//		Property name or property path.
-			// callback: Function|Listener
-			//		Function or a Listener object. If a callback is specified only the
-			//		specific callback is removed otherwise all available listeners for
+			// listener: Function|Listener
+			//		Function or a Listener object. If a listener is specified only the
+			//		specific listener is removed otherwise all available listeners for
 			//		the property are removed.
 			// tag:
 			//		Public
 			if (property) {
 				if (property instanceof Array) {
 					property.forEach( function(prop) {
-						this.unwatch(prop, callback);
+						this.unwatch(prop, listener, scope);
 					}, this);
 					return;
 				}
 				if (isString(property)) {
 					if (/,/.test(property)) {
-						return this.unwatch( property.split(/\s*,\s*/), callback );
+						return this.unwatch( property.split(/\s*,\s*/), listener, scope );
 					}
 				}
 				if (Keys.validPath(property)) {
-					var spotters = this._spotters.getByType(property);
-					var remProp  = true;
-					if (spotters.length) {
-						if (callback) {
-							this._spotters.removeListener( property, callback);
-						} else {
-							this._spotters.clear(property);
-						}
-						remProp = !this._spotters.getByType(property).length;
-					}
-					if (remProp) {
+					this._spotters.removeListener(property, listener, scope);
+					if (!this._spotters.getByType(property).length) {
 						var index = Keys.indexOf(this._watchList, property);
 						if ( index > -1) {
 							this._watchList.splice(index,1);
+							if (!this._watchList.length) {
+								// Unregister from the store...
+								this._watchHandle.remove();
+								this._watchHandle = null;
+							}
 						}
 					}
 				} else {

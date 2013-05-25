@@ -176,7 +176,7 @@ define(["dojo/_base/lang",
 						value  = record.value;
 						keyIdx = Keys.indexOf(value, primaryKey);
 						if (keyIdx == -1) {
-							for (keyIdx = 0; keyIdx < value.length && Keys.cmp(primaryKey, value[keyIdx]) > 0; keyIdx++);
+							for (keyIdx = 0; keyIdx < value.length && Keys.cmp(primaryKey, value[keyIdx]) > 0; keyIdx++) {}
 						} else {
 							keyIdx++;
 						}
@@ -231,7 +231,7 @@ define(["dojo/_base/lang",
 						var idx = Keys.indexOf(value, primaryKey);
 
 						if (idx == -1) {
-							for (idx = value.length-1; idx >= 0 && Keys.cmp(primaryKey, value[idx]) < 0; idx--);
+							for (idx = value.length-1; idx >= 0 && Keys.cmp(primaryKey, value[idx]) < 0; idx--) {}
 						} else {
 							idx--;
 						}

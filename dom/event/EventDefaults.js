@@ -9,7 +9,7 @@
 //
 
 define(["../../_base/Library",
-				"../../listener/Actions",
+				"../../listener/Actions"
 			], function (Lib, Actions) {
 	"use strict";
 
@@ -42,7 +42,7 @@ define(["../../_base/Library",
 	//	|	  store.put( {name:"Homer", lastname:"Simpson"} );
 	//	|	});
 	
-	var DEFAULT_ACTIONS = "dojo.indexedStore.event.EventDefaults"
+	var DEFAULT_ACTIONS = "indexedStore.event.EventDefaults"
 
 	var defaultActions = Lib.getProp( DEFAULT_ACTIONS, window );
 	if (!defaultActions) {

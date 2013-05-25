@@ -1,11 +1,10 @@
-define(["dojo/_base/lang",
-				"dojo/Deferred",
+define(["dojo/Deferred",
 				"dojo/request",
 				"dojo/request/handlers",
 				"./Library",
 				"../error/createError!../error/StoreErrors.json",
 				"../util/QueryEngine"
-			 ], function (lang, Deferred, request, handlers, Lib, createError, QueryEngine) {
+			 ], function (Deferred, request, handlers, Lib, createError, QueryEngine) {
 
 	// module
 	//		indexedStore/_base/LoaderPlus
@@ -27,6 +26,7 @@ define(["dojo/_base/lang",
 	var StoreError = createError("Loader");		// Create the StoreError type.
 	var isObject   = Lib.isObject;
 	var clone      = Lib.clone;
+	var mixin      = Lib.mixin;
 	
 	var LoadDirectives = { 
 		// data: Array
@@ -136,7 +136,7 @@ define(["dojo/_base/lang",
 					}
 				}
 				try {
-					store._listeners.trigger("loadStart");
+					store._trigger("loadStart");
 					if (options.url) {
 						store._clone = false;
 					}
@@ -185,7 +185,7 @@ define(["dojo/_base/lang",
 			// tag:
 			//		private
 			if (!defer.isFulfilled()) {
-				store._listeners.trigger("loadFailed");
+				store._trigger("loadFailed");
 				defer.reject(err);
 			}
 			defer.error  = err;
@@ -282,7 +282,8 @@ define(["dojo/_base/lang",
 			// tag:
 			//		private
 			if (!defer.abort) {
-				store._listeners.trigger("loadEnd");
+				loader.count++;
+				store._trigger("loadEnd");
 				loadProgress(100, 100, defer);
 				defer.resolve(store);
 				loadNext();
@@ -346,10 +347,10 @@ define(["dojo/_base/lang",
 			if (options && !isObject(options)) {
 				throw new StoreError( "DataError", "load", "options argument is not an object");
 			}
-			var options = lang.mixin( clone(LoadDirectives), options );
+			var options = mixin( clone(LoadDirectives), options );
 			var ldrDef  = new Deferred( function (reason) {
 				if (ldrDef == active) {
-					store._listeners.trigger("loadCancel");
+					store._trigger("loadCancel");
 					ldrDef.error = reason;
 					ldrDef.abort = true;
 					loadNext();
@@ -406,12 +407,12 @@ define(["dojo/_base/lang",
 						break;
 				}
 				if (handler) {
-					handlers.register(type, (closure ? lang.hitch(closure, handler) : handler));
+					handlers.register(type, handler.bind(closure));
 					if (closure && options) {
 						if (setter) {
 							setter.call(closure, options);
 						} else {
-							lang.mixin(closure, options);
+							mixin(closure, options);
 						}
 					}
 					return closure || handler;
@@ -424,6 +425,7 @@ define(["dojo/_base/lang",
 		// Public properties
 		this.loading = false;
 		this.error   = null;
+		this.count   = 0;
 
 		// Private properties
 		var active = null;
@@ -436,7 +438,7 @@ define(["dojo/_base/lang",
 		// Register callbacks with the store. Whenever a store is closed or cleared
 		// the active and all pending load requests, if any, are canceled.
 		
-		store._listeners.addListener("close, clear", function () {
+		store._register("close, clear", function () {
 				var message = "load request was canceled due to a store clear or close operation"
 				var reason  = new StoreError( "RequestCancel", "cancel", message);
 				loader.cancel(reason);

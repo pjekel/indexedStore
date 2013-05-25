@@ -46,11 +46,11 @@ define(["dojo/_base/declare",
 	//	|	require(["dojo/_base/declare",
 	//	|	         "store/_base/_Store",
 	//	|	         "store/_base/_Natural",
-	//	|	         "store/_base/KeyRange",
-	//	|	         "store/extension/Loader"
-	//	|	        ], function (declare, _Store, _Natural, KeyRange, Loader) {
+	//	|	         "store/_base/_Loader",
+	//	|	         "store/_base/KeyRange"
+	//	|	        ], function (declare, _Store, _Natural, _Loader, KeyRange) {
 	//	|
-	//	|	  var store = declare([_Store, _Natural, Loader]);
+	//	|	  var store = declare([ _Store, _Natural, _Loader]);
 	//	|	  var myStore = new store( {url:"../data/Simpsons.json", keyPath:"name"} );
 	//	|	                       ...
 	//	|   var index  = store.createIndex("names", "name", {unique:true});
@@ -74,7 +74,7 @@ define(["dojo/_base/declare",
 	var clone      = Lib.clone;											// HTML5 structured clone.
 	var undef;
 	
-	var _Natural = {
+	var _Natural = declare (null, {
 
 		//===================================================================
 		// Constructor
@@ -182,11 +182,10 @@ define(["dojo/_base/declare",
 
 				this.total = this._records.length;
 				this.revision++;
-				
-				this._listeners.trigger("delete", key, null, value, recNum );
 
+				this._trigger("delete", key, null, value, recNum );
 				if (this.eventable && !this.suppressEvents) {
-					this.emit("delete", {item: value, at:-1, from:recNum}, true);
+					this._emit("delete", {item: value, at:-1, from:recNum}, true);
 				}
 			}
 			return false;
@@ -404,14 +403,14 @@ define(["dojo/_base/declare",
 			this.revision++;
 			
 			// Check if any extension added a callback.
-			this._listeners.trigger("write", keyVal, value, curVal, at, options );
+			this._trigger("write", keyVal, value, curVal, at, options );
 
 			// Next, Event handling ....
 			if (this.eventable && !this.suppressEvents) {
 				if (curRec) {
-					this.emit( "change", {item: value, oldItem: curVal, at: location.at}, true);
+					this._emit( "change", {item: value, oldItem: curVal, at: location.at}, true);
 				} else {
-					this.emit( "new", {item: value, at: location.at}, true);
+					this._emit( "new", {item: value, at: location.at}, true);
 				}
 			}
 			return keyVal;
@@ -447,8 +446,8 @@ define(["dojo/_base/declare",
 			return "[object Natural]";
 		}
 
-	};	/* end _Natural {} */
+	});	/* end declare() */
 
-	return declare( [], _Natural );
+	return _Natural;
 
 });

@@ -8,8 +8,7 @@
 //	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["dojo/_base/lang",
-				"dojo/Deferred",
+define(["dojo/Deferred",
 				"dojo/when",
 			  "./Cursor",
 			  "./Keys",
@@ -18,10 +17,9 @@ define(["dojo/_base/lang",
 				"./Range",
 			  "./Record",
 				"../error/createError!../error/StoreErrors.json",
-				"../util/QueryEngine",
 				"../util/QueryResults"
-			 ], function (lang, Deferred, when, Cursor, Keys, KeyRange, Lib, Range, Record, 
-			               createError, QueryEngine, QueryResults) {
+			 ], function (Deferred, when, Cursor, Keys, KeyRange, Lib, Range, Record, 
+			               createError, QueryResults) {
 	"use strict";
 
 	//module:
@@ -37,6 +35,7 @@ define(["dojo/_base/lang",
 	var StoreError = createError( "Index" );		// Create the StoreError type.
 	var isObject = Lib.isObject;
 	var clone    = Lib.clone;
+	var mixin    = Lib.mixin;
 	var undef;
 	
 	var debug = dojo.config.isDebug || false;
@@ -162,6 +161,8 @@ define(["dojo/_base/lang",
 						sortDuplicates( this );
 					}
 					break;
+				default:
+					throw new StoreError("DataError", "onStoreLoad", "unknown operation: [%{0}]", type);
 			}
 		}
 
@@ -629,16 +630,15 @@ define(["dojo/_base/lang",
 			//		Function called when a condition was detected preventing the store
 			//		from getting ready.
 			// scope: Object?
-			//		The scope/closure in which callback and errback are executed. If
-			//		not specified the store is used.
+			//		The scope/closure in which callback and errback are executed.
 			// returns: dojo/promise/Promise
 			//		dojo/promise/Promise
 			// tag:
 			//		Public
 			if (callback || errback) {
 				this._indexReady.then(
-					callback ? lang.hitch( (scope || this), callback) : null, 
-					errback  ? lang.hitch( (scope || this), errback)  : null
+					callback ? callback.bind(scope) : null, 
+					errback  ? errback.bind(scope)  : null
 				);
 			}
 			return this._indexReady.promise;
@@ -647,7 +647,7 @@ define(["dojo/_base/lang",
 		//=========================================================================
 
 		if (typeof name === "string" && keyPath && store) {
-			var indexOptions = lang.mixin( Lib.clone(IDBIndexOptions), optionalParameters || {});
+			var indexOptions = mixin( clone(IDBIndexOptions), optionalParameters || {});
 			// If keyPath is and Array and the multiEntry property is true throw an
 			// exception of type NotSupportedError.
 			if (keyPath instanceof Array && !!indexOptions.multiEntry) {
@@ -665,7 +665,6 @@ define(["dojo/_base/lang",
 			this.keyPath     = keyPath;
 			this.store       = store;
 			this.type        = "index";
-			this.queryEngine = QueryEngine;
 
 			Lib.writable( this, "keyPath, name, store, type, uppercase, multiEntry, unique", false );
 			Lib.protect( this );
@@ -674,7 +673,7 @@ define(["dojo/_base/lang",
 			var index = this;
 
 			// Register callbacks with the store.
-			store._listeners.addListener( "loadStart, loadCancel, loadEnd, loadFailed", onStoreLoad, this );
+			store._register( "loadStart, loadCancel, loadEnd, loadFailed", onStoreLoad, this );
 
 			if (async) {
 				setTimeout( function () {

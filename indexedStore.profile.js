@@ -1,8 +1,8 @@
-var testResourceRe = /^indexedStore\/tests\//;
-var excludePath = [ /^indexedStore\/((.*)?\/)?tests\//,
-									  /^indexedStore\/((.*)?\/)?demos\//,
-									  /^indexedStore\/((.*)?\/)?json\//,
-									  /^indexedStore\/((.*)?\/)?csv\//
+var testResourceRe = /^store\/tests\//;
+var excludePath = [ /^store\/((.*)?\/)?tests\//,
+									  /^store\/((.*)?\/)?demos\//,
+									  /^store\/((.*)?\/)?json\//,
+									  /^store\/((.*)?\/)?csv\//
 									 ];
 var copyOnly = function(filename, mid) {
 	var list = {
@@ -40,19 +40,26 @@ var profile = {
 		"store/indexedStore": {
 			include: [
 				"store/_base/_Indexed",
+				"store/_base/_Loader",
 				"store/_base/_Natural",
 				"store/_base/_Store",
 				"store/_base/Cursor",
+				"store/_base/Eventer",
 				"store/_base/FeatureList",
 				"store/_base/Index",
 				"store/_base/KeyRange",
 				"store/_base/Keys",
 				"store/_base/Library",
+				"store/_base/LoaderBase",
+				"store/_base/LoaderPlus",
+				"store/_base/Location",
+				"store/_base/Observer",
+				"store/_base/Range",
 				"store/_base/Record",
 				"store/_base/Transaction",
 				"store/_base/TransactionMgr",
 				"store/dom/event/Event",
-				"store/dom/event/EventDefault",
+				"store/dom/event/EventDefaults",
 				"store/dom/event/EventTarget",
 				"store/dom/string/DOMStringList",
 				"store/error/createError",
@@ -60,14 +67,20 @@ var profile = {
 				"store/extension/_PathList",
 				"store/extension/Ancestry",
 				"store/extension/CORS",
+				"store/extension/Eventable",
 				"store/extension/Hierarchy",
-				"store/extension/Loader",
 				"store/extension/Observable",
 				"store/extension/Watch",
-				"store/handler/csvHandler",
-				"store/handler/ifrsHandler",
-				"store/util/shim/Array",
-				"store/util/QueryEngine"
+				"store/listener/Actions",
+				"store/listener/Listener",
+				"store/listener/ListenerList",
+				"store/shim/Array",
+				"store/shim/Date",
+				"store/shim/Object",
+				"store/shim/shims",
+				"store/util/QueryEngine",
+				"store/util/QueryResults",
+				"store/util/Sorter"
 			]
 		}
 	},

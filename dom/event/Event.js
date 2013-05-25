@@ -9,8 +9,7 @@
 //
 
 define(["../../_base/Library",
-				"../../error/createError!../../error/StoreErrors.json",
-				"../../util/shim/Date"		// Date.now()
+				"../../error/createError!../../error/StoreErrors.json"
 			 ], function(Lib, createError){
 	"use strict";
 	
@@ -30,11 +29,6 @@ define(["../../_base/Library",
 	var isString = Lib.isString;
 	var mixin    = Lib.mixin; 
 	
-	var NONE            = 0,
-			CAPTURING_PHASE = 1,
-			AT_TARGET       = 2,
-			BUBBLING_PHASE  = 3;
-
 	function setEventType( event, type ) {
 		// summary:
 		//		Validate and set the event type.
@@ -69,9 +63,9 @@ define(["../../_base/Library",
 		this.target           = null;
 		this.bubbles          = false;
 		this.cancelable       = false;
-		this.timeStamp        = Date.now();
-		this.eventPhase       = NONE;
+		this.eventPhase       = Event.NONE;
 		this.isTrusted        = false;				// False by default...
+		this.timeStamp        = Date.now();
 		this.type             = "";
 		this.defaultPrevented = false;
 
@@ -100,7 +94,7 @@ define(["../../_base/Library",
 				}
 				this.currentTarget    = null;
 				this.defaultPrevented = false;
-				this.eventPhase       = NONE;
+				this.eventPhase       = Event.NONE;
 				this.stopDeferred     = false;
 				this.stopImmediate    = false;
 				this.stopPropagate    = false;
@@ -154,6 +148,12 @@ define(["../../_base/Library",
 			Lib.writable( this, "isTrusted, timeStamp", false );
 		}
 	}
+
+	// Event phases...
+	Event.NONE            = 0;
+	Event.CAPTURING_PHASE = 1;
+	Event.AT_TARGET       = 2;
+	Event.BUBBLING_PHASE  = 3;
 	
 	return Event;
 });

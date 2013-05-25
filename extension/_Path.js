@@ -8,11 +8,13 @@
 //	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define (["../error/createError!../error/StoreErrors.json"], function (createError) {
+define (["../_base/Library",
+         "../error/createError!../error/StoreErrors.json"
+        ], function (Lib, createError) {
 	"use strict";
 
-	var defineProperty = Object.defineProperty;
 	var StoreError = createError("Path");		// Create the StoreError 
+	var defProp    = Lib.defProp;
 
 	function intersect(pathA, pathB, inclusive) {
 		var a = pathA.segments();
@@ -64,8 +66,8 @@ define (["../error/createError!../error/StoreErrors.json"], function (createErro
 			return segments.slice(0);
 		};
 
-		defineProperty( this, "string", { value: path, enumerable: true, writable: false	});
-		defineProperty( this, "length", { value: segments.length, enumerable: false});
+		defProp( this, "string", { value: path, enumerable: true, writable: false	});
+		defProp( this, "length", { value: segments.length, enumerable: false});
 	}
 
 	return Path;

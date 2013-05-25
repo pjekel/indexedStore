@@ -14,7 +14,7 @@ define(["dojo/_base/declare",
 		// summary:
 		// source: EventTarget
 		// type: type
-		var listeners = source._getEventListener(type);
+		var listeners = source.getEventListeners(type);
 		if (listeners) {
 			listeners.forEach( function (listener) {
 				source.removeEventListener( type, listener );
@@ -32,26 +32,25 @@ define(["dojo/_base/declare",
 			// type: String
 			// tag:
 			//		Public
-			if (isString(type)) {
+			if (type instanceof Array) {
+				type.forEach( function (type) {
+					this.registerEvent(type);
+				}, this);
+			} else if (isString(type)) {
 				if (/,/.test(type)) {
-					type = type.split(/\s*,\s*/);
-				}
-				if (type instanceof Array) {
-					type.forEach( function (type) {
-						this.registerEvent(type);
-					}, this);
+					this.registerEvent(type.split(/\s*,\s*/));
 				} else {
 					var prop = "on" + type.toLowerCase();
 					Lib.defProp( source, prop, {
 						get: function () {
 									 var listener = source.getEventListeners(type)[0];
 									 if (listener) {
-										 return listener.callback;
+										 return listener.listener;
 									 }
 								 },
 						set: function (callback) {
 									 if (callback !== null) {
-										 if (typeof callback == "function") {
+										 if (callback instanceof Function) {
 											 source.addEventListener( type, callback );
 										 } else {
 											 throw new StoreError("TypeError", "register", "callback is not a callable object");
@@ -71,14 +70,14 @@ define(["dojo/_base/declare",
 			}
 		};
 
-		this.emit = function (type, properties, custom) {
+		this._emit = function (type, properties, custom) {
 			// summary:
 			// type: String
 			// properties: Object?
 			// custom: Boolean?
 			// tag:
 			//		Public
-			if (type && typeof type == "string") {
+			if (type && isString(type)) {
 				if (!source.suppressEvents) {
 					if (custom) {
 						var custProp = properties;
@@ -102,7 +101,9 @@ define(["dojo/_base/declare",
 		}
 
 		if (source instanceof EventTarget) {
-			this.registerEvent(types);
+			if (types) {
+				this.registerEvent(types);
+			}
 		} else {
 			throw new StoreError( "DataError", "constructor", "source must be an instance of EventTarget");
 		}

@@ -9,12 +9,12 @@
 //
 
 define(["dojo/_base/declare",
-				"../_base/Cursor",
-				"../_base/Keys",
-				"../_base/KeyRange",
-				"../_base/Library",
-				"../_base/Location",
-				"../_base/Record",
+				"./Cursor",
+				"./Keys",
+				"./KeyRange",
+				"./Library",
+				"./Location",
+				"./Record",
 				"../error/createError!../error/StoreErrors.json"
 			 ], function (declare, Cursor, Keys, KeyRange, Lib, Location, Record,
 										 createError) {
@@ -44,9 +44,9 @@ define(["dojo/_base/declare",
 	//	|	require(["dojo/_base/declare",
 	//	|	         "store/_base/_Store",
 	//	|	         "store/_base/_Indexed",
-	//	|	         "store/_base/KeyRange",
-	//	|	         "store/extension/Loader"
-	//	|	        ], function (declare, _Store, _Indexed, KeyRange, Loader) {
+	//	|	         "store/_base/_Loader",
+	//	|          "store/_base/KeyRange"
+	//	|	        ], function (declare, _Store, _Indexed, _Loader, KeyRange) {
 	//	|
 	//	|	  var store = declare([_Store, _Indexed, Loader]);
 	//	|	  var myStore = new store( {url:"../data/Simpsons.json", keyPath:"name"} );
@@ -64,7 +64,7 @@ define(["dojo/_base/declare",
 	var clone      = Lib.clone;										// HTML5 structured clone.
 	var undef;
 	
-	var _Indexed = {
+	var _Indexed = declare (null, {
 
 		//===================================================================
 		// Constructor
@@ -155,10 +155,10 @@ define(["dojo/_base/declare",
 				this.total = this._records.length;
 				this.revision++;
 				
-				this._listeners.trigger("delete", key, null, value, recNum );
+				this._trigger("delete", key, null, value, recNum );
 
 				if (this.eventable && !this.suppressEvents) {
-					this.emit( "delete", {item: value}, true );
+					this._emit( "delete", {item: value}, true );
 				}
 			}
 			return false;
@@ -289,14 +289,14 @@ define(["dojo/_base/declare",
 			this.revision++;
 			
 			// Check if any extension added a callback.
-			this._listeners.trigger("write", keyVal, value, curVal, at, options );
+			this._trigger("write", keyVal, value, curVal, at, options );
 
 			// Next, event handling ....
 			if (this.eventable && !this.suppressEvents) {
 				if (curRec) {
-					this.emit( "change", {item: value, oldItem: curVal}, true);
+					this._emit( "change", {item: value, oldItem: curVal}, true);
 				} else {
-					this.emit( "new", {item: value}, true);
+					this._emit( "new", {item: value}, true);
 				}
 			}
 			return keyVal;
@@ -367,8 +367,8 @@ define(["dojo/_base/declare",
 			return "[object Indexed]";
 		}
 
-	};	/* end _Indexed {} */
+	});	/* end declare() */
 	
-	return declare( [], _Indexed );
+	return _Indexed;
 
 });

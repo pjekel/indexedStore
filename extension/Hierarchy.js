@@ -65,7 +65,7 @@ define(["dojo/_base/declare",
 
 				this.features.add("hierarchy");
 			} else {
-				throw new StoreError( "MethodMissing", "constructor", "base class '_Natural' or '_Indexed' must be loaded first");
+				throw new StoreError( "Dependency", "constructor", "base class '_Natural' or '_Indexed' must be loaded first");
 			}
 		},
 		

@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Listeners</title>
+    <style type="text/css">
+      @import "../../dijit/themes/claro/claro.css";
+      @import "../../dijit/themes/claro/document.css";
+      @import "../../dijit/tests/css/dijitTests.css";
+    </style>
+
+    <script type="text/javascript">
+      var dojoConfig = {
+            async: true,
+            parseOnLoad: true,
+            isDebug: true,
+            baseUrl: "../../",
+            packages: [
+              { name: "dojo", location: "dojo" },
+              { name: "doh",  location: "util/doh" },
+              { name: "store",location: "indexedStore" }
+            ]
+      };
+    </script>
+
+    <script type="text/javascript" src="../../dojo/dojo.js"></script>
+    <script type="text/javascript">
+
+			// Run the listener tests before store tests as most other store functions
+			// rely on listener functionality. If any of the listener tests fail it is
+			// likely store tests will fail too....
+
+      require([
+        "doh/runner",
+        "dojo/ready",
+        "store/_base/Library",
+        "store/listener/Actions",
+        "store/listener/Listener",
+        "store/listener/ListenerList"
+        ], function( doh, ready,	Lib, Actions, Listener, ListenerList ) {
+					"use strict";
+
+					var triggers = {};
+					var before   = 0;
+					var after    = 0;
+					var undef;
+					
+					var scope    = {
+						Listener: Listener,
+						ListenerList: ListenerList
+					};
+
+					var someObj = {
+						lstn0: function lstn0 (type) {
+							triggers[type] = triggers[type] ? triggers[type] + 1 : 1;
+						},
+						lstn1: function lstn1 (type) {
+							triggers[type] = triggers[type] ? triggers[type] + 1 : 1;
+						},
+						lstn2: function lstn2 (type) {
+							triggers[type] = triggers[type] ? triggers[type] + 1 : 1;
+						},
+						lstn3: function lstn3 (type) {
+							triggers[type] = triggers[type] ? triggers[type] + 1 : 1;
+						}
+					}
+					var listener0 = someObj.lstn0;
+					var listener1 = someObj.lstn1;
+					var listener2 = someObj.lstn2;
+					var listener3 = someObj.lstn3;
+					
+					doh.register("basic listeners", [
+						{
+							name: "validate listener declarations",
+							runTest:function (t) {
+								// Listener( ... ) and new Listener( ... ) should both a new instance.
+								t.is( undef, new Listener().listener );
+								t.is( new Listener(listener0).listener, Listener(listener0).listener ); 
+
+								// Late binding without a scope
+								var lstn = new Listener("bingo");
+								t.is( undef, lstn.listener );
+								t.is( undef, lstn.scope );
+								t.is( undef, lstn.args );
+								t.is( "bingo", lstn.bindName );
+
+								// Late binding with a scope
+								var lstn = new Listener("lstn0", someObj);
+								t.is( undef, lstn.listener );
+								t.is( someObj, lstn.scope );
+								t.is( undef, lstn.args );
+								t.is( "lstn0", lstn.bindName );
+
+								// Preserve additional arguments
+								var lstn = new Listener(listener0, null, 1,2);
+								t.is( listener0, lstn.listener );
+								t.is( undef, lstn.bindName );
+								t.is( undef, lstn.scope );
+								t.t (lstn.args instanceof Array);
+								t.is( 2, lstn.args.length );
+
+								// Late binding with a scope and optional arguments
+								var lstn = new Listener("lstn0", someObj, 1,2);
+								t.is( undef, lstn.listener );
+								t.is( "lstn0", lstn.bindName );
+								t.is( someObj, lstn.scope );
+								t.t (lstn.args instanceof Array);
+								t.is( 2, lstn.args.length );
+
+								// Pass a number and an object as the callback
+								t.e( Error, scope, "Listener", [1] );
+								t.e( Error, scope, "Listener", [someObj] );
+							}
+						},
+
+						{
+							name: "validate ListenerList declarations",
+							runTest:function (t) {
+								// Create an empty listener list.
+								var list = new ListenerList();
+								t.t( list instanceof ListenerList);
+								t.is( 0, list.length );
+								t.is( undef, list.actions );
+
+								// Create an empty listener list with default actions.
+								var actions = new Actions()
+								var list = new ListenerList(actions);
+								t.t( list instanceof ListenerList);
+								t.t( list.actions instanceof Actions );
+								t.is( 0, list.length );
+
+								// Create an listener list with invalid actions.
+								t.e (Error, scope, "ListenerList", ["hello"]);
+							}
+						},
+						
+						{
+							name: "Add listeners to ListenerList",
+							runTest:function (t) {
+
+								// Create an empty listener list.
+								var list = new ListenerList();
+								t.t( list instanceof ListenerList);
+								t.is( 0, list.length );
+								t.is( undef, list.actions );
+
+								// Add a listener, test the returned handle and remove listener
+								var lstn   = new Listener( listener0 );
+								var handle = list.addListener( "type", lstn );
+								t.t( Lib.isObject(handle) && typeof handle.remove == "function");
+								t.is( 1, list.length );
+								handle.remove();
+								t.is( 0, list.length );
+
+								// try adding the same listener and type twice
+								list.addListener( "type", lstn );
+								list.addListener( "type", lstn );
+								t.is( 1, list.length );
+								// try adding the same listener using a different type.
+								list.addListener( "type2", lstn );
+								t.is( 2, list.length );
+								
+								// remove all listeners regardless of type
+								list.removeListener();
+								t.is( 0, list.length );
+
+								// try adding the same listener with different types.
+								var h0 = list.addListener( "type0", lstn );
+								var h1 = list.addListener( "type1", lstn );
+								var h2 = list.addListener( "type2", lstn );
+								t.is( 3, list.length );
+
+								// Get all types, should return an [object Object] with 3 keys
+								var all = list.getByType();
+								t.t( Lib.isObject(all) );
+								t.is(3, Object.keys(all).length);
+
+								for(var key in all) {
+									t.is(1, all[key].length);
+								}
+
+								// Get specific type, should return an array.
+								var type1 = list.getByType("type1");
+								t.t( type1 instanceof Array);
+								t.is(1, type1.length);
+								
+								// remove specific listener by it's handle...
+								h1.remove();
+								
+								t.is( 2, list.length );
+								
+								t.is(1, list.getByType("type0").length );
+								t.is(0, list.getByType("type1").length );
+								t.is(1, list.getByType("type2").length );
+								
+								// remove all remaining listeners regardless of type
+								list.removeListener();
+								t.is( 0, list.length );
+							}
+						},
+
+						{
+							name: "Add multiple listeners with the same type",
+							runTest:function (t) {
+
+								// Create an empty listener list.
+								var list = new ListenerList();
+								t.t( list instanceof ListenerList);
+								t.is( 0, list.length );
+								t.is( undef, list.actions );
+
+								// Add a listeners directly....
+								var h0 = list.addListener( "type0", listener0 );
+								var h1 = list.addListener( "type0", listener1 );
+								var h2 = list.addListener( "type0", listener2 );
+								var h3 = list.addListener( "type0", listener3 );
+								t.is( 4, list.length );
+								
+								// There should only be one type...
+								var all = list.getByType();
+								t.is (1, Object.keys(all).length);
+								
+								var type0 = list.getByType("type0");
+								t.t( type0 instanceof Array);
+								t.is(4, type0.length);
+
+								var type1 = list.getByType("type1");
+								t.is(0, type1.length);
+
+								t.t( list.getByCallback("type0", listener0) != undef );
+								t.t( list.getByCallback("type0", listener1) != undef );
+								t.t( list.getByCallback("type0", listener2) != undef );
+								t.t( list.getByCallback("type0", listener3) != undef );
+
+								// remove specific listener by it's handle
+								h2.remove();
+								var type0 = list.getByType("type0");
+								t.is(3, type0.length);
+
+								// Only listener2 should be undefined
+								t.t( list.getByCallback("type0", listener0) != undef );
+								t.t( list.getByCallback("type0", listener1) != undef );
+								t.t( list.getByCallback("type0", listener2) == undef );
+								t.t( list.getByCallback("type0", listener3) != undef );
+
+								// remove all listeners by type, first a non existing type
+								list.removeListener("type1");
+								t.is( 3, list.length );
+								// next an existing type 
+								list.removeListener("type0");
+								t.is( 0, list.length );
+
+								// Remove listeners by there handle even though all have already
+								// been removed. This should not throw an exception
+								h0.remove()
+								h1.remove()
+								h2.remove()
+								h3.remove()
+
+							}
+						},
+						
+						{
+							name: "Add multiple listeners with the different types",
+							runTest:function (t) {
+
+								// Create an empty listener list.
+								var list = new ListenerList();
+								t.t( list instanceof ListenerList);
+								t.is( 0, list.length );
+								t.is( undef, list.actions );
+
+								// Add a listeners directly....
+								var h0 = list.addListener( "type0", listener0 );
+								var h1 = list.addListener( "type1", listener1 );
+								var h2 = list.addListener( "type2", listener2 );
+								var h3 = list.addListener( "type3", listener3 );
+								t.is( 4, list.length );
+								
+								// There should 4 types...
+								var all = list.getByType();
+								t.is (4, Object.keys(all).length);
+								
+								t.t( list.getByCallback("type0", listener0) != undef );
+								t.t( list.getByCallback("type1", listener0) == undef );
+								t.t( list.getByCallback("type2", listener0) == undef );
+								t.t( list.getByCallback("type3", listener0) == undef );
+
+								t.t( list.getByCallback("type0", listener1) == undef );
+								t.t( list.getByCallback("type1", listener1) != undef );
+								t.t( list.getByCallback("type2", listener1) == undef );
+								t.t( list.getByCallback("type3", listener1) == undef );
+
+								t.t( list.getByCallback("type0", listener2) == undef );
+								t.t( list.getByCallback("type1", listener2) == undef );
+								t.t( list.getByCallback("type2", listener2) != undef );
+								t.t( list.getByCallback("type3", listener2) == undef );
+
+								t.t( list.getByCallback("type0", listener3) == undef );
+								t.t( list.getByCallback("type1", listener3) == undef );
+								t.t( list.getByCallback("type2", listener3) == undef );
+								t.t( list.getByCallback("type3", listener3) != undef );
+
+								list.removeListener();
+								t.is( 0, list.length );
+							}
+						},
+						
+						{
+							name: "Add listener with same type and trigger the specific type",
+							runTest:function (t) {
+
+								triggers = {};	// Clear triggers
+								
+								// Create an empty listener list.
+								var list = new ListenerList();
+								t.t( list instanceof ListenerList);
+								t.is( 0, list.length );
+								t.is( undef, list.actions );
+
+								var h0 = list.addListener( "type1", listener0 );
+								
+								// Calling trigger without any type should fail
+								t.e( Error, list, "trigger", [] );
+
+								// Trigger type0, should have no effect...
+								list.trigger("type0");
+								t.is( 0, triggers["type0"] || 0 );
+
+								// Trigger type1, should have no effect...
+								list.trigger("type1");
+								t.is( 0, triggers["type0"] || 0 );
+								t.is( 1, triggers["type1"]);
+
+								// Add a few more listeners for the same type...
+								var h1 = list.addListener( "type1", listener1 );
+								var h2 = list.addListener( "type1", listener2 );
+								var h3 = list.addListener( "type1", listener3 );
+
+								triggers = {};	// Clear trigger counters
+								var type1 = list.getByType("type1");
+								list.trigger("type0");
+								list.trigger("type1");
+								list.trigger("type2");
+								list.trigger("type3");
+								// Each listener should be invoked  once...
+								t.is( type1.length, triggers["type1"] );
+
+								h2.remove();		// Remove one listener
+
+								list.trigger("type1");
+								t.is( (type1.length*2)-1, triggers["type1"] );
+
+								// Remove all type1 listeners....
+								list.removeListener("type1");
+								t.is( 0, list.length );
+							}
+						},
+
+						{
+							name: "Add listeners with different types and trigger all types",
+							runTest:function (t) {
+
+								triggers = {};	// Clear triggers
+								
+								// Create an empty listener list.
+								var list = new ListenerList();
+								t.t( list instanceof ListenerList);
+								t.is( 0, list.length );
+								t.is( undef, list.actions );
+
+								var h0 = list.addListener( "type0", listener0 );
+								var h1 = list.addListener( "type1", listener1 );
+								var h2 = list.addListener( "type2", listener2 );
+								var h3 = list.addListener( "type3", listener3 );
+
+								triggers = {};	// Clear trigger counters
+
+								list.trigger("type0");
+								list.trigger("type1");
+								list.trigger("type2");
+								list.trigger("type3");
+
+								// Each listener should have been invoked once..
+								t.is( 1, triggers["type0"]);
+								t.is( 1, triggers["type1"]);
+								t.is( 1, triggers["type2"]);
+								t.is( 1, triggers["type3"]);
+
+								// Only trigger type1 and type2
+								list.trigger("type1");
+								list.trigger("type2");
+
+								t.is( 1, triggers["type0"]);
+								t.is( 2, triggers["type1"]);	// should be 2
+								t.is( 2, triggers["type2"]);	// should be 2
+								t.is( 1, triggers["type3"]);
+							}
+						},
+
+						{
+							name: "Trigger listeners using late binding",
+							runTest:function (t) {
+
+								triggers = {};	// Clear triggers
+								
+								// Create an empty listener list.
+								var list = new ListenerList();
+								t.t( list instanceof ListenerList);
+								t.is( 0, list.length );
+								t.is( undef, list.actions );
+
+								var h0 = list.addListener( "type0", "lstn0", someObj );
+								var h1 = list.addListener( "type1", "lstn1", someObj );
+								var h2 = list.addListener( "type2", "lstn2", someObj );
+								var h3 = list.addListener( "type3", "lstn3", someObj );
+
+								triggers = {};	// Clear trigger counters
+
+								list.trigger("type0");
+								list.trigger("type1");
+								list.trigger("type2");
+								list.trigger("type3");
+
+								// Each listener should have been invoked once..
+								t.is( 1, triggers["type0"]);
+								t.is( 1, triggers["type1"]);
+								t.is( 1, triggers["type2"]);
+								t.is( 1, triggers["type3"]);
+
+								// Only trigger type1 and type2
+								list.trigger("type1");
+								list.trigger("type2");
+
+								t.is( 1, triggers["type0"]);
+								t.is( 2, triggers["type1"]);	// should be 2
+								t.is( 2, triggers["type2"]);	// should be 2
+								t.is( 1, triggers["type3"]);
+							}
+						},
+
+						{
+							name: "Test variable argument list",
+							runTest:function (t) {
+
+								// this listener should be called with 4 arguments, type being
+								// the first.
+								function listener0(type) {
+									t.is( 4, arguments.length );
+									t.t( type == "type0" || type == "type1");
+									t.is( 1, arguments[1] );
+									t.is( 2, arguments[2] );
+									t.is( 3, arguments[3] );
+									triggers[type] = triggers[type] ? triggers[type] + 1 : 1;
+								}
+
+								// this listener should be called with 7 arguments, type being
+								// the first.
+								function listener1(type) {
+									t.is( 7, arguments.length );
+									t.t( type == "type2");
+									// The optional listener arguments should come first
+									t.is( 4, arguments[1] );
+									t.is( 5, arguments[2] );
+									t.is( 6, arguments[3] );
+									// followed by the optional trigger agruments
+									t.is( 1, arguments[4] );
+									t.is( 2, arguments[5] );
+									t.is( 3, arguments[6] );
+									triggers[type] = triggers[type] ? triggers[type] + 1 : 1;
+								}
+								
+								// this listener should be called with 7 arguments and 'this'
+								// should match thisArg.
+								function listener2(type) {
+									t.is( this, thisArg );
+									t.is( 7, arguments.length );
+									t.t( type == "type3" || type == "type4");
+									// The optional listener arguments should come first
+									t.is( 4, arguments[1] );
+									t.is( 5, arguments[2] );
+									t.is( 6, arguments[3] );
+									// followed by the optional trigger agruments
+									t.is( 1, arguments[4] );
+									t.is( 2, arguments[5] );
+									t.is( 3, arguments[6] );
+									triggers[type] = triggers[type] ? triggers[type] + 1 : 1;
+								}
+								
+								triggers = {};	// Clear triggers
+								
+								// Create an empty listener list.
+								var list = new ListenerList();
+								t.t( list instanceof ListenerList);
+								t.is( 0, list.length );
+								t.is( undef, list.actions );
+
+								// Stick the optional argument on the listener itself.
+								var lstn0 = new Listener( listener0, null, 1,2,3 );
+								var h0 = list.addListener( "type0", lstn0 );
+								list.trigger("type0");
+								t.is( 1, triggers["type0"]);
+
+								// This time the listener has NO optional arguments BUT we call
+								// trigger() with optional arguments.
+								var h1 = list.addListener( "type1", listener0 );
+								list.trigger("type1", 1, 2, 3);
+								t.is( 1, triggers["type1"]);
+								
+								// This time we stick the optional argument on the listener AND
+								// we also trigger() with optional arguments.  Listener1 should
+								// be called with the following arguments: ["type2",4,5,6,1,2,3]
+								// Notice the arguments order.
+								
+								var lstn1 = new Listener( listener1, null, 4,5,6 );
+								var h2 = list.addListener( "type2", lstn1 );
+								list.trigger("type2", 1,2,3);
+								t.is( 1, triggers["type2"]);
+
+								// Same as above but with a specific scope for the listener.
+								var thisArg = {sayWhat: "bingo"};
+								var lstn2 = new Listener( listener2, thisArg, 4,5,6 );
+								var h3 = list.addListener( "type3", lstn2 );
+								list.trigger("type3", 1,2,3);
+								t.is( 1, triggers["type3"]);
+
+								// Same as above but but this time we specify the scope when
+								// adding the listener to the listener list, therefore lstn3
+								// itself should not get a scope.
+								var lstn3 = new Listener( listener2, null,  4,5,6 );
+								var h4 = list.addListener( "type4", lstn3, thisArg );
+								list.trigger("type4", 1,2,3);
+								// Make sure lstn3 didn't get a scope AFTER adding it to the list
+								// or after the trigger operation.
+								t.is (undef, lstn3.scope );
+								t.is( 1, triggers["type4"]);
+
+							}
+						},
+
+						{
+							name: "Test variable argument list and late Binding",
+							runTest:function (t) {
+
+								// this listener should be called with 4 arguments, type being
+								// the first.
+								var myObj = {
+									listener0: function listener0(type) {
+										t.is( 4, arguments.length );
+										t.t( type == "type0" || type == "type1");
+										t.is( 1, arguments[1] );
+										t.is( 2, arguments[2] );
+										t.is( 3, arguments[3] );
+										triggers[type] = triggers[type] ? triggers[type] + 1 : 1;
+									}
+								}
+
+								triggers = {};	// Clear triggers
+								
+								// Create an empty listener list.
+								var list = new ListenerList();
+								t.t( list instanceof ListenerList);
+								t.is( 0, list.length );
+								t.is( undef, list.actions );
+
+								// Stick the optional argument on the listener itself.
+								var lstn0 = new Listener( "listener0", myObj, 1,2,3 );
+								var h0 = list.addListener( "type0", lstn0 );
+								list.trigger("type0");
+								t.is( 1, triggers["type0"]);
+
+								// This time the listener has NO optional arguments BUT we call
+								// trigger() with optional arguments.
+								var h1 = list.addListener( "type1", "listener0", myObj );
+								list.trigger("type1", 1, 2, 3);
+								t.is( 1, triggers["type1"]);
+								
+							}
+						},
+						
+						{
+							name: "ListenerLists and Actions",
+							runTest:function (t) {
+
+								function actBefore (type) {
+									var count = triggers[type] || 0;
+									t.is ( count, actions.before );
+									actions.before++;
+								}
+								function actAfter (type) {
+									var count = triggers[type] || 0;
+									t.is ( count-1, actions.after );
+									actions.after++;
+								}
+
+								var actions  = {before: 0, after: 0};
+								triggers = {};	// Clear triggers
+								
+								// Create an empty listener list.
+								var acts = new Actions();
+								var list = new ListenerList(acts);
+
+								t.t( list instanceof ListenerList);
+								t.is( 0, list.length );
+								t.is( acts, list.actions );
+
+								list.addListener( "type0", listener0 );
+								list.actions.before( "type0", actBefore );
+								list.actions.after( "type0", actAfter );
+								
+								list.trigger("type0");
+								t.is( 1, triggers["type0"]);
+								t.is( 1, actions.before );
+								t.is( 1, actions.after );
+								
+							}
+						}
+
+						
+
+					]);
+
+					ready( function () {
+						doh.run();
+
+					});
+
+				}
+      );
+    </script>
+
+  </head>
+
+  <body class="claro">
+    <h1 class="DemoTitle">Listeners</h1>
+  </body>
+</html>

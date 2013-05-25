@@ -33,9 +33,10 @@
         "store/_base/_Indexed",
         "store/_base/_Loader",
 				"store/extension/Hierarchy",
+				"store/extension/Eventable",
 				"store/extension/Watch"
         ], function( doh, declare, ready,
-											_Store, _Indexed, _Loader, Hierarchy, Watch ) {
+											_Store, _Indexed, _Loader, Hierarchy, Eventable, Watch ) {
 					"use strict";
 					
 					// IMPORTANT:
@@ -73,9 +74,21 @@
 					
 					doh.register("Watch Extension", [
 						{
+							name: "Watch properties, single entry, no listeners, non-eventable store",
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, Watch]);
+								var store = new Store ();
+
+								// Calling 'watch' without a listener on a non-eventable store
+								// should fail.
+								t.e( Error, store, "watch", ["name"]);
+							}
+						},
+
+						{
 							name: "Watch properties, single entry, no listeners",
 							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Watch]);
+								var Store = declare( [_Store, _Indexed, Eventable, Watch]);
 								var store = new Store ();
 
 								// Get the store's private properties...
@@ -108,7 +121,7 @@
 						{
 							name: "Watch properties, multi entry, no listeners",
 							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Watch]);
+								var Store = declare( [_Store, _Indexed, Eventable, Watch]);
 								var store = new Store ();
 
 								// Get the store's private properties...
@@ -146,7 +159,7 @@
 						{
 							name: "Watch properties, single entry, with listener",
 							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Watch]);
+								var Store = declare( [_Store, _Indexed, Eventable, Watch]);
 								var store = new Store ();
 
 								// Get the store's private properties...
@@ -201,7 +214,7 @@
 						{
 							name: "Watch properties, multiple entries, with listener",
 							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Watch]);
+								var Store = declare( [_Store, _Indexed, Eventable, Watch]);
 								var store = new Store ();
 
 								// Get the store's private properties...
@@ -235,7 +248,7 @@
 						{
 							name: "Watch properties, monitor using the set event",
 							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Watch]);
+								var Store = declare( [_Store, _Indexed, Hierarchy, Eventable, Watch]);
 								var store = new Store ({data:data, keyPath:"name"});
 
 								var events = [];
@@ -280,13 +293,13 @@
 						{
 							name: "Watch properties, monitor using listeners",
 							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Watch]);
+								var Store = declare( [_Store, _Indexed, Hierarchy, Watch]);
 								var store = new Store ({data:data, keyPath:"name"});
 
 								var events = [];
 
 								// Event handler...
-								function watcher(object, property, newValue, oldValue) {
+								function watcher(property, object, newValue, oldValue) {
 									events[property] = (events[property] || 0) + 1;
 								}
 								
@@ -323,13 +336,13 @@
 						{
 							name: "Watch properties, monitor using listeners and remove listener",
 							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy, Watch]);
+								var Store = declare( [_Store, _Indexed, Hierarchy, Watch]);
 								var store = new Store ({data:data, keyPath:"name"});
 
 								var events = [];
 
 								// Event handler...
-								function watcher(object, property, newValue, oldValue) {
+								function watcher(property, object, newValue, oldValue) {
 									events[property] = (events[property] || 0) + 1;
 								}
 								

@@ -64,7 +64,10 @@ define(["../error/createError!../error/StoreErrors.json",
 					case "Blob":
 					case "File":
 						return object.slice(0, object.size, object.type);
-					case "Function":
+					default:
+						if (!strict) {
+							return object;
+						}
 						break;
 				}
 				throw new StoreError("DataCloneError", "clone", "objects of type [%{0}] can not be cloned", type);

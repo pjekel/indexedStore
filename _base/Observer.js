@@ -27,12 +27,12 @@ define(["dojo/_base/declare",
 	// module:
 	//		store/_base/Observer
 	// summary:
-	//		An Observer monitors the data of a store query or range request for
+	//		An Observer monitors the results of a store query or range request for
 	//		any changes due to store content changes.
 	// description:
 	//		Whenever an object is added to or removed from the store or when object
 	//		property values changed, the Observer inspects the QueryResults object
-	//		to determine if the store changes have an impact on the QueryResults.
+	//		to determine if the store changes have an affect on the QueryResults.
 	//		If the latter is true, the QueryResults object is updated accordingly
 	//		and all listeners registered with the Observer are notified.
 	// NOTE:
@@ -81,30 +81,29 @@ define(["dojo/_base/declare",
 	var C_QUERY = 0,													// QueryResult types
 			C_RANGE = 1;
 
-	function locate (source, data, key) {
+	function locate (store, data, key, match) {
 		// summary:
 		// 		Locate an object with a given key in an arry of objects.
 		// source: Store|Index
-		//		Instance of a Store or Index object.
+		//		Instance of a Store or Index.
 		// data:
-		//		An array of objects.
+		//		An array of objects to search.
 		// key: Key
-		//		Key used to locate the object.
+		//		Key to locate in the objects array.
+		// match: Boolean
+		//		If true, an exact match is required.
 		// returns: Number
 		//		If found the index number of the object otherwise -1.
 		// tag:
 		//		Private
-		var idx, objKey, max = data.length, keyPath = source.keyPath;
-		for (idx = 0; idx < max; idx++) {
-			objKey = Keys.keyValue(keyPath, data[idx]);
-			if (objKey && source.uppercase) {
-				objKey = Keys.toUpperCase(objKey);
-			}
-			if (!Keys.cmp(key, objKey)) {
-				return idx;
+		var i, l = data.length, m = match, r;
+		for (i = 0; i < l; i++) {
+			r = Keys.cmp(key, store.getIdentity(data[i]));
+			if ( (m && !r) || (!m && r <=0) ) {
+				return i;
 			}
 		}
-		return -1;
+		return m ? -1 : i;
 	}
 
 	function Observer (source, query, directives /*, results */) {
@@ -132,6 +131,10 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Private
 
+			// TODO:
+			//		Should we just destroy the Observer?. If so, how do we notify the
+			// 		listeners? -> trigger( data.slice(), Infinity, -1 ) maybe ???
+			
 			var object, at = 0;
 
 			while( object = data.shift() ) {
@@ -242,10 +245,10 @@ define(["dojo/_base/declare",
 				var deleted = !!(!newObj && oldObj);
 				var updated = !!(newObj && oldObj);
 
-				var first = options.start || 0;
+				var start = options.start || 0;
 				var count = options.count || 0;
-				var size  = count ? options.start + count : dataset.length;
-				var from  = !added ? locate(store, dataset, key) : -1;
+				var size  = count ? start + count : dataset.length;
+				var from  = !added ? locate(store, dataset, key, true) : -1;
 				var into  = -1;
 
 				if (!deleted) {
@@ -255,7 +258,12 @@ define(["dojo/_base/declare",
 							if (matches ? matches(newObj) : qFunc([newObj]).length) {
 								if (from == -1) {
 									// New object added to dataset
-									into = dataset.push(newObj) - 1;
+									if (!sorted) {
+										into = locate(store, dataset, key, false);
+										dataset.splice(into, 0, newObj);
+									} else {
+										into = dataset.push(newObj) - 1;
+									}
 									dataset.total++;
 								} else {
 									// Existing object in dataset updated
@@ -277,7 +285,7 @@ define(["dojo/_base/declare",
 									if (added) {
 										for(into = 0; into < dataset.length; into++) {
 											var match = Keys.cmp( key, store.getIdentity(dataset[into]) );
-											if ((ascending && match < 0) || (!ascending && match > 0)) {
+											if ((ascending && match <= 0) || (!ascending && match >= 0)) {
 												break;
 											}
 										}
@@ -318,16 +326,16 @@ define(["dojo/_base/declare",
 
 				if (chunked) {
 					data.total = dataset.total;
-					// Dismiss all updates in front or behind the current view.
+					// Dismiss all updates strictly in front or behind the current view.
 					if ((into > -1 && into < size || from > -1 && from < size)) {
-						if (into > -1 && into < first && from > -1 && from < first) {
+						if (into > -1 && into < start && from > -1 && from < start) {
 							return;
 						}
-						if (into >= first && into < size && from >= first && from < size) {
+						if (into >= start && into < size && from >= start && from < size) {
 							// An update strictly within the current view, therefore the view
 							// won't shift.
-							into = into - first;
-							from = from - first;
+							into = into - start;
+							from = from - start;
 							move(data, from, into, newObj);
 							trigger(newObj, from, into);
 							return;

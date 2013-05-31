@@ -94,8 +94,9 @@ define(["./Keys",
 						break;
 				};	/* end switch() */
 			}
+			// Add range info  to the result.
 			results.direction = direction;
-			results.keyRange  = keysOnly;
+			results.keysOnly  = keysOnly;
 			return results;
 		} else {
 			throw new StoreError("DataError", "constructor", "invalid source specified");

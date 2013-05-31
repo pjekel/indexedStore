@@ -683,7 +683,7 @@ define(["dojo/_base/declare",
 				if (arguments[1] && Lib.isDirection(arguments[1])) {
 					dir = arguments[1];
 				} else {
-					throw new StoreError("DataError", "getRange");
+					throw new StoreError("DataError", "getRange", "invalid direction");
 				}
 			}
 

@@ -31,6 +31,8 @@ define(["exports",
 
 	var StoreError = createError( "Keys" );			// Create the StoreError type.
 	var isString   = Lib.isString;
+	var getProp    = Lib.getProp;
+	var clone      = Lib.clone;
 	var undef;
 	
 	exports.cmp = function cmp ( key1, key2, strict ) {
@@ -354,17 +356,19 @@ define(["exports",
 		//		Any. The value returned may or may not be a valid key.
 		// tag:
 		//		Public
-
 		if (keyPath != undef) {
 			if (keyPath instanceof Array) {
-				return keyPath.map( function (path) {
-					return exports.keyValue(path,object);
+				// This will only ever "recurse" one level since key path sequences
+				// can't ever be nested
+				var value = keyPath.map( function (path) {
+					return getProp(path, object);
 				});
-			} else if (keyPath != "") {
-				return Lib.getProp(keyPath, object);
-			} else {
-				return object;
+				return exports.validKey(key) ? value : undef;
 			}
+			if (keyPath != "") {
+				return getProp(keyPath, object);
+			}
+			return object;
 		}
 	};
 
@@ -497,14 +501,13 @@ define(["exports",
 		//		New key.
 		// tag:
 		//		Public
-		var keyValue = Lib.clone(key);
+		var keyValue = clone(key);
 		if (keyValue) {
 			if (keyValue instanceof Array) {
-				keyValue = keyValue.map( exports.toUpperCase );
-			} else {
-				if (keyValue.toUpperCase) {
-					keyValue = keyValue.toUpperCase();
-				}
+				return keyValue.map( exports.toUpperCase );
+			}
+			if (keyValue.toUpperCase) {
+				keyValue = keyValue.toUpperCase();
 			}
 		}
 		return keyValue;

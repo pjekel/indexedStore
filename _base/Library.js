@@ -9,7 +9,7 @@
 //
 
 define(["../error/createError!../error/StoreErrors.json", 
-				"../shim/shims"
+				"../shim/shims",
 			 ], function (createError) {
 
 	var StoreError = createError( "Library" );
@@ -64,6 +64,8 @@ define(["../error/createError!../error/StoreErrors.json",
 					case "Blob":
 					case "File":
 						return object.slice(0, object.size, object.type);
+					case "Function":
+						break;
 				}
 				throw new StoreError("DataCloneError", "clone", "objects of type [%{0}] can not be cloned", type);
 			}

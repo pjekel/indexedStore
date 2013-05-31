@@ -501,8 +501,6 @@ define(["dojo/Deferred",
 					return index.store._clone ? clone(objects) : objects;
 				})
 			);
-			results.direction = dir;
-			results.keyRange  = false;
 			return results;
 		};
 
@@ -547,8 +545,6 @@ define(["dojo/Deferred",
 					return index.store._clone ? clone(objects) : objects;
 				})
 			);
-			results.direction = dir;
-			results.keyRange  = true;
 			return results;
 		};
 

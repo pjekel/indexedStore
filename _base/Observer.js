@@ -10,25 +10,29 @@
 
 define(["dojo/_base/declare",
 				"dojo/Deferred",
+				"dojo/promise/Promise",
 				"dojo/when",
 				"../_base/Keys",
 				"../_base/KeyRange",
 				"../_base/Library",
+				"../_base/Range",
 				"../error/createError!../error/StoreErrors.json",
 				"../listener/Listener",
-				"../listener/ListenerList"
-			 ], function (declare, Deferred, when, Keys, KeyRange, Lib, createError, 
-			               Listener, ListenerList) {
+				"../listener/ListenerList",
+				"../util/Sorter"
+			 ], function (declare, Deferred, Promise, when, Keys, KeyRange, Lib, Range, 
+			               createError, Listener, ListenerList, Sorter) {
 	"use strict";
 	
 	// module:
 	//		store/_base/Observer
 	// summary:
-	//		An Observer monitors QueryResults objects for any changes as the result
-	//		of store content changes. Whenever an object is added to or removed from
-	//		the store or when object property values changed, the Observer inspects
-	//		the QueryResults object to determine if the store changes have an impact
-	//		on the QueryResults.
+	//		An Observer monitors the data of a store query or range request for
+	//		any changes due to store content changes.
+	// description:
+	//		Whenever an object is added to or removed from the store or when object
+	//		property values changed, the Observer inspects the QueryResults object
+	//		to determine if the store changes have an impact on the QueryResults.
 	//		If the latter is true, the QueryResults object is updated accordingly
 	//		and all listeners registered with the Observer are notified.
 	// NOTE:
@@ -50,8 +54,7 @@ define(["dojo/_base/declare",
 	//	|	  }
 	//	|	                 ...
 	//	|	  var query    = {hair:"none"};
-	//	|	  var results  = store.query( query );
-	//	|	  var observer = new Observer( store, results, query );
+	//	|	  var observer = new Observer( store, query );
 	//	|	  observer.done( function () {
 	//	|	    observer = null;
 	//	|	  });
@@ -63,26 +66,27 @@ define(["dojo/_base/declare",
 	//	|	                 ...
 	//	|	  handle.remove();	// Remove listener from the Observer.
 	//	|	});
-	//
-	//	See the Observable extension for some implmentation examples.
 	
-	var StoreError = createError( "Observer" );		// Create the StoreError type.
-	var isObject   = Lib.isObject;
-	var isString   = Lib.isString;
-	var clone      = Lib.clone;
-	var move       = Lib.move;
+	var StoreError  = createError( "Observer" );		// Create the StoreError type.
+	var isDirection = Lib.isDirection;
+	var isObject    = Lib.isObject;
+	var clone       = Lib.clone;
+	var mixin       = Lib.mixin;
+	var move        = Lib.move;
 	var undef;
+	
+	var C_MSG_OUT_OF_DATE = "Query or range is out of date due to previous store changes";
 	
 	var C_TYPE  = ["query", "range"];					// Types of Listeners
 	var C_QUERY = 0,													// QueryResult types
 			C_RANGE = 1;
 
-	function locate (source, results, key) {
+	function locate (source, data, key) {
 		// summary:
 		// 		Locate an object with a given key in an arry of objects.
 		// source: Store|Index
 		//		Instance of a Store or Index object.
-		// results:
+		// data:
 		//		An array of objects.
 		// key: Key
 		//		Key used to locate the object.
@@ -90,11 +94,10 @@ define(["dojo/_base/declare",
 		//		If found the index number of the object otherwise -1.
 		// tag:
 		//		Private
-		var idx, objKey;
-		
-		for (idx = 0; idx < results.length; idx++) {
-			objKey = Keys.keyValue(source.keyPath, results[idx]);
-			if (objKey != undef && source.uppercase) {
+		var idx, objKey, max = data.length, keyPath = source.keyPath;
+		for (idx = 0; idx < max; idx++) {
+			objKey = Keys.keyValue(keyPath, data[idx]);
+			if (objKey && source.uppercase) {
 				objKey = Keys.toUpperCase(objKey);
 			}
 			if (!Keys.cmp(key, objKey)) {
@@ -104,24 +107,20 @@ define(["dojo/_base/declare",
 		return -1;
 	}
 
-	function Observer (source, results, range, directives, revision) {
+	function Observer (source, query, directives /*, results */) {
 		// summary:
-		//		An Observer is an object capable of monitoring query or range results
+		//		An Observer is an object capable of monitoring query or range data
 		//		of type indexedStore/util/QueryResults. The store methods that return
 		//		a QueryResults object are: query() and getRange().
 		// source: Store|Index
-		// results: dojo.store.util.QueryResults
-		//		The dataset to monitor
-		// range: KeyRange|Object?
-		//		If range is not a KeyRange object it is considered a query object.
+		// query: KeyRange|Object?
+		//		If query is not a KeyRange object it is considered a query object.
 		// directives: Any?
 		//		Directives specific to the range argument. If range is a KeyRange
 		//		then directives represents the range direction, otherwise	directives
 		//		is considered a Store.QueryOptions object.
-		// revision: Number?
-		//		The store revision at the time the results (QueryResults) object
-		//		resolved. If not specified the results object is checked for the
-		//		revision property.
+		// resutls: dojo.store.util.QueryResults?
+		//		The dataset to monitor, only to be used by the Observable extension.
 		// tag:
 		//		Private
 		"use strict";
@@ -129,14 +128,85 @@ define(["dojo/_base/declare",
 		function clear () {
 			// summary:
 			//		This method is called when the store associated with this Observer
-			//		is cleared or when the QueryResults object is out-of-date.
-			//		Clearing a store immediately renders all observers for that store
-			//		out-of-date.
+			//		is cleared.
 			// tag:
 			//		Private
 
-			self.destroy();
+			var object, at = 0;
+
+			while( object = data.shift() ) {
+				data.total--;
+				trigger( object, at++, -1 );
+			}
+			when (master, function (dataset) {
+				dataset.revision = store.revision;
+				dataset.length   = 0;
+				dataset.total    = 0;
+			});
+			// Resync revision number.
+			revision = store.revision;
 		};
+		
+		function initialize (dataset) {
+			// summary:
+			//		Initialize the Observer. This method is called when the Range or
+			//		query result associated with this Observer resolves.
+			// dataset: Object[]
+			//		Array of all objects matching the query or range.
+			// returns: Object[]
+			//		Either dataset or a subset of dataset depending on the QueryOptions
+			//		properties 'start' and 'count'.
+			// tag:
+			//		Private
+
+			if ("direction" in dataset) {
+				obsType   = C_RANGE;
+				ascending = /^next/.test( dataset.direction ) || false;
+			} else {
+				obsType = C_QUERY;
+				qFunc   = store.queryEngine && store.queryEngine( query, chunkOff);
+				matches = qFunc && qFunc.matches;
+			}
+			revision = Number(dataset.revision) || 0;
+			if (!revision) {
+				throw new StoreError( "DataError", "when", "dataset has no revision number" );
+			}
+			// If the query requested a chunk, that is, a subset of the query or range
+			// results, create data as a view of the entire dataset, data and dataset
+			// will be different objects.
+			
+			if (chunked) {
+				data = Sorter( dataset, chunkOn );	// returns a new object.
+				data.total = dataset.total;
+			} else {
+				data = dataset;
+			}
+			return data;
+		}
+
+		function trigger (object, from, into) {
+			// summary:
+			//		Signal listeners an object was added to, or removed from, the query
+			//		data or an object already part of the query data was updated.
+			// object: Object
+			//		The object that was either added, removed or updated.
+			// from: Number
+			//		The previous location of the object in the query data. If 'from' 
+			//		equals -1 it indicates the object was added.
+			// into: Number
+			//		The new location of the object. If 'into' equal -1 it indicates the 
+			//		object was removed.
+			// tag:
+			//		Private
+			if (object && listeners.length) {
+				var lsByType = listeners.getByType( C_TYPE[obsType] );
+				lsByType.forEach( function (lstn) {
+					if (from != into || lstn.updates) {
+						lstn.listener.call( lstn.scope, object, from, into);
+					}
+				});
+			}
+		}
 		
 		function update (action, key, newObj, oldObj, at) {
 			// summary:
@@ -153,76 +223,69 @@ define(["dojo/_base/declare",
 			//		The old object, that is, the value portion of a record. If null it
 			//		indicates a new record was inserted into the store.
 			// at: Number
-			//		The store index number of the record containing newObj.
+			//		Index number of the store record containing newObj.
 			// tag:
 			//		Private, callback
 
-			// Ignore update notifications until we have a revision number indicating
-			// the QueryResults has been resolved.
+			// Ignore notifications until we have a revision number indicating the
+			// QueryResults has been resolved.
 			if (!revision) {
 				return;
 			}
-			when( results, function (dataset) {
+			when( master, function (dataset) {
 				if (++revision != store.revision) {
-					// Store updates were made prior to observing the query or range results.
-					clear();	// Cleanup
-					var message = "Query or range is out of date due to previous store changes";
-					throw new StoreError("InvalidState", "update", message);
+					// Store updates were made prior to observing the query or range data.
+					self.destroy();
+					throw new StoreError("InvalidState", "update", C_MSG_OUT_OF_DATE);
 				}
-				var object  = newObj || oldObj;
-				var added   = newObj && !oldObj;
-				var deleted = !newObj;
+				var added   = !!(newObj && !oldObj);
+				var deleted = !!(!newObj && oldObj);
+				var updated = !!(newObj && oldObj);
 
-				var atEnd   = true;
-				var count   = dataset.length;
-				var from    = !added ? locate(store, dataset, key) : -1;
-				var temp    = from;
-				var into    = -1;
+				var first = options.start || 0;
+				var count = options.count || 0;
+				var size  = count ? options.start + count : dataset.length;
+				var from  = !added ? locate(store, dataset, key) : -1;
+				var into  = -1;
 
 				if (!deleted) {
 					switch (obsType) {
-
 						case C_QUERY:
-							var atEnd = count != options.count;
-							if (queryFnc) {
-								// First test if the new/updated object matches the query to being
-								// with. If so, go find it's new location in the results set.
-								if (matches ? matches(newObj) : queryFnc([newObj]).length) {
-									object = store._clone ? clone(newObj) : newObj;
-									if (from < 0) {
-										temp = dataset.push(object) - 1;
-									} else {
-										dataset[from] = object;
-									}
-									into = locate(store, queryFnc(dataset), key );
+							// Test if the new or updated object affects the dataset.
+							if (matches ? matches(newObj) : qFunc([newObj]).length) {
+								if (from == -1) {
+									// New object added to dataset
+									into = dataset.push(newObj) - 1;
+									dataset.total++;
+								} else {
+									// Existing object in dataset updated
+									dataset[from] = newObj;
+									into = from;
 								}
-							} else {
-								// Store has no query engine !!!
-								object = store._clone ? clone(newObj) : newObj;
-								into = added ? dataset.length : from;
-								if (into > -1) {
-									dataset[into] = object;
+								if (sorted) {
+									Sorter( dataset, chunkOff );
+									into = dataset.indexOf(newObj);
 								}
 							}
 							break;
-
 						case C_RANGE:
 							if (!index) {
 								// A range is based on object keys and because the primary key of
 								// an object can't change without deleting the object first, only
 								// new objects can alter the range order.
-								if (Keys.inRange(key, range)) {
-									object = store._clone ? clone(newObj) : newObj;
+								if (Keys.inRange(key, query)) {
 									if (added) {
-										for(into = 0; into < count; into++) {
+										for(into = 0; into < dataset.length; into++) {
 											var match = Keys.cmp( key, store.getIdentity(dataset[into]) );
 											if ((ascending && match < 0) || (!ascending && match > 0)) {
 												break;
 											}
 										}
+										dataset.splice(into, 0, newObj);
+										dataset.total++;
 									} else {
 										// It's an update therefore no change in object order.
-										dataset[from] = object;
+										dataset[from] = newObj;
 										into = from;
 									}
 								}
@@ -237,27 +300,67 @@ define(["dojo/_base/declare",
 							break;
 					}
 				}
-				// Move object into the correct location. If results is paginated and
-				// the object was moved into the first or last position we assume it
-				// belongs to either the previous or next page.
-				if (from != into) {
-					var increment = from == -1 ? 1 : (into == -1 ? -1 : 0);
-					if ( (options.start > 0 && into == 0) || (!atEnd && into == dataset.length)) {
-						dataset.splice(into, 1);
-						into = -1;
+				
+				if (into == -1) {
+					if (from > -1) {
+						dataset.splice(from,1);
+						dataset.total--;
 					} else {
-						move( dataset, temp, into, object );	// Insert, delete or relocate object.
+						return;
 					}
-					// Update the total property. (results and dataset may be different
-					// objects so do both).
-					results.total = dataset.total = dataset.total + increment;
 				}
-				if (listeners.length && (from > -1 || into > -1)) {
-					listeners.getByType( C_TYPE[obsType] ).forEach( function (lstn) {
-						if (from != into || lstn.updates) {
-							lstn.listener.call( lstn.scope, object, from, into);
+
+				// If a chunk was requested data and dataset are two different object
+				// arrays. dataset represents ALL objects matching the query or range,
+				// while data represents the subset of only those objects matching the
+				// requested page (e.g. a view).  If no chunking is required data and
+				// dataset will reference the same object array.
+
+				if (chunked) {
+					data.total = dataset.total;
+					// Dismiss all updates in front or behind the current view.
+					if ((into > -1 && into < size || from > -1 && from < size)) {
+						if (into > -1 && into < first && from > -1 && from < first) {
+							return;
 						}
-					});
+						if (into >= first && into < size && from >= first && from < size) {
+							// An update strictly within the current view, therefore the view
+							// won't shift.
+							into = into - first;
+							from = from - first;
+							move(data, from, into, newObj);
+							trigger(newObj, from, into);
+							return;
+						}
+						// An object was inserted or removed before the end of the view,
+						// as a result the view will change one way or another.
+						var view = Sorter( dataset, chunkOn );
+
+						// First, signal the object removed from the current view, this
+						// quarentees the data (view) will never exceed the maximum count
+						// limit
+						if (from > -1 || (count && data.length == count)) {
+							data.some( function (obj, idx) {
+								if (view.indexOf(obj) == -1) {
+									data.splice(idx, 1);
+									trigger(obj, idx, -1);
+									return true;
+								}
+							});
+						}
+						// Next, signal the object added to the view, if any.
+						if (into > -1 || (count && view.length == count)) {
+							view.some( function (obj, idx) {
+								if (data.indexOf(obj) == -1) {
+									data.splice(idx, 0, obj);
+									trigger(obj, -1, idx);
+									return true;
+								}
+							});
+						}
+					}
+				} else {
+					trigger(newObj || oldObj, from, into);
 				}
 			});
 		}
@@ -274,7 +377,7 @@ define(["dojo/_base/declare",
 			//		Instance of a Listener object or a function.
 			// includeUpdates: Boolean?
 			//		If true, the listener will also be notified when an object that
-			//		is part of the results set has simply changed.
+			//		is part of the data set has simply changed.
 			// scope: Object?
 			//		Object to use as 'this' when executing callback.
 			// returns: Object
@@ -306,19 +409,19 @@ define(["dojo/_base/declare",
 			//		new listeners can be added.
 			// tag:
 			//		Public
+			destroyed = true;
+
 			listeners && listeners.destroy();
 			updater   && updater.remove();
 			cleaner   && cleaner.remove();
 			updater = cleaner = null;
 			// Observer is done, remove all listeners and release resources
 			listeners = null;
-			results   = null;
+			source    = null;
+			data      = null;
 			store     = null;
 			index     = null;
-			range     = null;
-			source    = null;
 			
-			destroyed = true;
 			deferred.resolve();
 		};
 		
@@ -361,25 +464,37 @@ define(["dojo/_base/declare",
 			//		Instance of a Listener object.
 			// tag:
 			//		Public
-			if (listener instanceof Array) {
-				listener.forEach( this.removeListener, this );
-			} else {
-				listeners.removeListener( C_TYPE[obsType],listener );
-				if (!listeners.length) {
-					self.destroy();
+			if (listeners && listeners.length) {
+				if (listener instanceof Array) {
+					listener.forEach( this.removeListener, this );
+				} else {
+					listeners.removeListener( C_TYPE[obsType],listener );
+					if (!listeners.length) {
+						self.destroy();
+					}
 				}
 			}
 		}
 		
 		//=======================================================================
 		
+		var qFunc, matches, revision, chunked, sorted, chunkOff, chunkOn;
+		var ascending = false;
+		var destroyed = false;
+		var obsType   = C_QUERY;
+		var options   = directives || {};
+		var results   = arguments[3];			// Reserved for Observable extension
+		var store     = source;
+		var index     = null;
+		var self      = this;
+		var master;
+		var data;
+
+		// First, validate the source object.
 		if (source && (source.type == "store" || source.type == "index")) {
-			if (source.type == "store") {
-				var store = source;
-				var index = null;
-			} else {
-				var store = source.store;
-				var index = source;
+			if (source.type == "index") {
+				store = source.store;
+				index = source;
 			}
 			if (store.keyPath == undef) {
 				throw new StoreError( "DataError", "constructor", "store requires a key path to be observable" );
@@ -388,62 +503,52 @@ define(["dojo/_base/declare",
 			throw new StoreError( "DataError", "constructor", "invalid source" );
 		}
 		
-		// Try to determine the type of result set we are dealing with.
-		var obsType = "keyRange" in results ? C_RANGE : C_QUERY;
-		if (obsType == C_RANGE) {
-			if (!(range instanceof KeyRange)) {
-				if (range != undef) {
-					if (!Keys.validKey(range)) {
-						throw new StoreError( "TypeError", "constructor" );
-					} else {
-						range = KeyRange.only( source.uppercase ? Keys.toUpperCase(range) : range );
-					}
+		// Second, setup the options object and chunking parameters
+		options  = isDirection(options) ? {direction:options} : options;
+		options  = mixin( {start:0, count: 0}, options);
+
+		sorted   = !!(options.sort);
+		chunked  = !!(options.start || options.count);
+		chunkOff = mixin(clone(options), {start:0, count:0});
+		chunkOn  = {start: options.start, count: options.count};
+
+		// Third, if no results was specified determine what we need to observe
+		if (results) {
+			if (!(results instanceof Array || results instanceof Promise)) {
+				throw new StoreError( "DataError", "constructor", "invalid RESULTS argument" );
+			}
+			master = results;
+		} else {
+			if (query) {
+				if (query instanceof KeyRange || isObject(query)) {
+					obsType = query instanceof KeyRange ? C_RANGE : C_QUERY;
+				} else {
+					throw new StoreError( "DataError", "constructor", "invalid query argument" );
+				}
+			} else {
+				if (isObject(options) && "direction" in options) {
+					options = {direction: options.direction};
+					obsType = C_RANGE;
+					chunked = false;
+					sorted  = false;
 				}
 			}
-			var direction = results.direction || directives || "next";
-			var ascending = /^next/.test(direction) || false;
-			var options   = {};
-		} else {
-			if (range == undef || isObject(range)) {
-				var options = directives || {};
-				var npOpts  = clone( options );
-				npOpts.start = 0;
-				npOpts.count = 0;
-
-				var queryFnc = store.queryEngine && store.queryEngine( range, npOpts);
-				var matches  = queryFnc && queryFnc.matches;
+			if (obsType == C_RANGE) {
+				master = source.getRange( query, options.direction, !!options.duplicates );
 			} else {
-				throw new StoreError( "DataError", "constructor", "invalid range argument" );
+				master = source.query( query, chunkOff );
 			}
+			when ( master, function (dataset) {
+				dataset.revision = "revision" in dataset ? dataset.revision : store.revision;				
+			});
 		}
-
-		// We must have a revision number somewhere. A revision number greater than
-		// zero (0) is an indication the QueryResults has been resolved. Until then
-		// all observations for the QueryResults will be postponed.
-
-		if (!revision) {
-			if ("revision" in results) {
-				// Don't fetch the revision number until QueryResults resolves.
-				when (results, function () {
-					when (results.revision, function (revNum) {
-						if (typeof revNum == "number") {
-							revision = revNum;
-						} else {
-							throw new StoreError( "DataError", "constructor", "revision must be a number" );
-						}
-					});
-				});
-			} else {
-				throw new StoreError( "DataError", "constructor", "missing revision number" );
-			}
-		}
+		// When master dataset resolves initialize the Observer.
+		data = when( master, initialize);
 
 		var listeners = new ListenerList();
 		var deferred  = new Deferred();
-		var destroyed = false;
-		var self      = this;
 		
-		Lib.defProp( this, "results", {	get: function () {return results;},	enumerable: true });
+		Lib.defProp( this, "data", {	get: function () {return data;},	enumerable: true });
 
 		// Register observer callbacks with the store.
 		var updater = store._register( "write, delete", update );

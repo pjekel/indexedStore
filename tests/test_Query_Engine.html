@@ -100,7 +100,6 @@
 								var options = {sort:[{property:"name"}]};
 								var results = Sorter( data, options);
 
-								t.is( 18, results.total );
 								t.is( 18, results.length );
 
 								var name = results[0].name;
@@ -113,7 +112,6 @@
 								options = {sort:[{property:"name", descending:true}]};
 								results = Sorter( data, options);
 
-								t.is( 18, results.total );
 								t.is( 18, results.length );
 
 								name = results[0].name;
@@ -133,7 +131,6 @@
 								var results = Sorter( data, options);
 								var max = data.length;
 
-								t.is( max, results.total );
 								t.is( max, results.length );
 
 								var name = results[0].name;
@@ -152,7 +149,6 @@
 								options = {sort:[{property:"name", descending:true}, {property:"age"}]};
 								results = Sorter( data, options);
 
-								t.is( max, results.total );
 								t.is( max, results.length );
 
 								name = results[0].name;
@@ -171,7 +167,6 @@
 								options = {sort:[{property:"name", descending:true}, {property:"age", descending:true}]};
 								results = Sorter( data, options);
 
-								t.is( max, results.total );
 								t.is( max, results.length );
 
 								name = results[0].name;

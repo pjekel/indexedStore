@@ -20,6 +20,6 @@ define(["doh/main", "require"], function(doh, require){
 	doh.register("Hierarchy Extension", require.toUrl("./test_Hierarchy_Extension.html"), 999999);
 	doh.register("Ancestry Extension", require.toUrl("./test_Ancestry_Extension.html"), 999999);
 	doh.register("Watch Extension", require.toUrl("./test_Watch_Extension.html"), 999999);
-	doh.register("Observable Extension", require.toUrl("./test_Observable_Extension.html"), 999999);
+//	doh.register("Observable Extension", require.toUrl("./test_Observable_Extension.html"), 999999);
 
 });

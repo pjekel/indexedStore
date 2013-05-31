@@ -100,20 +100,16 @@
 								var Store = declare( [_Store, _Indexed]);
 								var store = new Store ();
 
-								var query   = {hair:"blond"};
-								var results = store.query(query); 
 								var destroyed = false;
 								
-								t.t( results instanceof Array );
-
 								// Because the Observable extension is not loaded we must create
 								// the observer instance manually.
-								var observer = new Observer( store, results, query, null, store.revision );
+								var observer = new Observer( store );
 								observer.done( function () {
 									destroyed = true;
 								});
 
-								t.is (results, observer.results)
+								t.t( observer.data instanceof Array );
 
 								// Create listener manually
 								var lstn0  = new Listener( listener0 );
@@ -126,7 +122,7 @@
 								handle.remove();
 
 								// The observer should be 'destroyed'
-								t.is (null, observer.results)
+								t.is (null, observer.data)
 								t.e( Error, observer, "addListener", [listener0]);
 								t.t(destroyed);
 
@@ -140,20 +136,16 @@
 								var Store = declare( [_Store, _Indexed]);
 								var store = new Store ();
 
-								var query   = {hair:"blond"};
-								var results = store.query(query); 
 								var destroyed = false;
 								
-								t.t( results instanceof Array );
-
 								// Because the Observable extension is not loaded we must create
 								// the observer instance manually.
-								var observer = new Observer( store, results, query, null, store.revision );
+								var observer = new Observer( store );
 								observer.done( function () {
 									destroyed = true;
 								});
 
-								t.is (results, observer.results)
+								t.t( observer.data instanceof Array );
 
 								// Create listener automatically.
 								observer.addListener( listener0 );
@@ -167,7 +159,7 @@
 								observer.removeListener();
 
 								// The observer should be 'destroyed'
-								t.is (null, observer.results)
+								t.is (null, observer.data)
 								t.e( Error, observer, "addListener", [listener0]);
 								t.t(destroyed);
 
@@ -181,20 +173,14 @@
 								var Store = declare( [_Store, _Indexed]);
 								var store = new Store ();
 
-								var query   = {hair:"blond"};
-								var results = store.query(query); 
 								var destroyed = false;
-								
-								t.t( results instanceof Array );
 
 								// Because the Observable extension is not loaded we must create
 								// the observer instance manually.
-								var observer = new Observer( store, results, query, null, store.revision );
+								var observer = new Observer( store );
 								observer.done( function () {
 									destroyed = true;
 								});
-
-								t.is (results, observer.results)
 
 								// Create listener automatically.
 								observer.addListener( listener0 );
@@ -209,8 +195,9 @@
 								observer.destroy();		// this should be Ok.
 
 								listeners = observer.getListeners();
+								t.is (null, listeners);
 								// The observer should be 'destroyed'
-								t.is (null, observer.results)
+								t.is (null, observer.data)
 								t.e( Error, observer, "addListener", [listener0]);
 								t.t(destroyed);
 							}
@@ -225,21 +212,17 @@
 								var defer = new doh.Deferred();
 
 								var query   = {hair:"blond"};
-								var results = store.query(query); 
-
-								t.t( results instanceof Array );
 
 								// Because the Observable extension is not loaded we must create
 								// the observer instance manually.
-								var observer = new Observer( store, results, query, null, store.revision );
+								var observer = new Observer( store, query );
 
 								store.ready( 
 									defer.getTestCallback(
 										function (store) {
 											// There is NO Observer listener so fetch the results 
 											// directly from the observer.
-											var obsRes = observer.results;
-											t.is( obsRes, results );
+											var obsRes = observer.data;
 											t.is( 0, obsRes.total );
 
 											// Marge does not match query
@@ -257,8 +240,6 @@
 											t.is( 0, obsRes.total );
 
 											observer.destroy();
-											// Observer destroyed, adding a listener should fail
-											t.e( Error, observer, "addListener", [listener0]);
 										}
 									),
 									function (err) {
@@ -277,21 +258,16 @@
 								var store = new Store ({autoLoad:true, keyPath:"name"});
 								var defer = new doh.Deferred();
 
-								var results = store.getRange(); 
-
-								t.t( results instanceof Array );
-
 								// Because the Observable extension is not loaded we must create
 								// the observer instance manually.
-								var observer = new Observer( store, results, null, null, store.revision );
+								var observer = new Observer( store, null, "next" );
 
 								store.ready( 
 									defer.getTestCallback(
 										function (store) {
 											// There is NO Observer listener so fetch the results 
 											// directly from the observer.
-											var obsRes = observer.results;
-											t.is( obsRes, results );
+											var obsRes = observer.data;
 											t.is( 0, obsRes.total );
 
 											// Marge does match range
@@ -315,8 +291,6 @@
 											t.is( 1, obsRes.total );
 											
 											observer.destroy();
-											// Observer destroyed, adding a listener should fail
-											t.e( Error, observer, "addListener", [listener0]);
 										}
 									),
 									function (err) {
@@ -337,13 +311,11 @@
 
 								// Because store load is deferred results should be a Promise.
 								var query   = {hair:"blond"};
-								var results = store.query(query); 
-
-								t.t( results instanceof Promise );
 
 								// Because the Observable extension is not loaded we must create
 								// the observer instance manually.
-								var observer = new Observer( store, results, query, null, store.revision );
+								var observer = new Observer( store, query );
+								t.t (observer.data instanceof Promise);
 
 								// Deferred load (to get the store ready and resolve results)
 								store.load();
@@ -353,16 +325,17 @@
 										function (store) {
 											// There is NO Observer listener so fetch the results 
 											// directly from the observer.
-											when( observer.results, function (dataset) {
+											t.t (observer.data instanceof Array);
+											var a = observer;
+											
+											when( observer.data, function (dataset) {
 												t.is (0, dataset.length);
 												t.is (0, dataset.total);
-												t.is (0, results.total);
 											});
 											store.put( {name:"Bart", hair:"blond"});
-											when( observer.results, function (dataset) {
+											when( observer.data, function (dataset) {
 												t.is (1, dataset.length);
 												t.is (1, dataset.total);
-												t.is (1, results.total);
 											});
 											observer.destroy();
 										}
@@ -386,20 +359,16 @@
 								count = {};		// reset counters
 								
 								var query   = {hair:"blond"};
-								var results = store.query(query); 
-
-								t.t( results instanceof Array );
 
 								// Because the Observable extension is not loaded we must create
 								// the observer instance manually.
-								var observer = new Observer( store, results, query, null, store.revision );
+								var observer = new Observer( store, query );
 								observer.addListener( listener0, true );
 
 								store.ready( 
 									defer.getTestCallback(
 										function (store) {
-											var obsRes = observer.results;
-											t.is( obsRes, results );
+											var obsRes = observer.data;
 											t.is( 0, obsRes.total );
 
 											store.put( {name:"Marge", hair:"blue"});	// No match
@@ -428,7 +397,6 @@
 							}
 						},
 
-
 						{
 							name: "Observe Query, with listener",
 							timeout: 2000,
@@ -447,8 +415,9 @@
 											var query = {age: function (val, key, obj) {
 												return (val >= 40 && val <= 50);
 											}};
-											var results = store.query( query );
-											var observer = new Observer( store, results, query, null, store.revision );
+											var observer = new Observer( store, query );
+											var results  = observer.data;
+											
 											observer.addListener( listener0, true );		// Include updates
 											observer.addListener( listener1, false );		// exclude updates
 											
@@ -493,6 +462,67 @@
 								return defer;
 							}
 						},
+
+						{
+							name: "Observable Extension",
+							timeout: 2000,
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, Observable]);
+								var store = new Store ({data:data, keyPath:"name"});
+								var defer = new doh.Deferred();
+
+								count = {add:0, delete:0, change:0};		// reset counters
+								
+								store.ready( 
+									defer.getTestCallback(
+										function (store) {
+
+											// Query using a property function
+											var query = {age: function (val, key, obj) {
+												return (val >= 40 && val <= 50);
+											}};
+											var results = store.query(query);
+											
+											t.t( results.observe instanceof Function);
+										
+											var handle = results.observe( listener0, true );
+											t.is( 0, count.add );
+											
+											results.forEach( function (obj) {
+												obj.age++;
+												store.put(obj);
+											});
+											// Test types of actions..
+											t.is( 0, count.add );
+											t.is( 0, count.delete );
+											t.is( 4, count.change );		// Only listener0 should have been called.
+
+											// Update age again but this time all object will no longer
+											// match the query so all will be removed from results.
+											
+											results.slice().forEach( function (obj) {
+												obj.age = 66;
+												store.put(obj);
+											});
+
+											t.is( 0, results.length );
+											t.is( 0, results.total );
+
+											// Test types of actions..
+											t.is( 0, count.add );
+											t.is( 4, count.delete );
+											t.is( 4, count.change );
+
+											handle.remove();
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}
+								);
+								return defer;
+							}
+						}
 
 					]);
 

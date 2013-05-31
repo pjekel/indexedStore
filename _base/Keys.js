@@ -353,17 +353,17 @@ define(["exports",
 		// object: Object
 		//		Object to extract the key value from.
 		// returns: Any
-		//		Any. The value returned may or may not be a valid key.
+		//		Any. The value returned may or may not be a valid key. To test key
+		//		validity call validKey()
 		// tag:
 		//		Public
 		if (keyPath != undef) {
 			if (keyPath instanceof Array) {
 				// This will only ever "recurse" one level since key path sequences
 				// can't ever be nested
-				var value = keyPath.map( function (path) {
+				return keyPath.map( function (path) {
 					return getProp(path, object);
 				});
-				return exports.validKey(key) ? value : undef;
 			}
 			if (keyPath != "") {
 				return getProp(keyPath, object);
@@ -436,7 +436,32 @@ define(["exports",
 		return new Location(source);
 	};
 
-	exports.sort = function (/*Key[]*/ keys, /*Boolean?*/ ascending) {
+	exports.sort = function (data, keyPath, ascending) {
+		// summary:
+		//		Sort an array of objects by their key.
+		// data: Object[]
+		//		Array of objects.
+		// keyPath: KeyPath
+		// ascending: Boolean?
+		//		If true, the objects are sorted in ascending order otherwise the objects
+		//		are sorted in descending order. The default is true.
+		// returns: Object[]
+		//		The keys array sorted.
+		// tag:
+		//		Public
+		if (keyPath && data instanceof Array) {
+			var kA, kB, kV = exports.keyValue;
+			ascending = (ascending != undef ? !!ascending : true);
+			data.sort( function (a,b) {
+				kA = kV(keyPath, a);
+				kB = kV(keyPath, b);
+				return ( ascending ? exports.cmp(kA,kB) : exports.cmp(kB,kA) );
+			});
+		}
+		return data;
+	};
+
+	exports.sortKeys = function (keys, ascending) {
 		// summary:
 		//		Sort an array of keys. If keys are arrays a deep array comparison
 		//		is performed. In accordance with the W3C IndexedDB specs, the rule:

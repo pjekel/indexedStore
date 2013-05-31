@@ -255,6 +255,7 @@ define(["../_base/Record",
 			var unique   = options && options.unique;
 			var data     = data || [];
 			var results  = [];
+			var total;
 			
 			data.forEach( function (any) {
 				var object = any instanceof Record ? any.value : any;
@@ -266,10 +267,11 @@ define(["../_base/Record",
 			if (!!unique) {
 				results = uniqueness(results, options);
 			}
-			results.total = results.length;
+			total = results.length;
 			if (!!paginate) {
 				results = Sorter( results, options );
 			}
+			results.total = total;
 			return results;
 		} /* end execute() */
 

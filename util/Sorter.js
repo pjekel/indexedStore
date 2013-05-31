@@ -15,6 +15,7 @@ define(["../_base/Library",
 	// module:
 	//		indexedStore/util/Sorter
 	// summary:
+	//		Sort and paginate an array of objects.
 
 	var StoreError = createError("Sorter");
 	var getProp    = Lib.getProp;
@@ -30,7 +31,6 @@ define(["../_base/Library",
 		var objects = data || [];  // Make sure we always return something
 		var sortSet = options && options.sort;
 		var sortFnc = sortSet;
-		var total   = objects.length;
 
 		// Can the objects be sorted or do we have a user specified sort function?
 		if (typeof objects.sort != "function" && typeof sortFnc != "function") {
@@ -47,8 +47,8 @@ define(["../_base/Library",
 
 					for(i=0; sort = sortSet[i]; i++) {
 						prop = sort.property || sort.attribute;
-						valA = getProp.call(Lib, prop,a);
-						valB = getProp.call(Lib, prop,b);
+						valA = getProp(prop,a);
+						valB = getProp(prop,b);
 
 						if (sort.ignoreCase) {
 							valA = (valA && valA.toLowerCase) ? valA.toLowerCase() : valA;
@@ -67,7 +67,6 @@ define(["../_base/Library",
 		if (options && (options.start || options.count)) {
 			objects = objects.slice(options.start || 0, (options.start || 0) + (options.count || Infinity));
 		}
-		objects.total = total;
 		return objects;
 	}
 

@@ -119,9 +119,6 @@
 								store.getRange(keyRange, "prev");
 								store.getRange(keyRange, "prevunique");
 
-								// Direction not nullable
-								t.e( Error, store, "getRange", [null, null] );
-								t.e( Error, store, "getRange", [keyRange, null] );
 								t.e( Error, store, "getRange", [null, "what?"] );
 							}
 						},
@@ -143,14 +140,12 @@
 								index.getRange(keyRange);
 								index.getRange(keyRange, false);
 								index.getRange(keyRange, "next");
-								index.getRange(keyRange, "next", false);
+								index.getRange(keyRange, {direction:"next", duplicates:false});
 								index.getRange(keyRange, "nextunique");
 								index.getRange(keyRange, "prev");
 								index.getRange(keyRange, "prevunique");
 
 								// Direction not nullable
-								t.e( Error, index, "getRange", [null, null] );
-								t.e( Error, index, "getRange", [keyRange, null] );
 								t.e( Error, index, "getRange", [null, "what?"] );
 
 								// Test index key range parameters
@@ -166,9 +161,6 @@
 								index.getKeyRange(keyRange, "prev");
 								index.getKeyRange(keyRange, "prevunique");
 
-								// Direction not nullable
-								t.e( Error, index, "getKeyRange", [null, null] );
-								t.e( Error, index, "getKeyRange", [keyRange, null] );
 								t.e( Error, index, "getKeyRange", [null, "what?"] );
 							}
 						},
@@ -267,7 +259,7 @@
 								});
 
 								rangeDupl = index.getKeyRange();
-								rangeUniq = index.getKeyRange(null, false);
+								rangeUniq = index.getKeyRange(null, {duplicates:false});
 								t.is ( rangeUniq, Keys.purgeKey( rangeDupl));
 
 								store.destroy();

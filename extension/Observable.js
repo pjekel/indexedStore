@@ -93,14 +93,14 @@ define(["dojo/_base/declare",
 		//=========================================================================
 		// Public IndexedStore/api/store API methods
 
-		getRange: function (keyRange, direction) {
+		getRange: function (keyRange, options) {
 			// summary:
 			//		Retrieve a range of store records.
 			// keyRange: Key|KeyRange?
 			//		A KeyRange object or valid key.
-			// direction: String?
-			//		The range required direction. Valid options are: 'next', 'nextunique',
-			//		'prev' or 'prevunique'.
+			// options: (String|Object)?
+			//		If a string, the range required direction: 'next', 'nextunique', 
+			//		'prev' or 'prevunique'. Otherwise a Store.RangeOptions object.
 			// returns: dojo/store/api/Store.QueryResults
 			//		The results of the query, extended with iterative methods.
 			// tag:
@@ -127,14 +127,13 @@ define(["dojo/_base/declare",
 				//		Public
 				
 				if (!observer) {
-					observer = new Observer(store, keyRange, direction, results);
+					observer = new Observer(store, keyRange, options, results);
 					observer.done( function () { observer = null;	});
 				}
 				return observer.addListener(listener, includeUpdates, scope);
 			}
 
 			var results   = this.inherited(arguments);		// Call 'parent' getRange()
-			var direction = direction || "next";
 			var keyRange  = keyRange;
 			var store     = this;
 			var observer  = null;

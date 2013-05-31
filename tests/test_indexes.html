@@ -399,7 +399,7 @@
 								t.is( 9, results.total );
 
 								// Same range, no duplicates
-								results = pIndex.getRange( keyRange, false );	// (Lisa, Bart, Maggie, Marge, Patty, Selma)
+								results = pIndex.getRange( keyRange, {duplicates:false} );	// (Lisa, Bart, Maggie, Marge, Patty, Selma)
 								t.is( 6, results.total );
 
 								//========================================================
@@ -455,7 +455,7 @@
 								t.is( 9, results.total );
 
 								// Same range, no duplicates
-								results = pIndex.getRange( keyRange, false );	// (Lisa, Bart, Maggie, Marge, Patty, Selma)
+								results = pIndex.getRange( keyRange, {duplicates:false} );	// (Lisa, Bart, Maggie, Marge, Patty, Selma)
 								t.is( 6, results.total );
 								
 								//========================================================

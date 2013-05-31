@@ -38,10 +38,11 @@
 				"store/listener/Listener",
 				"store/extension/Hierarchy",
 				"store/extension/Observable",
-				"store/extension/Watch"
+				"store/extension/Watch",
+				"store/util/Sorter"
         ], function( doh, declare, Promise, ready, when,
 											_Store, _Indexed, _Loader, Observer, Listener, Hierarchy,
-											Observable, Watch ) {
+											Observable, Watch, Sorter ) {
 					"use strict";
 					
 					// IMPORTANT:
@@ -66,6 +67,7 @@
 						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
 						{ "name":"Manjula", "age":40, "parent":["Apu"], "hair":"brown"}
 					];
+					var max = data.length;
 					var undef;
 
 					var count = {};
@@ -462,6 +464,104 @@
 								return defer;
 							}
 						},
+
+						{
+							name: "Observe Query, with listener, clear store",
+							timeout: 2000,
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ({data:data, keyPath:"name"});
+								var defer = new doh.Deferred();
+
+								count = {add:0, delete:0, change:0};		// reset counters
+								
+								var query    = {hair:"blond"};
+								var observer = new Observer( store, query );
+								observer.addListener( listener0, true );
+
+								store.ready( 
+									defer.getTestCallback(
+										function (store) {
+											var obsRes = observer.data;
+											t.is( 5, obsRes.total );
+
+											store.clear();
+
+											t.is( 0, obsRes.total );
+											t.is( 5, count.delete );
+
+											observer.destroy();
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}
+								);
+								return defer;
+							}
+						},
+
+						{
+							name: "Observe Query, with listener, paginate",
+							timeout: 2000,
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed]);
+								var store = new Store ({data:data, keyPath:"name"});
+								var defer = new doh.Deferred();
+
+								count = {add:0, delete:0, change:0};		// reset counters
+								
+								var observer = new Observer( store, null, {count: 5} );
+								observer.addListener( listener0, true );
+
+								store.ready( 
+									defer.getTestCallback(
+										function (store) {
+											var temp = Sorter( data.slice(), {sort:[{property:"name"}] } );
+											var oRes = observer.data.slice();
+											var res  = observer.data;
+											
+											t.is( max, observer.data.total );
+											t.is( 5, observer.data.length );
+											
+											res.forEach( function (obj, idx) {
+												t.is(obj.name, temp[idx].name);
+											});
+											// insert new object immediately following the last object in
+											// the result set.
+											var name = res[res.length-1].name + "0";
+											var obj  = {name:name, "age":80, "parent":["Apu"], "hair":"brown"};
+											store.put( obj );
+											
+											// Total number of objects matching the query should have increased
+											// but the results data length not....
+											
+											t.is( 0, count.add );
+											t.is( max+1, observer.data.total );
+											t.is( 5, observer.data.length );
+
+								
+											// Insert a record at index 0
+											var obj  = {name:"AAA", "age":80, "parent":["Apu"], "hair":"brown"};
+											store.put( obj );
+
+											t.is( 1, count.add );
+											t.is( max+2, observer.data.total );
+											t.is( 5, observer.data.length );
+
+											t.is( "AAA", res[0].name );
+
+											observer.destroy();
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}
+								);
+								return defer;
+							}
+						},
+
 
 						{
 							name: "Observable Extension",

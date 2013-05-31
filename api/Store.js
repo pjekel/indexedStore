@@ -389,5 +389,23 @@ define(["dojo/_base/declare",
 		// unique: String?
 	});
 
+	Store.RangeOptions = declare(null, {
+		// summary:
+		//		Optional object with additional parameters for query results.
+		// direction: String?
+		//		'next', 'nextunique', 'prev' or 'prevunique'.
+		// duplicates: Boolean?
+		// sort: dojo/store/api/Store.SortInformation[]?
+		//		A list of attributes to sort on, as well as direction
+		//		For example:
+		//		| [{attribute:"price, descending: true}].
+		//		If the sort parameter is omitted, then the natural order of the store
+		//		may be applied if there is a natural order.
+		// start: Number?
+		//		The first result to begin iteration on
+		// count: Number?
+		//		The number of how many results should be returned.
+	});
+
 	return Store;
 });

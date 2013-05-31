@@ -17,9 +17,10 @@ define(["dojo/Deferred",
 				"./Range",
 			  "./Record",
 				"../error/createError!../error/StoreErrors.json",
-				"../util/QueryResults"
+				"../util/QueryResults",
+				"../util/Sorter"
 			 ], function (Deferred, when, Cursor, Keys, KeyRange, Lib, Range, Record, 
-			               createError, QueryResults) {
+			               createError, QueryResults, Sorter) {
 	"use strict";
 
 	//module:
@@ -32,15 +33,18 @@ define(["dojo/Deferred",
 	// Define default index properties.
 	var IDBIndexOptions = { unique: false, multiEntry: false, uppercase: false, async: false };
 	
-	var StoreError = createError( "Index" );		// Create the StoreError type.
-	var isObject = Lib.isObject;
-	var clone    = Lib.clone;
-	var mixin    = Lib.mixin;
+	var StoreError  = createError( "Index" );		// Create the StoreError type.
+	var isDirection = Lib.isDirection;
+	var isObject    = Lib.isObject;
+	var isString    = Lib.isString;
+	var clone       = Lib.clone;
+	var mixin       = Lib.mixin;
 	var undef;
 	
 	var debug = dojo.config.isDebug || false;
 	
 	function Index (store, name, keyPath, optionalParameters) {
+		"use strict";
 		// summary:
 		//		Implements the IDBIndexSync interface
 		// store: Store
@@ -105,7 +109,7 @@ define(["dojo/Deferred",
 			if (record) {
 				if (record.value.push(storeKey) > 1) {
 					if (!index.unique && !index.loading) {
-						record.value.sort();
+						Keys.sortKeys(record.value);
 					}
 				}
 			} else {
@@ -184,7 +188,7 @@ define(["dojo/Deferred",
 			if (!index.unique && index._updates) {
 				records.forEach( function (record) {
 					if ((dup = record.value.length) > 1) {
-						Keys.sort( record.value );
+						Keys.sortKeys( record.value );
 					}
 					count += dup;
 				});
@@ -460,88 +464,88 @@ define(["dojo/Deferred",
 			return retrieveIndexValue( this, key );
 		};
 
-		this.getRange = function (keyRange, direction, duplicates) {
+		this.getRange = function (keyRange, options) {
 			// summary:
 			//		Retrieve a range of store records.
 			// keyRange: Key|KeyRange?
 			//		A KeyRange object or a valid key.
-			// direction: String?
-			//		The range's required direction.
-			// duplicates: Boolean?
-			//		If false, duplicate store record references are ignored. The default
-			//		is true.
+			// options: (String|Object)?
+			//		If a string, the range required direction: 'next', 'nextunique', 
+			//		'prev' or 'prevunique'. Otherwise a Store.RangeOptions object.
 			// returns: dojo/store/util/QueryResults
 			//		The range results, extended with iterative methods.
 			// tag:
 			//		Public
 
 			var defer = this.store.waiting || this.store.loader.loading;
-			var range = keyRange, dir = "next", dup = true;
+			var range = keyRange, direction = "next", duplicates = true;
+			var paginate = false;
 			var index = this;
 			
-			if (arguments.length > 1) {
-				if (arguments[1] !== null) {
-					if (Lib.isDirection(arguments[1])) {
-						dir = arguments[1];
-						dup = arguments[2];
-					} else if (typeof arguments[1] == "boolean") {
-						dup = arguments[1];
-					} else {
-						throw new StoreError("DataError", "getRange");
-					}
+			if (options) {
+				if (isString(options)) {
+					direction = options;
+				} else if (isObject(options)) {
+					paginate   = options.sort || options.start || options.count;
+					direction  = options.direction || direction;
+					duplicates = options.duplicates;
 				} else {
-					throw new StoreError("DataError", "getRange");
+					throw new StoreError("DataError", "getRange", "invalid options");
 				}
 			}
-			dup = dup != undef ? !!dup : true;
+			if (!isDirection(direction)) {
+				throw new StoreError("DataError", "getRange", "invalid direction");
+			}
+			duplicates = duplicates != undef ? !!duplicates : true;
 
 			var results = QueryResults ( 
 				when (defer, function () {
-					var objects = Range( index, range, dir, dup, false );
+					var objects = Range( index, range, direction, duplicates, false );
+					if (paginate) {
+						objects = Sorter(objects, options);
+					}
 					return index.store._clone ? clone(objects) : objects;
 				})
 			);
 			return results;
 		};
 
-		this.getKeyRange = function (keyRange, direction, duplicates) {
+		this.getKeyRange = function (keyRange, options) {
 			// summary:
 			//		Retrieve a range of store records.
 			// keyRange: Key|KeyRange?
 			//		A KeyRange object or a valid key.
-			// direction: String?
-			//		The range's required direction.
-			// duplicates: Boolean?
-			//		If false, duplicate store reference keys are ignored. The default
-			//		is true.
+			// options: (String|Object)?
+			//		If a string, the range required direction: 'next', 'nextunique', 
+			//		'prev' or 'prevunique'. Otherwise a Store.RangeOptions object.
 			// returns: dojo/store/util/QueryResults
 			//		The range results, extended with iterative methods.
 			// tag:
 			//		Public
 
 			var defer = this.store.waiting || this.store.loader.loading;
-			var range = keyRange, dir = "next", dup = true;
+			var range = keyRange, direction = "next", duplicates = true;
 			var index = this;
 			
-			if (arguments.length > 1) {
-				if (arguments[1] !== null) {
-					if (Lib.isDirection(arguments[1])) {
-						dir = arguments[1];
-						dup = arguments[2];
-					} else if (typeof arguments[1] == "boolean") {
-						dup = arguments[1];
-					} else {
-						throw new StoreError("DataError", "getKeyRange");
-					}
+			if (options) {
+				if (isString(options)) {
+					direction = options;
+					options   = null;
+				} else if (isObject(options)) {
+					direction  = options.direction || direction;
+					duplicates = options.duplicates;
 				} else {
-					throw new StoreError("DataError", "getKeyRange");
+					throw new StoreError("DataError", "getKeyRange", "invalid options");
 				}
 			}
-			dup = dup != undef ? !!dup : true;
+			if (!isDirection(direction)) {
+				throw new StoreError("DataError", "getKeyRange", "invalid direction");
+			}
+			duplicates = duplicates != undef ? !!duplicates : true;
 
 			var results = QueryResults ( 
 				when (defer, function () {
-					var objects = Range( index, range, dir, dup, true );
+					var objects = Range( index, range, direction, duplicates, true );
 					return index.store._clone ? clone(objects) : objects;
 				})
 			);

@@ -24,10 +24,12 @@ define(["dojo/_base/declare",
 				"../dom/string/DOMStringList",
 				"../listener/ListenerList",
 				"../util/QueryEngine",
-				"../util/QueryResults"
+				"../util/QueryResults",
+				"../util/Sorter"
 			 ], function (declare, Deferred, when, FeatureList, Index, Lib, Loader, 
 			               Keys, KeyRange, Range, Record, createError, EventTarget,
-			               DOMStringList, ListenerList, QueryEngine, QueryResults ) {
+			               DOMStringList, ListenerList, QueryEngine, QueryResults,
+			               Sorter ) {
 	"use strict";
 	// module:
 	//		IndexedStore/_base/_Store
@@ -151,11 +153,13 @@ define(["dojo/_base/declare",
 	//	|	});
 	//
 
-	var StoreError = createError( "_Store" );			// Create the StoreError type.
-	var isObject   = Lib.isObject;								// Test for [object Object];
-	var clone      = Lib.clone;										// HTML5 structured clone.
-	var mixin      = Lib.mixin;
-	var uniqueId   = 0;
+	var StoreError  = createError( "_Store" );			// Create the StoreError type.
+	var isDirection = Lib.isDirection; 
+	var isObject    = Lib.isObject;								// Test for [object Object];
+	var isString    = Lib.isString;
+	var clone       = Lib.clone;										// HTML5 structured clone.
+	var mixin       = Lib.mixin;
+	var uniqueId    = 0;
 	var undef;
 	
 	function AbstractOnly (/*String*/ method) {
@@ -509,6 +513,7 @@ define(["dojo/_base/declare",
 			//		Public
 			
 			this._assertStore( this, "clear", true );
+			this.loader.cancel();
 			this._clearRecords();
 			this.revision++;
 
@@ -662,34 +667,43 @@ define(["dojo/_base/declare",
 			}
 		},
 
-		getRange: function (keyRange, direction) {
+		getRange: function (keyRange, options) {
 			// summary:
 			//		Retrieve a range of store records.
 			// keyRange: Key|KeyRange?
 			//		A KeyRange object or valid key.
-			// direction: String
-			//		The range required direction. Valid options are: 'next', 'nextunique',
-			//		'prev' or 'prevunique'.
+			// options: (String|Object)?
+			//		If a string, the range required direction: 'next', 'nextunique', 
+			//		'prev' or 'prevunique'. Otherwise a Store.RangeOptions object.
 			// returns: dojo/store/api/Store.QueryResults
 			//		The results of the query, extended with iterative methods.
 			// tag:
 			//		Public
 
+			var direction = "next", paginate = false, range = keyRange;
 			var defer = this.waiting || this.loader.loading;
-			var range = keyRange, dir = "next";
 			var store = this;
 
-			if (arguments.length > 1) {
-				if (arguments[1] && Lib.isDirection(arguments[1])) {
-					dir = arguments[1];
+			if (options) {
+				if (isString(options)) {
+					direction = options;
+				} else if (isObject(options)) {
+					direction = options.direction || direction;
+					paginate  = options.sort || options.start || options.count;
 				} else {
-					throw new StoreError("DataError", "getRange", "invalid direction");
+					throw new StoreError("DataError", "getRange", "invalid options");
 				}
+			}
+			if (!isDirection(direction)) {
+				throw new StoreError("DataError", "getRange", "invalid direction");
 			}
 
 			var results = QueryResults ( 
 				when (defer, function () {
-					var objects = Range( store, range, dir, false, false );
+					var objects = Range( store, range, direction, false, false );
+					if (paginate) {
+						objects = Sorter(objects, options);
+					}
 					return store._clone ? clone(objects) : objects;
 				})
 			);
@@ -710,18 +724,6 @@ define(["dojo/_base/declare",
 			if (index) {
 				return index;
 			}
-		},
-		
-		isLoaded: function () {
-			// summary:
-			//		Test if the store has finished loaded.
-			// returns: Boolean
-			//		true if the store successfully completed at least one load request
-			//		and currently has no load request in progress, otherwise false.
-			// tag:
-			//		Public
-			var defer = this.waiting || this.loader.loading;
-			return (defer === false ? true : false);
 		},
 		
 		load: function (options) {

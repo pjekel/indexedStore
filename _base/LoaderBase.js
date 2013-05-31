@@ -44,6 +44,10 @@ define(["dojo/Deferred",
 		// store: Store
 		//		Instance of a Store object
 
+		this.cancel = function (reason) {
+			canceled = true;
+		};
+		
 		this.load = function (options) {
 			// summary:
 			//		Load an array of JavaScript key:value pairs objects into the store.
@@ -55,14 +59,16 @@ define(["dojo/Deferred",
 			var flags   = options.overwrite ? {overwrite:true} : null;
 			var data    = options.data || [];
 			var ldrDef  = new Deferred();
-			
+
+			canceled = false;
+
 			if (data instanceof Array) {
 				var i, max = data.length;
 
 				loader.loading = ldrDef.promise;
 				store._trigger("loadStart");
 				try {
-					for (i=0; i<max; i++) {
+					for (i=0; i<max && !canceled; i++) {
 						store._storeRecord( data[i], flags );
 					}
 					loader.loading = false;
@@ -79,9 +85,10 @@ define(["dojo/Deferred",
 				throw new StoreError("DataError", "load", "data must be an array of objects");
 			}
 			return ldrDef.promise;
-		}
+		};
 
-		var loader = this;
+		var canceled = false;
+		var loader   = this;
 
 		// Public properties
 		this.loading = false;

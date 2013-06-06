@@ -9,9 +9,15 @@
 //
 
 define(["../error/createError!../error/StoreErrors.json", 
-				"../shim/shims",
+				"../shim/shims"
 			 ], function (createError) {
 
+	// module:
+	//		indexedStore/_base/Library
+	// summary:
+	//		The Library module provides a set of common functions shared by many
+	//		other modules.
+	
 	var StoreError = createError( "Library" );
 	var _toString  = Object.prototype.toString;
   var undef;
@@ -19,9 +25,13 @@ define(["../error/createError!../error/StoreErrors.json",
 	var Lib = {
 
 		clone: function clone (object, strict) {
-			// html structured cloning algorithm. (no type map support)
-			var strict = strict != undef ? !!strict : true;
-			var memory = [];
+			// summary:
+			// 		html5 structured cloning algorithm. (no type map support)
+			// object: any
+			//		Object to clone.
+			// strict: Boolean?
+			// tag:
+			//		Public
 
 			function inMemory(memory, object) {
 				var obj;
@@ -72,13 +82,20 @@ define(["../error/createError!../error/StoreErrors.json",
 				}
 				throw new StoreError("DataCloneError", "clone", "objects of type [%{0}] can not be cloned", type);
 			}
-			var clone = cloneObj( object, memory );
-			return clone;
+
+			var strict = strict != undef ? !!strict : true;
+			var memory = [];
+
+			return cloneObj( object, memory );
 		},
 
 		copy: function (object) {
 			// summary:
 			//		create a shallow copy
+			// object: Object
+			//		A JavaScript object of class [object Object]
+			// tag:
+			//		Public
 			if (object === null || !(object instanceof Object)) {
 				return object;
 			}
@@ -87,6 +104,9 @@ define(["../error/createError!../error/StoreErrors.json",
 
 		debug: function ( text )	{
 			// summary:
+			// text: String
+			// tag:
+			//		Public
 			var msg = new Date() + (text ? " " + text : "");
 			console.info( msg );
 		},
@@ -110,7 +130,7 @@ define(["../error/createError!../error/StoreErrors.json",
 				} else if (typeof object[property] == "function") {
 					Object.defineProperty( object, property, {value: object[property], enumerable:false});
 				} else {
-					this.defProp( object, property, {enumerable:!!value});
+					Object.defineProperty( object, property, {enumerable:!!value});
 				}
 			}
 		},
@@ -138,6 +158,10 @@ define(["../error/createError!../error/StoreErrors.json",
 		},
 
 		isDirection: function ( direction ) {
+			// summary:
+			// direction: String
+			// tag:
+			//		Public
 			switch (direction) {
 				case "next": case "nextunique":
 				case "prev": case "prevunique":
@@ -149,6 +173,9 @@ define(["../error/createError!../error/StoreErrors.json",
 		isEmpty: function (o) {
 			// summary:
 			//		Return true if object is empty otherwise false.
+			// o: Object
+			// tag:
+			//		Public
 			for(var prop in o) {
 				if(o.hasOwnProperty(prop)) {
 					return false;
@@ -161,10 +188,14 @@ define(["../error/createError!../error/StoreErrors.json",
 			// summary:
 			//		Returns true if, and only if, an object is a JavaScript key:value
 			//		pairs object
+			// tag:
+			//		Public
 			return (obj && _toString.call(obj).slice(8,-1) == "Object");
 		},
 
 		isString: function(obj) {
+			// tag:
+			//		Public
 			return (_toString.call(obj).slice(8,-1) == "String");
 		},
 
@@ -202,6 +233,8 @@ define(["../error/createError!../error/StoreErrors.json",
 		},
 
 		mixin: function (dest, objects) {
+			// tag:
+			//		Public
 			var k, o, s, i=1, empty = {};
 			var d = dest || {};
 
@@ -217,6 +250,8 @@ define(["../error/createError!../error/StoreErrors.json",
 		},
 
 		protect: function (object) {
+			// tag:
+			//		Public
 			var props = Object.keys(object).filter( function(prop) {	return /^_/.test(prop);} );
 //			this.enumerate( object, props, false );
 		},
@@ -248,11 +283,13 @@ define(["../error/createError!../error/StoreErrors.json",
 			throw new StoreError("TypeError", "setProp", "parameter 'object' must be an object or array");
 		},
 
-		writable: function (/*Object*/ object,/*String|String[]*/ property,/*Boolean*/ value ) {
+		writable: function (object, property, value ) {
 			// summary:
-			// object:
-			// property:
-			// value:
+			// object: Object
+			// property: String|String[]
+			// value: Boolean
+			// tag:
+			//		Public
 
 			if (object && property) {
 				if (property instanceof Array) {

@@ -420,45 +420,20 @@ define(["exports",
 					idx = lb + Math.floor((ub-lb)/2);
 					rc  = exports.cmp( key, records[idx].key )
 					switch (rc) {
-						case 0:
-							return new Location( source, idx-1, idx, idx+1 );
 						case 1:
 							lb = idx + 1;
 							break;
 						case -1:
 							ub = idx;
 							break;
+						case 0:
+							return new Location( source, idx-1, idx, idx+1 );
 					}
 				} while (lb < ub);
 				return new Location( source, (rc < 0 ? idx-1 : idx), -1, (rc < 0 ? idx : idx + 1));
 			}
 		}
 		return new Location(source);
-	};
-
-	exports.sort = function (data, keyPath, ascending) {
-		// summary:
-		//		Sort an array of objects by their key.
-		// data: Object[]
-		//		Array of objects.
-		// keyPath: KeyPath
-		// ascending: Boolean?
-		//		If true, the objects are sorted in ascending order otherwise the objects
-		//		are sorted in descending order. The default is true.
-		// returns: Object[]
-		//		The keys array sorted.
-		// tag:
-		//		Public
-		if (keyPath && data instanceof Array) {
-			var kA, kB, kV = exports.keyValue;
-			ascending = (ascending != undef ? !!ascending : true);
-			data.sort( function (a,b) {
-				kA = kV(keyPath, a);
-				kB = kV(keyPath, b);
-				return ( ascending ? exports.cmp(kA,kB) : exports.cmp(kB,kA) );
-			});
-		}
-		return data;
 	};
 
 	exports.sortKeys = function (keys, ascending) {

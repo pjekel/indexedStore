@@ -8,17 +8,16 @@
 //	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["dojo/_base/lang",
-				"./Keys",
+define(["./Keys",
 				"./KeyRange",
 				"./Library",
 				"./Location",
 				"../error/createError!../error/StoreErrors.json"
-			], function(lang, Keys, KeyRange, Lib, Location, createError){
+			], function (Keys, KeyRange, Lib, Location, createError){
 	"use strict";
 
 	// module:
-	//		IndexedStore/_base/Cursor
+	//		indexedStore/_base/Cursor
 	// summary:
 	//		Cursors are a transient mechanism used to iterate over multiple records
 	//		in a store. Storage operations are performed on the underlying index or
@@ -26,7 +25,18 @@ define(["dojo/_base/lang",
 	//
 	//			http://www.w3.org/TR/IndexedDB/#cursor-sync
 	//
-	//		Cursors are supported on IndexedStore/_Indexed based stores and any index.
+	//		Cursors are supported on indexedStore/_base/_Indexed based stores and
+	//		any index.
+	//
+	// NOTE:
+	//		The dojo build system does not allow the use of the reserved keywords
+	//		'continue' and 'delete' as object properties therefore the following
+	//		alternatives are used:
+	//
+	//				IndexedDB              indexedStore/_base/Cursor
+	//
+	//			cursor.continue()   -->     cursor.cont()
+	//			cursor.delete()     -->     cursor.remove()
 	
 	var StoreError = createError( "Cursor" );		// Create the CBTError type.
 	var defProp    = Lib.defProp;
@@ -268,7 +278,8 @@ define(["dojo/_base/lang",
 
 		this.advance = function (count) {
 			// summary:
-			//		Advance the cursor count number of times forward.
+			//		Advance the cursor count number of times forward in the direction
+			//		set for the cursor.
 			// count: Number
 			//		The number of advances forward the cursor should make.
 			// tag:
@@ -285,6 +296,8 @@ define(["dojo/_base/lang",
 		}
 
 		// dojo buildsystem doesn't allow 'this.continue' therefore we use 'this.cont'
+
+		// this.continue = function (key) {
 		this.cont = function (key) {
 			// summary:
 			//		Advance the cursor once in the direction set for the cursor or to
@@ -305,6 +318,8 @@ define(["dojo/_base/lang",
 		}
 
 		// dojo buildsystem doesn't allow 'this.delete' therefore we use 'this.remove'
+
+		//this.delete = function () {
 		this.remove = function () {
 			// summary:
 			//		Delete the record with the cursor's current primary key from the store.

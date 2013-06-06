@@ -58,7 +58,7 @@ define (["./Library"], function (Lib) {
 		
 		this.has = function(/*String|String[]*/ name,/*Boolean?*/ all ) {
 			// summary:
-			//		Returns true if a given string is part of the DOMStringList otherwise
+			//		Returns true if a given string is part of the FeatureList otherwise
 			//		false
 			// name:
 			//		A feature name, a comma separated list of feature names or an array
@@ -69,7 +69,7 @@ define (["./Library"], function (Lib) {
 			if (name instanceof Array) {
 				return (all ? name.every( this.has ) : name.some( this.has ));
 			} else if (/,/.test(name)) {
-				return this.has( name.split(/\s*,\s*/));
+				return this.has( name.split(/\s*,\s*/), all);
 			}
 			return features[name] || false;
 		};

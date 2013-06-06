@@ -2,9 +2,10 @@ define(["dojo/Deferred",
 				"dojo/request",
 				"dojo/request/handlers",
 				"./Library",
+				"../dom/event/Event",
 				"../error/createError!../error/StoreErrors.json",
 				"../util/QueryEngine"
-			 ], function (Deferred, request, handlers, Lib, createError, QueryEngine) {
+			 ], function (Deferred, request, handlers, Lib, Event, createError, QueryEngine) {
 
 	// module
 	//		indexedStore/_base/LoaderPlus
@@ -30,7 +31,7 @@ define(["dojo/Deferred",
 	
 	var LoadDirectives = { 
 		// data: Array
-		//		The array of all raw objects to be loaded in the memory store.
+		//		An array of all raw objects to be loaded into the store.
 		//		(See also the 'dataHandler' and 'handleAs' properties).
 		data: null, 
 
@@ -98,6 +99,7 @@ define(["dojo/Deferred",
 
 	function Loader (store) {
 		// summary:
+		//		The enhanced store loader.
 		// store: Store
 		//		Instance of a Store object.
 		// tag:
@@ -179,22 +181,25 @@ define(["dojo/Deferred",
 			// summary:
 			//		a XHR request failed or the data loaded is invalid.
 			// err: Error
-			//		Error condition.
+			//		Error condition, typeically an instance of Error
 			// defer: dojo/Deferred
 			//		The dojo/Deferred associated with the load request.
 			// tag:
 			//		private
 			if (!defer.isFulfilled()) {
 				store._trigger("loadFailed");
+				store.dispatchEvent( new Event("error", {error:err}) );
 				defer.reject(err);
 			}
 			defer.error  = err;
 			loader.error = err;
+
 			loadNext();
 		}
 		
 		function loadInit (defer, options) {
 			// summary:
+			//		Initialize the loader.
 			// defer: dojo/Deferred
 			//		The dojo/Deferred associated with the load request.
 			// options: LoadDirectives
@@ -222,13 +227,14 @@ define(["dojo/Deferred",
 								loadData( data, defer, options );
 							},
 							function (err) {
-								loadError( new StoreError( fixError(err), "load"), defer);
+								err = fixError(err);
+								loadError( StoreError.call( err, err, "loadInit"), defer);
 							}
 						);
 						defer.then( null, result.cancel );
 					}
 				} catch (err) {
-					loadError(err, defer);
+					loadError( StoreError.call(err, err, "loadInit"), defer);
 				}
 			} else {
 				loadSuccess(defer);
@@ -237,7 +243,7 @@ define(["dojo/Deferred",
 
 		function loadNext () {
 			// summary:
-			//		Initiate the next load request.
+			//		Initiate the next load request, if any.
 			// tag:
 			//		private
 			var request;
@@ -268,6 +274,7 @@ define(["dojo/Deferred",
 			//		private
 			if (defer && defer.progress) {
 				var doneness = total > 0 ? (((loaded / total) * 100) >>> 0) : 0;
+				store._storeReady.progress(doneness);
 				defer.progress(doneness);
 			}
 		}
@@ -275,8 +282,7 @@ define(["dojo/Deferred",
 		function loadSuccess (defer) {
 			// summary:
 			//		Load request completed successfully. The dojo/Deferred associated
-			//		with the load request is resolved using a new 'thread' to allow
-			//		for the call stack to unwind.
+			//		with the load request is resolved.
 			// defer: dojo/Deferred
 			//		The dojo/Deferred associated with the load request.
 			// tag:
@@ -361,6 +367,7 @@ define(["dojo/Deferred",
 			queue.push( request );
 
 			if (!loader.loading) {
+//				setTimeout( loadNext, 0 );
 				loadNext();
 			}
 			return request.defer.promise;
@@ -425,7 +432,7 @@ define(["dojo/Deferred",
 		// Public properties
 		this.loading = false;
 		this.error   = null;
-		this.count   = 0;
+		this.count   = 0;					// Number of successful load requests.
 
 		// Private properties
 		var active = null;
@@ -444,7 +451,7 @@ define(["dojo/Deferred",
 				loader.cancel(reason);
 			}
 		);
-	}
+	}	/* end Loader() */
 	
 	return Loader;
 

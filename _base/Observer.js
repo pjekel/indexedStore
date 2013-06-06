@@ -180,6 +180,10 @@ define(["dojo/_base/declare",
 			
 			if (chunked) {
 				data = Sorter( dataset, chunkOn );	// returns a new object.
+				if (obsType == C_RANGE) {
+					data.direction = dataset.direction;
+					data.keysOnly  = dataset.keysOnly;
+				}
 				data.total = dataset.total;
 			} else {
 				data = dataset;
@@ -245,9 +249,6 @@ define(["dojo/_base/declare",
 				var deleted = !!(!newObj && oldObj);
 				var updated = !!(newObj && oldObj);
 
-				var start = options.start || 0;
-				var count = options.count || 0;
-				var size  = count ? start + count : dataset.length;
 				var from  = !added ? locate(store, dataset, key, true) : -1;
 				var into  = -1;
 
@@ -257,13 +258,9 @@ define(["dojo/_base/declare",
 							// Test if the new or updated object affects the dataset.
 							if (matches ? matches(newObj) : qFunc([newObj]).length) {
 								if (from == -1) {
-									// New object added to dataset
-									if (!sorted) {
-										into = locate(store, dataset, key, false);
-										dataset.splice(into, 0, newObj);
-									} else {
-										into = dataset.push(newObj) - 1;
-									}
+									// New object added to dataset, find location based on key.
+									into = locate(store, dataset, key, false);
+									dataset.splice(into, 0, newObj);
 									dataset.total++;
 								} else {
 									// Existing object in dataset updated
@@ -296,6 +293,10 @@ define(["dojo/_base/declare",
 										dataset[from] = newObj;
 										into = from;
 									}
+									if (sorted) {
+										Sorter( dataset, chunkOff );
+										into = dataset.indexOf(newObj);
+									}
 								}
 							} else {
 								// TODO: Needs additional work
@@ -325,6 +326,8 @@ define(["dojo/_base/declare",
 				// dataset will reference the same object array.
 
 				if (chunked) {
+					var start = options.start, count = options.count;
+					var size  = count ? start + count : dataset.length;
 					data.total = dataset.total;
 					// Dismiss all updates strictly in front or behind the current view.
 					if ((into > -1 && into < size || from > -1 && from < size)) {
@@ -535,14 +538,11 @@ define(["dojo/_base/declare",
 				}
 			} else {
 				if (isObject(options) && "direction" in options) {
-					options = {direction: options.direction};
 					obsType = C_RANGE;
-					chunked = false;
-					sorted  = false;
 				}
 			}
 			if (obsType == C_RANGE) {
-				master = source.getRange( query, options.direction, !!options.duplicates );
+				master = source.getRange( query, chunkOff );
 			} else {
 				master = source.query( query, chunkOff );
 			}

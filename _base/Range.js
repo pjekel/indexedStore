@@ -15,7 +15,12 @@ define(["./Keys",
 			 ], function (Keys, KeyRange, Lib, createError) {
 	"use strict";
 	
-	var StoreError = createError( "Range" );		// Create the StoreError type.
+	// module:
+	//		indexedStore/_base/Range
+	// summary:
+
+	var StoreError  = createError( "Range" );		// Create the StoreError type.
+	var isDirection = Lib.isDirection;
 	var undef;
 	
 	function Range(source, keyRange, direction, duplicates, keysOnly) {
@@ -36,7 +41,7 @@ define(["./Keys",
 		//		(record values) are returned. (default is false).
 		// returns: Object[]|Key[]
 		//		An array of objects or key values. The order of the objects or keys
-		//		is determined by the direction.
+		//		is determined by the direction set for the range.
 		// tag:
 		//		Public
 
@@ -49,7 +54,7 @@ define(["./Keys",
 			var store      = source.type == "store" ? source : source.store;
 			var results    = [];
 			
-			if (!Lib.isDirection( direction )) {
+			if (!isDirection( direction )) {
 				throw new StoreError( "TypeError", "constructor", "invalid direction");
 			}
 			if (!(keyRange instanceof KeyRange)) {
@@ -97,6 +102,7 @@ define(["./Keys",
 			// Add range info  to the result.
 			results.direction = direction;
 			results.keysOnly  = keysOnly;
+			results.total     = results.length;
 			return results;
 		} else {
 			throw new StoreError("DataError", "constructor", "invalid source specified");

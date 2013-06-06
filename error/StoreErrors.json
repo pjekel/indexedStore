@@ -29,6 +29,7 @@
 	{"ConstraintError": 			{ "text": "a mutation operation failed because a constraint was not satisfied" } },
 	{"InvalidStateError": 		{ "text": "the object is in an invalid state"} },
 	{"ReadOnlyError": 				{ "text": "the mutating operation was attempted in a 'readonly' transaction"} },
+	{"TransactionInactiveError": {"text":"A request was placed against a transaction which is currently not active, or which is finished"} },
 	{"UnknownError": 					{ "text": "the operation failed for reasons unrelated to the store or index"} }
 ]
 

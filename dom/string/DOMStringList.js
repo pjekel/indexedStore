@@ -108,7 +108,7 @@ define ([], function () {
 			}
 			return null;
 		}
-
+		Object.seal(this);
 	}
 
 	return DOMStringList;

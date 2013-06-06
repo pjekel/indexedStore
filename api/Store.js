@@ -388,6 +388,9 @@ define(["dojo/_base/declare",
 		//		Match object properties case insensitive. Default is false.
 		// unique: String?
 	});
+	
+	Store.QueryResults = declare(null, {
+	});
 
 	Store.RangeOptions = declare(null, {
 		// summary:

@@ -16,6 +16,9 @@ define(["doh/main", "require"], function(doh, require){
 	doh.register("Index Cursors", require.toUrl("./test_Index_Cursors.html"), 999999);
 	doh.register("Store Ranges", require.toUrl("./test_Ranges.html"), 999999);
 	doh.register("Query Engine", require.toUrl("./test_Query_Engine.html"), 999999);
+	doh.register("Observer_Listeners", require.toUrl("./test_Observer_Listener.html"), 999999);
+	doh.register("Observer_Query", require.toUrl("./test_Observer_Query.html"), 999999);
+	doh.register("Observer_Range", require.toUrl("./test_Observer_Range.html"), 999999);
 	doh.register("CORS Extension", require.toUrl("./test_CORS_Extension.html"), 999999);
 	doh.register("Hierarchy Extension", require.toUrl("./test_Hierarchy_Extension.html"), 999999);
 	doh.register("Ancestry Extension", require.toUrl("./test_Ancestry_Extension.html"), 999999);

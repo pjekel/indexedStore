@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Observer &amp; Observable Extension</title>
+    <title>Observable Extension</title>
     <style type="text/css">
       @import "../../dijit/themes/claro/claro.css";
       @import "../../dijit/themes/claro/document.css";
@@ -34,23 +34,24 @@
         "store/_base/_Store",
         "store/_base/_Indexed",
         "store/_base/_Loader",
+        "store/_base/KeyRange",
         "store/_base/Observer",
 				"store/listener/Listener",
 				"store/extension/Hierarchy",
 				"store/extension/Observable",
 				"store/extension/Watch",
+				"store/util/QueryEngine",
 				"store/util/Sorter"
         ], function( doh, declare, Promise, ready, when,
-											_Store, _Indexed, _Loader, Observer, Listener, Hierarchy,
-											Observable, Watch, Sorter ) {
+											_Store, _Indexed, _Loader, KeyRange, Observer, Listener, Hierarchy,
+											Observable, Watch, QueryEngine, Sorter ) {
 					"use strict";
 					
 					// IMPORTANT:
-					//		Don't change the number of records without updating any of
-					//		the range and count tests.
-					// - there are 8 unique parents.
+					//		DON'T CHANGE THE NUMBER OF RECORDS ARE ANY PROPERTIES WITHOUT UPDATING
+					//		ANY OF THE RANGE AND COUNT TESTS.
 					var data = [
-						{ "name":"Root", "parent":[], "hair":"none" },
+						{ "name":"Root", "age":Infinity, "parent":[], "hair":"none" },
 						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
 						{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
 						{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
@@ -73,7 +74,7 @@
 					var count = {};
 
 					function action (from, to) {
-						var type = from < 0 ? (to < 0 ? "none" : "add") : (to < 0 ? "delete" : "change");
+						var type = from < 0 ? (to < 0 ? "none" : "add") : (to < 0 ? "deleted" : "change");
 						return type;
 					}
 
@@ -95,483 +96,16 @@
 					};
 					
 					doh.register("Observer & Observable Extension", [
-						{
-							name: "Create Observer, add and remove listener",
-							timeout: 2000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ();
-
-								var destroyed = false;
-								
-								// Because the Observable extension is not loaded we must create
-								// the observer instance manually.
-								var observer = new Observer( store );
-								observer.done( function () {
-									destroyed = true;
-								});
-
-								t.t( observer.data instanceof Array );
-
-								// Create listener manually
-								var lstn0  = new Listener( listener0 );
-								var handle = observer.addListener( lstn0 );
-								// Create listener automatically.
-								observer.addListener( listener1 );
-								observer.removeListener( listener1 );
-
-								// remove first listener using the handle.
-								handle.remove();
-
-								// The observer should be 'destroyed'
-								t.is (null, observer.data)
-								t.e( Error, observer, "addListener", [listener0]);
-								t.t(destroyed);
-
-							}
-						},
 
 						{
-							name: "Create Observer, add and remove multiple listeners",
-							timeout: 2000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ();
-
-								var destroyed = false;
-								
-								// Because the Observable extension is not loaded we must create
-								// the observer instance manually.
-								var observer = new Observer( store );
-								observer.done( function () {
-									destroyed = true;
-								});
-
-								t.t( observer.data instanceof Array );
-
-								// Create listener automatically.
-								observer.addListener( listener0 );
-								observer.addListener( listener1 );
-								observer.addListener( listener2 );
-
-								var listeners = observer.getListeners();
-								t.is (3, listeners.length);
-								
-								// Remove all listeners
-								observer.removeListener();
-
-								// The observer should be 'destroyed'
-								t.is (null, observer.data)
-								t.e( Error, observer, "addListener", [listener0]);
-								t.t(destroyed);
-
-							}
-						},
-
-						{
-							name: "Create Observer, add multiple, destroy Observer",
-							timeout: 2000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ();
-
-								var destroyed = false;
-
-								// Because the Observable extension is not loaded we must create
-								// the observer instance manually.
-								var observer = new Observer( store );
-								observer.done( function () {
-									destroyed = true;
-								});
-
-								// Create listener automatically.
-								observer.addListener( listener0 );
-								observer.addListener( listener1 );
-								observer.addListener( listener2 );
-
-								var listeners = observer.getListeners();
-								t.is (3, listeners.length);
-
-								// Destroy Observer
-								observer.destroy();
-								observer.destroy();		// this should be Ok.
-
-								listeners = observer.getListeners();
-								t.is (null, listeners);
-								// The observer should be 'destroyed'
-								t.is (null, observer.data)
-								t.e( Error, observer, "addListener", [listener0]);
-								t.t(destroyed);
-							}
-						},
-
-						{
-							name: "Observe Query, no listener, empty store, auto load",
-							timeout: 2000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({autoLoad:true, keyPath:"name"});
-								var defer = new doh.Deferred();
-
-								var query   = {hair:"blond"};
-
-								// Because the Observable extension is not loaded we must create
-								// the observer instance manually.
-								var observer = new Observer( store, query );
-
-								store.ready( 
-									defer.getTestCallback(
-										function (store) {
-											// There is NO Observer listener so fetch the results 
-											// directly from the observer.
-											var obsRes = observer.data;
-											t.is( 0, obsRes.total );
-
-											// Marge does not match query
-											store.put( {name:"Marge", hair:"blue"});
-											t.is( 0, obsRes.length );
-											t.is( 0, obsRes.total );
-
-											// Bart matches the query
-											store.put( {name:"Bart", hair:"blond"});
-											t.is( 1, obsRes.length );
-											t.is( 1, obsRes.total );
-
-											store.put( {name:"Bart", hair:"brown"});
-											t.is( 0, obsRes.length );
-											t.is( 0, obsRes.total );
-
-											observer.destroy();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						},
-
-						{
-							name: "Observe Range, no listener, empty store, auto load",
-							timeout: 2000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({autoLoad:true, keyPath:"name"});
-								var defer = new doh.Deferred();
-
-								// Because the Observable extension is not loaded we must create
-								// the observer instance manually.
-								var observer = new Observer( store, null, "next" );
-
-								store.ready( 
-									defer.getTestCallback(
-										function (store) {
-											// There is NO Observer listener so fetch the results 
-											// directly from the observer.
-											var obsRes = observer.data;
-											t.is( 0, obsRes.total );
-
-											// Marge does match range
-											store.put( {name:"Marge", hair:"blue"});
-											t.is( 1, obsRes.length );
-											t.is( 1, obsRes.total );
-
-											store.put( {name:"Bart", hair:"blond"});
-											t.is( 2, obsRes.length );
-											t.is( 2, obsRes.total );
-
-											// Updating Bart has no effect on the range
-											var bart = store.get("Bart");
-											bart.hair = "brown";
-											store.put( bart );
-											t.is( 2, obsRes.length );
-											t.is( 2, obsRes.total );
-
-											store.remove("Bart");
-											t.is( 1, obsRes.length );
-											t.is( 1, obsRes.total );
-											
-											observer.destroy();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						},
-
-						{
-							name: "Observe Query, no listener, empty store and deferred load",
-							timeout: 2000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({autoLoad: false, keyPath:"name"});
-								var defer = new doh.Deferred();
-
-								// Because store load is deferred results should be a Promise.
-								var query   = {hair:"blond"};
-
-								// Because the Observable extension is not loaded we must create
-								// the observer instance manually.
-								var observer = new Observer( store, query );
-								t.t (observer.data instanceof Promise);
-
-								// Deferred load (to get the store ready and resolve results)
-								store.load();
-								
-								store.ready( 
-									defer.getTestCallback(
-										function (store) {
-											// There is NO Observer listener so fetch the results 
-											// directly from the observer.
-											t.t (observer.data instanceof Array);
-											var a = observer;
-											
-											when( observer.data, function (dataset) {
-												t.is (0, dataset.length);
-												t.is (0, dataset.total);
-											});
-											store.put( {name:"Bart", hair:"blond"});
-											when( observer.data, function (dataset) {
-												t.is (1, dataset.length);
-												t.is (1, dataset.total);
-											});
-											observer.destroy();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						},
-
-						{
-							name: "Observe Query, with listener, empty store, auto load",
-							timeout: 2000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({autoLoad:true, keyPath:"name"});
-								var defer = new doh.Deferred();
-
-								count = {};		// reset counters
-								
-								var query   = {hair:"blond"};
-
-								// Because the Observable extension is not loaded we must create
-								// the observer instance manually.
-								var observer = new Observer( store, query );
-								observer.addListener( listener0, true );
-
-								store.ready( 
-									defer.getTestCallback(
-										function (store) {
-											var obsRes = observer.data;
-											t.is( 0, obsRes.total );
-
-											store.put( {name:"Marge", hair:"blue"});	// No match
-											store.put( {name:"Lisa", hair:"blond"});	// Match -> add
-											store.put( {name:"Bart", hair:"blond"});	// Match -> add
-											store.put( {name:"Bart", hair:"blond"});	// Match -> update
-											store.put( {name:"Bart", hair:"brown"});	// No match -> delete
-
-											// Only Lisa should be left
-											t.is( "Lisa", obsRes[0].name );
-											t.is( 1, obsRes.length );
-											t.is( 1, obsRes.total );
-
-											t.is( 2, count.add );
-											t.is( 1, count.change );
-											t.is( 1, count.delete );
-
-											observer.destroy();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						},
-
-						{
-							name: "Observe Query, with listener",
-							timeout: 2000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({data:data, keyPath:"name"});
-								var defer = new doh.Deferred();
-
-								count = {add:0, delete:0, change:0};		// reset counters
-								
-								store.ready( 
-									defer.getTestCallback(
-										function (store) {
-
-											// Query using a property function
-											var query = {age: function (val, key, obj) {
-												return (val >= 40 && val <= 50);
-											}};
-											var observer = new Observer( store, query );
-											var results  = observer.data;
-											
-											observer.addListener( listener0, true );		// Include updates
-											observer.addListener( listener1, false );		// exclude updates
-											
-											t.is( 4, results.length );
-											t.is( 4, results.total );
-											t.is( 0, count.add );
-											
-											results.forEach( function (obj) {
-												obj.age++;
-												store.put(obj);
-											});
-											// Test types of actions..
-											t.is( 0, count.add );
-											t.is( 0, count.delete );
-											t.is( 4, count.change );		// Only listener0 should have been called.
-
-											// Update age again but this time all object will no longer
-											// match the query so all will be removed from results.
-											// In addition, because this results in a delete operation
-											// both listeners should be called.
-											
-											results.slice().forEach( function (obj) {
-												obj.age = 66;
-												store.put(obj);
-											});
-
-											t.is( 0, results.length );
-											t.is( 0, results.total );
-
-											// Test types of actions..
-											t.is( 0, count.add );
-											t.is( 8, count.delete );	// Number of deletes * 2
-											t.is( 4, count.change );
-
-											observer.destroy();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						},
-
-						{
-							name: "Observe Query, with listener, clear store",
-							timeout: 2000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({data:data, keyPath:"name"});
-								var defer = new doh.Deferred();
-
-								count = {add:0, delete:0, change:0};		// reset counters
-								
-								var query    = {hair:"blond"};
-								var observer = new Observer( store, query );
-								observer.addListener( listener0, true );
-
-								store.ready( 
-									defer.getTestCallback(
-										function (store) {
-											var obsRes = observer.data;
-											t.is( 5, obsRes.total );
-
-											store.clear();
-
-											t.is( 0, obsRes.total );
-											t.is( 5, count.delete );
-
-											observer.destroy();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						},
-
-						{
-							name: "Observe Query, with listener, paginate",
-							timeout: 2000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({data:data, keyPath:"name"});
-								var defer = new doh.Deferred();
-
-								count = {add:0, delete:0, change:0};		// reset counters
-								
-								var observer = new Observer( store, null, {count: 5} );
-								observer.addListener( listener0, true );
-
-								store.ready( 
-									defer.getTestCallback(
-										function (store) {
-											var temp = Sorter( data.slice(), {sort:[{property:"name"}] } );
-											var oRes = observer.data.slice();
-											var res  = observer.data;
-											
-											t.is( max, observer.data.total );
-											t.is( 5, observer.data.length );
-											
-											res.forEach( function (obj, idx) {
-												t.is(obj.name, temp[idx].name);
-											});
-											// insert new object immediately following the last object in
-											// the result set.
-											var name = res[res.length-1].name + "0";
-											var obj  = {name:name, "age":80, "parent":["Apu"], "hair":"brown"};
-											store.put( obj );
-											
-											// Total number of objects matching the query should have increased
-											// but the results data length not....
-											
-											t.is( 0, count.add );
-											t.is( max+1, observer.data.total );
-											t.is( 5, observer.data.length );
-
-								
-											// Insert a record at index 0
-											var obj  = {name:"AAA", "age":80, "parent":["Apu"], "hair":"brown"};
-											store.put( obj );
-
-											t.is( 1, count.add );
-											t.is( max+2, observer.data.total );
-											t.is( 5, observer.data.length );
-
-											t.is( "AAA", res[0].name );
-
-											observer.destroy();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						},
-
-
-						{
-							name: "Observable Extension",
+							name: "Observable Extension, Query",
 							timeout: 2000,
 							runTest: function (t) {
 								var Store = declare( [_Store, _Indexed, Observable]);
 								var store = new Store ({data:data, keyPath:"name"});
 								var defer = new doh.Deferred();
 
-								count = {add:0, delete:0, change:0};		// reset counters
+								count = {add:0, deleted:0, change:0};		// reset counters
 								
 								store.ready( 
 									defer.getTestCallback(
@@ -594,7 +128,7 @@
 											});
 											// Test types of actions..
 											t.is( 0, count.add );
-											t.is( 0, count.delete );
+											t.is( 0, count.deleted );
 											t.is( 4, count.change );		// Only listener0 should have been called.
 
 											// Update age again but this time all object will no longer
@@ -610,8 +144,50 @@
 
 											// Test types of actions..
 											t.is( 0, count.add );
-											t.is( 4, count.delete );
+											t.is( 4, count.deleted );
 											t.is( 4, count.change );
+
+											handle.remove();
+										}
+									),
+									function (err) {
+										defer.errback(err);
+									}
+								);
+								return defer;
+							}
+						},
+
+						{
+							name: "Observable Extension, Range",
+							timeout: 2000,
+							runTest: function (t) {
+								var Store = declare( [_Store, _Indexed, Observable]);
+								var store = new Store ({data:data, keyPath:"name"});
+								var defer = new doh.Deferred();
+
+								count = {add:0, deleted:0, change:0};		// reset counters
+								
+								store.ready( 
+									defer.getTestCallback(
+										function (store) {
+
+											var keyRange = KeyRange.bound("Bart", "Marge");
+											var results  = store.getRange( keyRange );
+											
+											t.t( results.observe instanceof Function);
+										
+											var handle = results.observe( listener0, true );
+											t.is( 0, count.add );
+											
+											results.forEach( function (obj) {
+												obj.age++;
+												store.put(obj);
+											});
+											// Test types of actions..
+											t.is( 0, count.add );
+											t.is( 0, count.deleted );
+											t.is( 7, count.change );
 
 											handle.remove();
 										}
@@ -639,6 +215,6 @@
   </head>
 
   <body class="claro">
-    <h1 class="DemoTitle">Observer &amp; Observable Extension</h1>
+    <h1 class="DemoTitle">Observable Extension</h1>
   </body>
 </html>

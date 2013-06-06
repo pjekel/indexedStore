@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Watch Extension</title>
+    <title>Watcher &amp; Watch Extension</title>
     <style type="text/css">
       @import "../../dijit/themes/claro/claro.css";
       @import "../../dijit/themes/claro/document.css";
@@ -32,11 +32,12 @@
         "store/_base/_Store",
         "store/_base/_Indexed",
         "store/_base/_Loader",
+        "store/_base/Watcher",
 				"store/extension/Hierarchy",
 				"store/extension/Eventable",
 				"store/extension/Watch"
         ], function( doh, declare, ready,
-											_Store, _Indexed, _Loader, Hierarchy, Eventable, Watch ) {
+											_Store, _Indexed, _Loader, Watcher, Hierarchy, Eventable, Watch ) {
 					"use strict";
 					
 					// IMPORTANT:
@@ -76,43 +77,42 @@
 						{
 							name: "Watch properties, single entry, no listeners, non-eventable store",
 							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, Watch]);
-								var store = new Store ();
-
-								// Calling 'watch' without a listener on a non-eventable store
-								// should fail.
-								t.e( Error, store, "watch", ["name"]);
+								var Store   = declare( [_Store, _Indexed]);
+								var store   = new Store ();
+								var watcher = new Watcher(store);
+								// Calling 'watcher.watch()' without a listener on a non-eventable store
+								// this should fail.
+								t.e( Error, watcher, "watch", ["name"]);
 							}
 						},
 
 						{
 							name: "Watch properties, single entry, no listeners",
 							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, Eventable, Watch]);
-								var store = new Store ();
+								var Store   = declare( [_Store, _Indexed, Eventable]);
+								var store   = new Store ();
+								var watcher = new Watcher(store);
 
 								// Get the store's private properties...
-								var spotters = store._spotters;
-								var props    = store._watchList;
+								var spotters = watcher.getListeners();
+								var props    = watcher.properties;
 
-								t.is( 0, spotters.length );
+								t.is( 0, Object.keys(spotters).length );
 								t.is( 0, props.length );
 
-								store.watch("name");
-								t.is( 0, spotters.length );
+								watcher.watch("name");
+								spotters = watcher.getListeners();
+								t.is( 0, Object.keys(spotters).length );
 								t.is( 1, props.length );
 
 								// Add same property again....
-								store.watch("name");
-								t.is( 0, spotters.length );
+								watcher.watch("name");
 								t.is( 1, props.length );
 
-								var handle = store.watch("hair");
-								t.is( 0, spotters.length );
+								var handle = watcher.watch("hair");
 								t.is( 2, props.length );
 
 								handle.remove();
-								t.is( 0, spotters.length );
 								t.is( 1, props.length );
 
 							}
@@ -121,35 +121,39 @@
 						{
 							name: "Watch properties, multi entry, no listeners",
 							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, Eventable, Watch]);
-								var store = new Store ();
+								var Store   = declare( [_Store, _Indexed, Eventable]);
+								var store   = new Store ();
+								var watcher = new Watcher(store);
 
 								// Get the store's private properties...
-								var spotters = store._spotters;
-								var props    = store._watchList;
+								var spotters = watcher.getListeners();
+								var props    = watcher.properties;
 
-								t.is( 0, spotters.length );
+								t.is( 0, Object.keys(spotters).length );
 								t.is( 0, props.length );
 
-								var hndl0 = store.watch("name, hair, age");
-								t.is( 0, spotters.length );
+								var hndl0 = watcher.watch("name, hair, age");
+								spotters = watcher.getListeners();
+								t.is( 0, Object.keys(spotters).length );
 								t.is( 3, props.length );
 
 								// Add same property again....
-								store.watch("name, hair");
-								t.is( 0, spotters.length );
+								watcher.watch("name, hair");
+								spotters = watcher.getListeners();
+								t.is( 0, Object.keys(spotters).length );
 								t.is( 3, props.length );
 
-								var hndl1 = store.watch("hair");
-								t.is( 0, spotters.length );
+								var hndl1 = watcher.watch("hair");
 								t.is( 3, props.length );
 
 								hndl1.remove();
-								t.is( 0, spotters.length );
+								spotters = watcher.getListeners();
+								t.is( 0, Object.keys(spotters).length );
 								t.is( 2, props.length );
 
-								store.unwatch("name, age");
-								t.is( 0, spotters.length );
+								watcher.unwatch("name, age");
+								spotters = watcher.getListeners();
+								t.is( 0, Object.keys(spotters).length );
 								t.is( 0, props.length );
 
 								hndl0.remove();
@@ -159,52 +163,61 @@
 						{
 							name: "Watch properties, single entry, with listener",
 							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, Eventable, Watch]);
+								var Store = declare( [_Store, _Indexed, Eventable]);
 								var store = new Store ();
+								var watcher = new Watcher(store);
 
 								// Get the store's private properties...
-								var spotters = store._spotters;
-								var props    = store._watchList;
+								var spotters = watcher.getListeners();
+								var props    = watcher.properties;
 
-								t.is( 0, spotters.length );
+								t.is( 0, Object.keys(spotters).length );
 								t.is( 0, props.length );
 
-								store.watch("name", listener0);
-								t.is( 1, spotters.length );
+								watcher.watch("name", listener0);
+								spotters = watcher.getListeners();
+								t.is( 1, Object.keys(spotters).length );
 								t.is( 1, props.length );
 
 								// Add same property again....
-								store.watch("name");
-								t.is( 1, spotters.length );
+								watcher.watch("name");
+								spotters = watcher.getListeners();
+								t.is( 1, Object.keys(spotters).length );
 								t.is( 1, props.length );
 
 								// New property, same listener
-								var handle = store.watch("hair", listener0);
-								t.is( 2, spotters.length );
+								var handle = watcher.watch("hair", listener0);
+								spotters = watcher.getListeners();
+								t.is( 2, Object.keys(spotters).length );
 								t.is( 2, props.length );
 
 								handle.remove();
-								t.is( 1, spotters.length );
+								spotters = watcher.getListeners();
+								t.is( 1, Object.keys(spotters).length );
 								t.is( 1, props.length );
 
 								// Try removing a non-existing listener
-								store.unwatch( "name", listener99);
-								t.is( 1, spotters.length );
+								watcher.unwatch( "name", listener99);
+								spotters = watcher.getListeners();
+								t.is( 1, Object.keys(spotters).length );
 								t.is( 1, props.length );
 
-								store.unwatch( "name");
-								t.is( 0, spotters.length );
+								watcher.unwatch( "name");
+								spotters = watcher.getListeners();
+								t.is( 0, Object.keys(spotters).length );
 								t.is( 0, props.length );
 
-								store.watch("age", listener0);
-								store.watch("age", listener1);
-								store.watch("age", listener2);
+								watcher.watch("age", listener0);
+								watcher.watch("age", listener1);
+								watcher.watch("age", listener2);
 
-								store.unwatch( "age", listener1);
+								watcher.unwatch( "age", listener1);
+								spotters = watcher.getListeners("age");
 								t.is( 2, spotters.length );
 								t.is( 1, props.length );
 
-								store.unwatch("age");
+								watcher.unwatch("age");
+								spotters = watcher.getListeners("age");
 								t.is( 0, spotters.length );
 								t.is( 0, props.length );
 
@@ -214,39 +227,53 @@
 						{
 							name: "Watch properties, multiple entries, with listener",
 							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, Eventable, Watch]);
-								var store = new Store ();
+								var Store   = declare( [_Store, _Indexed, Eventable]);
+								var store   = new Store ();
+								var watcher = new Watcher(store);
 
-								// Get the store's private properties...
-								var spotters = store._spotters;
-								var props    = store._watchList;
-
-								t.is( 0, spotters.length );
-								t.is( 0, props.length );
-
-								var handle0 = store.watch("name, hair, age", listener0);
-								t.is( 3, spotters.length );
+								var handle0  = watcher.watch("name, hair, age", listener0);
+								var spotters = watcher.getListeners();
+								var props    = watcher.properties;
+								t.is( 3, Object.keys(spotters).length );
 								t.is( 3, props.length );
 
 								// Add same property again, no listener
-								store.watch("name");
-								t.is( 3, spotters.length );
+								watcher.watch("name");
+								spotters = watcher.getListeners();
+								t.is( 3, Object.keys(spotters).length );
 								t.is( 3, props.length );
 
 								// Add same property, same lsitener
-								var handle1 = store.watch("hair", listener0);
-								t.is( 3, spotters.length );
+								var handle1 = watcher.watch("hair", listener0);
+								spotters = watcher.getListeners();
+								t.is( 3, Object.keys(spotters).length );
 								t.is( 3, props.length );
 
 								handle0.remove();
-								t.is( 0, spotters.length );
+								spotters = watcher.getListeners();
+								t.is( 0, Object.keys(spotters).length );
 								t.is( 0, props.length );
 
 							}
 						},
 
 						{
-							name: "Watch properties, monitor using the set event",
+							name: "Watch Extension, extending store",
+							runTest: function (t) {
+								var Store   = declare( [_Store, _Indexed, Watch]);
+								var store   = new Store ();
+
+								// Watch extension extends the store with watcher watch and unwatch
+								// methods.
+								t.t( store.watcher instanceof Watcher );
+								t.t( store.watch instanceof Function );
+								t.t( store.unwatch instanceof Function );
+
+							}
+						},
+
+						{
+							name: "Watch Extension, monitor using the set event",
 							runTest: function (t) {
 								var Store = declare( [_Store, _Indexed, Hierarchy, Eventable, Watch]);
 								var store = new Store ({data:data, keyPath:"name"});
@@ -261,6 +288,8 @@
 								
 								store.watch("age, hair, parent");
 								store.on("set", onSet);
+								
+								store.put({name:"Klaas", age:22, hair:"Blond"});
 								
 								var homer = store.get("Homer");
 								homer.hair = "blond";
@@ -291,7 +320,7 @@
 						},
 
 						{
-							name: "Watch properties, monitor using listeners",
+							name: "Watch Extension, monitor using listeners",
 							runTest: function (t) {
 								var Store = declare( [_Store, _Indexed, Hierarchy, Watch]);
 								var store = new Store ({data:data, keyPath:"name"});
@@ -334,7 +363,7 @@
 						},
 
 						{
-							name: "Watch properties, monitor using listeners and remove listener",
+							name: "Watch Extension, monitor using listeners and remove listener",
 							runTest: function (t) {
 								var Store = declare( [_Store, _Indexed, Hierarchy, Watch]);
 								var store = new Store ({data:data, keyPath:"name"});
@@ -387,7 +416,7 @@
 								
 							}
 						}
-
+						
 					]);
 
 					ready( function () {
@@ -403,6 +432,6 @@
   </head>
 
   <body class="claro">
-    <h1 class="DemoTitle">Watch Extension</h1>
+    <h1 class="DemoTitle">Watcher &amp; Watch Extension</h1>
   </body>
 </html>

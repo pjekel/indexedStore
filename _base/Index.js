@@ -26,9 +26,16 @@ define(["dojo/Deferred",
 	//module:
 	//		store/_base/index
 	// summary:
-	//		This module implements the IDBIndexSync interface.
+	//		This module implements a synchronous version of the IDBIndex interface.
 	//
-	//			http://www.w3.org/TR/IndexedDB/#index-sync
+	//			http://www.w3.org/TR/IndexedDB/#index
+	//
+	//	In addition to the IDBIndex interface this module provides the following
+	//	methods:
+	//		
+	//		getRange()
+	//		getKeyRange()
+	//		ready()
 	
 	// Define default index properties.
 	var IDBIndexOptions = { unique: false, multiEntry: false, uppercase: false, async: false };
@@ -41,14 +48,12 @@ define(["dojo/Deferred",
 	var mixin       = Lib.mixin;
 	var undef;
 	
-	var debug = dojo.config.isDebug || false;
-	
 	function Index (store, name, keyPath, optionalParameters) {
 		"use strict";
 		// summary:
-		//		Implements the IDBIndexSync interface
+		//		Implements a synchronous version of the IDBIndex interface
 		// store: Store
-		//		A IDBObjectStore object which is the parent of the new index.
+		//		An indexedStore object which is the parent of the new index.
 		// name: DOMString
 		//		The name of a new index.
 		// keyPath: KeyPath
@@ -61,6 +66,8 @@ define(["dojo/Deferred",
 		//		indexOptions {
 		//			unique: false,
 		//			multiEntry: false
+		//			uppercase: false
+		//			async: false
 		//		}
 		// returns:
 		//		A new Index object.
@@ -94,7 +101,12 @@ define(["dojo/Deferred",
 
 		function addIndexRecord(index, indexKey, storeKey ) {
 			// summary:
-			//		Add a new record to the index.
+			//		Add a record to the index.
+			// description:
+			//		Add a record to the index. If the index is loading, that is, the
+			//		store is loading or being indexed suppress the sorting of store
+			//		references keys (duplicates) until all index records have been
+			//		created.
 			// index: Index
 			//		Index to which the record is added.
 			// indexKey: Key
@@ -108,12 +120,14 @@ define(["dojo/Deferred",
 			
 			if (record) {
 				if (record.value.push(storeKey) > 1) {
-					if (!index.unique && !index.loading) {
+					if (!index._loading) {
 						Keys.sortKeys(record.value);
+					} else {
+						record._NS = true;		// Mark record as 'Need Sorting'
 					}
 				}
 			} else {
-				var record = new Record( indexKey, [storeKey]);
+				record = new Record( indexKey, [storeKey]);
 				index._records.splice(locator.gt, 0, record);
 			}
 			index._updates++;
@@ -121,7 +135,9 @@ define(["dojo/Deferred",
 
 		function indexStore( store, index, defer ) {
 			// summary:
-			//		Index all existing store records.
+			//		Index all existing store records but not until the store finished
+			//		loading. This will avoid an index being created while the store is
+			//		in the middle of a load request.
 			// store: Store
 			//		Store.
 			// index: Index
@@ -129,44 +145,45 @@ define(["dojo/Deferred",
 			// defer: dojo.Deferred
 			// tag:
 			//		Private
-			var records = store._records;
-			var count = 0, dup, i;
-			try {
-				if (debug) {Lib.debug("Start building index ["+index.name+"]");}
-				index.loading = true;
-				index._clear();
-				records.forEach( index._add, index );
-				count = sortDuplicates( index );
-				if (debug) {Lib.debug("End building index ["+index.name+"], "+index._records.length+" unique, "+count+" total");}
-				defer.resolve(index);		// Index is ready.
-			} catch(err) {
-				var error = new StoreError( err, "indexStore" );
-				defer.reject(error);
-				throw error;
-			} finally {
-				delete index.loading;
-			}
+			var delay = store.loader.loading;
+			when (delay, function () {
+				var records = store._records;
+				try {
+					index._loading = true;
+					index._updates = 0;
+					index._clear();
+					records.forEach( index._add, index );
+					sortDuplicates( index );
+					defer.resolve(index);		// Index is ready.
+				} catch(err) {
+					var error = new StoreError( err, "indexStore" );
+					defer.reject(error);
+					throw error;
+				} finally {
+					delete index._loading;
+				}
+			});
 		}
 
-		function onStoreLoad( type ) {
+		function loadAction( type ) {
 			// summary:
+			//		This method is called when the store loader triggered one of the
+			//		following events: loadStart, loadEnd, loadFailed or loadCancel
 			// tag:
 			//		private, callback
 			switch( type ) {
 				case "loadStart":
-					this.loading = true;
+					this._loading = true;
 					this._updates = 0;
 					break;
 				case "loadFailed":
 				case "loadCancel":
 				case "loadEnd":
-					if (this.loading) {
-						delete this.loading;
-						sortDuplicates( this );
-					}
+					delete this._loading;
+					sortDuplicates( this );
 					break;
 				default:
-					throw new StoreError("DataError", "onStoreLoad", "unknown operation: [%{0}]", type);
+					throw new StoreError("DataError", "loadAction", "unknown operation: [%{0}]", type);
 			}
 		}
 
@@ -177,25 +194,21 @@ define(["dojo/Deferred",
 			//		during both such events the sorting of duplicate index entries is
 			//		suspended for performance reasons.
 			// index: Index
-			// returns: Number
-			//		Total number of records in the index.
 			// tag:
 			//		Private
-			var records = index._records;
-			var count = 0, dup;
+			var record, records = index._records;
+			var i, max = records.length;
 
-			// Only sort when strictly required.
+			// Only sort when strictly required and only those records that require it.
 			if (!index.unique && index._updates) {
-				records.forEach( function (record) {
-					if ((dup = record.value.length) > 1) {
+				for (i=0; i<max; i++) {
+					record = records[i];
+					if (record._NS) {
 						Keys.sortKeys( record.value );
+						delete record._NS;
 					}
-					count += dup;
-				});
-			} else {
-				count = records.length;
+				}
 			}
-			return count;
 		}
 
 		//=========================================================================
@@ -273,8 +286,8 @@ define(["dojo/Deferred",
 				//		Private
 				if (indexKey instanceof Array && index.multiEntry) {
 					return indexKey.some( function(key) {
-										return !!Keys.search(index, key).record;
-									});
+						return !!Keys.search(index, key).record;
+					});
 				}
 				return !!Keys.search(index, indexKey).record;
 			}
@@ -472,7 +485,7 @@ define(["dojo/Deferred",
 			// options: (String|Object)?
 			//		If a string, the range required direction: 'next', 'nextunique', 
 			//		'prev' or 'prevunique'. Otherwise a Store.RangeOptions object.
-			// returns: dojo/store/util/QueryResults
+			// returns: Store.QueryResults
 			//		The range results, extended with iterative methods.
 			// tag:
 			//		Public
@@ -518,7 +531,7 @@ define(["dojo/Deferred",
 			// options: (String|Object)?
 			//		If a string, the range required direction: 'next', 'nextunique', 
 			//		'prev' or 'prevunique'. Otherwise a Store.RangeOptions object.
-			// returns: dojo/store/util/QueryResults
+			// returns: Store.QueryResults
 			//		The range results, extended with iterative methods.
 			// tag:
 			//		Public
@@ -573,7 +586,7 @@ define(["dojo/Deferred",
 
 			var range = keyRange, dir = "next";
 			if (arguments.length > 1) {
-				if (arguments[1] && Lib.isDirection(arguments[1])) {
+				if (Lib.isDirection(arguments[1])) {
 					dir = arguments[1];
 				} else {
 					throw new StoreError("DataError", "openCursor");
@@ -604,7 +617,7 @@ define(["dojo/Deferred",
 
 			var range = keyRange, dir = "next";
 			if (arguments.length > 1) {
-				if (arguments[1] && Lib.isDirection(arguments[1])) {
+				if (Lib.isDirection(arguments[1])) {
 					dir = arguments[1];
 				} else {
 					throw new StoreError("DataError", "openKeyCursor");
@@ -673,7 +686,7 @@ define(["dojo/Deferred",
 			var index = this;
 
 			// Register callbacks with the store.
-			store._register( "loadStart, loadCancel, loadEnd, loadFailed", onStoreLoad, this );
+			store._register( "loadStart, loadCancel, loadEnd, loadFailed", loadAction, this );
 
 			if (async) {
 				setTimeout( function () {
@@ -687,7 +700,7 @@ define(["dojo/Deferred",
 			throw new StoreError( "SyntaxError", "constructor" );
 		}
 
-	} /* end StoreIndex */
+	} /* end Index() */
 
 	return Index;
 

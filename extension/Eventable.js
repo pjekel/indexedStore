@@ -16,12 +16,12 @@ define(["dojo/_base/declare",
 				this.features.add("eventable");
 				this.eventable = true;
 				
-				this.eventer = new Eventer(this, "change, clear, close, delete, load, new");
+				this.eventer = new Eventer(this, "clear, close, delete, error, load, new, update");
 				
 				Lib.defProp( this, "_emit", {
 					configurable: false,
 					enumerable: true, 
-					value: this.eventer._emit
+					value: this.eventer.emit
 				});
 				Lib.writable("eventable", false);
 			}

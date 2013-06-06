@@ -133,22 +133,27 @@ define(["dojo/_base/declare",
 				return observer.addListener(listener, includeUpdates, scope);
 			}
 
-			var results   = this.inherited(arguments);		// Call 'parent' getRange()
-			var keyRange  = keyRange;
+			// For an Observer to properly monitor paginated query results we must
+			// first pass it ALL matching objects, therefore perform the initial
+			// query with pagination turned off.
+			
+			var options  = mixin( {start:0, count: 0}, options);
+			var chunked  = !!(options.start || options.count);
+			var chunkOff = mixin( clone(options), {start:0, count: 0});
+			var chunkOn  = {start: options.start, count: options.count};
+
+			var results  = this.inherited(arguments, [keyRange, chunkOff]);	// Call 'parent' query()
 			var store     = this;
 			var observer  = null;
-			var revision  = 0;
 			
 			// Test if the results can be iterated.
 			if (results && typeof results.forEach == "function") {
-				// Don't set the revision until the QueryResults resolves.
-				results.revision = when( results, function () {
-					revision = revision || store.revision;
-					return revision;
+				when (results, function (dataset) {
+					dataset.revision = "revision" in dataset ? dataset.revision : store.revision;
 				});
 				results.observe = observe;
 			}
-			return results;
+			return chunked ? paginate(results, chunkOn) : results;
 		},
 
 		query: function (query, options) {

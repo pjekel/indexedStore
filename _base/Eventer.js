@@ -8,37 +8,50 @@ define(["dojo/_base/declare",
 	
 	// module
 	//		indexedStore/_base/Eventer
-	
+	// summary:
+	// interface:
+	//		interface Eventer {
+	//			void registerEvent ((string or sequence<string>) type);
+	//			void emit (string type, optional object properties, optional boolean custom);
+	//		}
+
 	var StoreError = createError("Eventer");		// Create the StoreError type.
 	var isObject   = Lib.isObject;
 	var isString   = Lib.isString;
-	
-	function removeListeners(source, type) {
-		// summary:
-		//		Remove all event listeners for the given type with the exception of
-		//		the dummy listener. Preserving the dummy listener guarantees advice
-		//		can still be added if required.
-		// source: EventTarget
-		// type: type
-		//		Event type.
-		// tag:
-		//		Private
-		var i, listeners = source.getEventListeners(type);
-		if (listeners && listeners.length > 1) {
-			// Keep the dummy listener so advice can still be added....
-			for (i=1; i<listeners.length; i++) {
-				source.removeEventListener( type, listeners[i] );
-			}
-		}
-	}
 	
 	function Eventer(source, types) {
 		// summary:
 		// source: EventTarget
 		// types: String|String[]?
 		
+		function removeListeners(source, type) {
+			// summary:
+			//		Remove the current event listener for the given type unless it is
+			//		the dummy listener, which will always be the first in the list.
+			//		Preserving the dummy listener guarantees advice can still be added
+			//		if required.
+			// source: EventTarget
+			// type: type
+			//		Event type.
+			// tag:
+			//		Private
+			var i, listeners = source.getEventListeners(type);
+			// Keep the dummy listener so advice can still be added....
+			if (listeners && listeners.length > 1) {
+				source.removeEventListener( type, callbacks[type] );
+			}
+		}
+	
 		this.registerEvent = function (type) {
 			// summary:
+			//		Register an event with the store.
+			// description
+			//		Register an event with the store. Registering an event will create
+			//		an empty store function called on<type>. For example registering a
+			//		event type 'error' creates the store function onerror(). The new
+			//		function can then be used to add advice. However, using the newly
+			//		created function in an assignment will actually register an event
+			//		listener.
 			// type: String
 			// tag:
 			//		Public
@@ -53,22 +66,24 @@ define(["dojo/_base/declare",
 					var prop = "on" + type.toLowerCase();
 					Lib.defProp( source, prop, {
 						get: function () {
-									 var listener = source.getEventListeners(type)[0];
-									 if (listener) {
-										 return listener.listener;
-									 }
-								 },
+							var listener = source.getEventListeners(type)[0];
+							if (listener) {
+								return listener.listener;
+							}
+						},
 						set: function (callback) {
-									 if (callback !== null) {
-										 if (callback instanceof Function) {
-											 source.addEventListener( type, callback );
-										 } else {
-											 throw new StoreError("TypeError", "register", "callback is not a callable object");
-										 }
-									 } else {
-										 removeListeners( source, type );
-									 }
-								 },
+							if (callback !== null) {
+								if (callback instanceof Function) {
+									removeListeners( source, type );
+									source.addEventListener( type, callback );
+									callbacks[type] = callback;
+								} else {
+									throw new StoreError("TypeError", "register", "callback is not a callable object");
+								}
+							} else {
+								removeListeners( source, type );
+							}
+						},
 						configurable: false,
 						enumerable: true
 					});
@@ -80,7 +95,7 @@ define(["dojo/_base/declare",
 			}
 		};
 
-		this._emit = function (type, properties, custom) {
+		this.emit = function (type, properties, custom) {
 			// summary:
 			// type: String
 			// properties: Object?
@@ -102,13 +117,15 @@ define(["dojo/_base/declare",
 					}
 					props = custProp;
 				}
-				var event = new Event (type, props);
-				source.dispatchEvent( event );
+				source.dispatchEvent( new Event (type, props) );
 			} else {
 				throw new StoreError( "TypeError", "emit", "invalid type property");
 			}
 		};
 
+		//=======================================================================
+		var callbacks = {};
+		
 		if (source instanceof EventTarget) {
 			if (types) {
 				this.registerEvent(types);

@@ -174,6 +174,10 @@ define(["dojo/_base/lang",
 			}
 			throw new StoreError("Parameter", "getByCallback", "callback is not a callable object");
 		}
+
+		this.getListeners = function () {
+			return this.getByType();
+		}
 		
 		this.removeListener = function (type, listener, scope) {
 			// summary:

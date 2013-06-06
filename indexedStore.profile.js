@@ -12,9 +12,6 @@ var copyOnly = function(filename, mid) {
 	return (mid in list);
 };
 
-// The following profile defines all dojo, dijit and indexedStore modules required
-// to run all demos included in the CheckBox Tree package.
-
 var profile = {
 	releaseDir: "../release",
 	releaseName: "indexedStore",

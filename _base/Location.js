@@ -14,23 +14,23 @@ define([], function () {
 // module:
 //		IndexedStore/_base/Location
 //
+// interface:
+//		[Constructor((Index or Store) source, optional number ls, optional number eq, optional number gt)]
+//		interface Location {
+//			attribute number	ls = -1;
+//			attribute	number	eq = -1;
+//			attribute	number	gt = 0;
+//			attribute object	record = null;
+//			attribute any	key;
+//			attribute any	value;
+//		};
 
 	var undef;
 
 	function Location(source, ls, eq, gt ) {
 		// summary:
 		//		A Record location object holds indexing (location) information for a
-		//		given record. The default location object looks like:
-		//
-		//		location dictionary = {
-		//			record = null;
-		//			value = null;
-		//			key = null
-		//			ls = -1;
-		//			eq = -1;
-		//			gt = 0;
-		//		};
-		//
+		//		given record.
 		// source: Store|Index
 		//		The location source which is either an Index or IDBOjectStore.
 		// ls: Number?
@@ -38,7 +38,7 @@ define([], function () {
 		//		the key searched for. (typically eq-1 if a match was found).
 		// eq: Number?
 		//		Index of the record with an exact key match. If no match is found
-		//		eq equals -1.
+		//		eq equals -1 and the record property will be null.
 		// gt: Number?
 		//		The index of the first record whose key is greater then the key
 		//		searched for.

@@ -13,7 +13,7 @@ define([], function(){
 	// module:
 	//		store/_base/Record
 
-	function Record(key, value) {
+	function Record(key, value, revision) {
 		// summary:
 		//		Definition of an IndexedDB record.
 		// key: Key
@@ -22,11 +22,13 @@ define([], function(){
 		//		of valid keys.
 		// value: Object
 		//		Record value (a JavaScript key:value pairs object).
+		// revision: Number?
 		// returns: Record
 		//		A new instance of a Record object.
 		// tag:
 		//		Public
 		this.key   = key;
+		this.rev   = revision || 0;
 		this.value = value;
 	}
 	

@@ -9,8 +9,9 @@
 //
 define(["dojo/Deferred",
 				"./Library",
+				"../dom/event/Event",
 				"../error/createError!../error/StoreErrors.json"
-			 ], function (Deferred, Lib, createError) {
+			 ], function (Deferred, Lib, Event, createError) {
 
 	// module
 	//		indexedStore/_base/LoaderBase
@@ -20,6 +21,7 @@ define(["dojo/Deferred",
 	//		store loader. For more enhanced features, including loading data using
 	//		a URL, please refer to:
 	//
+	//			indexedStore/_base/_Loader
 	//			indexedStore/_base/LoaderPlus
 
 	var StoreError = createError("Loader");		// Create the StoreError type.
@@ -29,7 +31,7 @@ define(["dojo/Deferred",
 
 	var LoadDirectives = { 
 		// data: Array
-		//		The array of all raw objects to be loaded in the memory store.
+		//		An array of objects to be loaded into the store.
 		data: null, 
 
 		// overwrite: Boolean
@@ -43,6 +45,15 @@ define(["dojo/Deferred",
 		//		The primordial store loader.
 		// store: Store
 		//		Instance of a Store object
+
+		function loadError (err) {
+			// summary:
+			// err: Error
+			//		Error condition, typeically an instance of Error
+			// tag:
+			//		private
+			store.dispatchEvent( new Event("error", {error:err}));
+		}
 
 		this.cancel = function (reason) {
 			canceled = true;
@@ -79,6 +90,7 @@ define(["dojo/Deferred",
 					loader.loading = false;
 					loader.error   = err;
 					store._trigger("loadFailed");
+					loadError( StoreError.call(err, err, "load") );
 					ldrDef.reject(err);
 				}
 			} else {

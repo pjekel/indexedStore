@@ -9,23 +9,22 @@
 //
 
 define(["dojo/_base/declare",
-				"dojo/_base/lang",
 				"./Keys",
 				"./KeyRange",
 				"./Library",
 				"./Location",
 				"./Record",
+				"./Transaction",
 				"../error/createError!../error/StoreErrors.json"
-			 ], function (declare, lang, Keys, KeyRange, Lib, Location, Record,
-										 createError) {
+			 ], function (declare, Keys, KeyRange, Lib, Location, Record, Transaction,
+			               createError) {
 	"use strict";
 	// module:
 	//		IndexedStore/_base/_Natural
 	// summary:
-	// 		The _Natural class is used in combination with the store/_base/_Store
-	//		class and will organize all object store records in a natural order.
+	// 		The _Natural class arranges all object store records in a natural order.
 	//		The natural order is the order in which records are added to the store
-	//		and/or re-arranged using the PutDirective property 'before'.
+	//		and/or re-arranged using the Store.PutDirective property 'before'.
 	//		Natural based stores also maintain a record number based index for fast
 	//		retrieval of records however this type of index is not suitable for the
 	//		use with cursors or any other IndexedDB based key operations.
@@ -34,8 +33,8 @@ define(["dojo/_base/declare",
 	//
 	//			store.put( {name:"Bart", lastname:"Simpson"}, {before:"Lisa"});
 	//
-	//		Notice that the 'before' property can be either an object or a valid
-	//		store key.
+	//		Notice that the 'before' property value can be either an object or a
+	//		valid store key.
 	//
 	// restrictions:
 	//		Stores based on the _Natural class do NOT support cursors therefore an
@@ -58,7 +57,7 @@ define(["dojo/_base/declare",
 	//	|	  var cursor = index.openCursor(range);
 	//	|	  while (cursor && cursor.value) {
 	//	|	    console.log( "Name: " + cursor.primaryKey );
-	//	|	    cursor.continue();
+	//	|	    cursor.cont();
 	//	|	  } 
 	//	|	});
 	//
@@ -72,7 +71,12 @@ define(["dojo/_base/declare",
 	var StoreError = createError( "_Natural" );			// Create the StoreError type.
 	var isObject   = Lib.isObject;
 	var clone      = Lib.clone;											// HTML5 structured clone.
+	var move       = Lib.move;
 	var undef;
+	
+	var C_MSG_MUTUAL_EXCLUSIVE = "base class '_Natural' and '_Indexed' are mutual exclusive";
+	var C_MSG_CONSTRAINT_ERROR = "record with key [%{0}] already exist";
+	var C_MSG_DEPENDENCY       = "base class '_Store' must be loaded first";
 	
 	var _Natural = declare (null, {
 
@@ -82,7 +86,7 @@ define(["dojo/_base/declare",
 		constructor: function () {
 			if (this.features.has("store")) {
 				if (this.features.has("indexed")) {
-					throw new StoreError("Dependency", "constructor", "base class '_Natural' and '_Indexed' are mutual exclusive");
+					throw new StoreError("Dependency", "constructor", C_MSG_MUTUAL_EXCLUSIVE );
 				}
 				this._index      = {};			// Local record index.
 
@@ -90,7 +94,7 @@ define(["dojo/_base/declare",
 				Lib.defProp( this,"natural", {value:true, writable:false, enumerable:true} );
 				Lib.protect(this);
 			} else {
-				throw new StoreError("Dependency", "constructor", "base class '_Store' must be loaded first");
+				throw new StoreError("Dependency", "constructor", C_MSG_DEPENDENCY);
 			}
 		},
 
@@ -112,7 +116,7 @@ define(["dojo/_base/declare",
 			});
 			this._records = [];
 			this._index   = {};
-			this.total = 0;
+			this.total    = 0;
 		},
 
 		//===================================================================
@@ -178,14 +182,16 @@ define(["dojo/_base/declare",
 				var record = this._records.splice( recNum, 1 )[0];
 				var value  = record.value;
 				var key    = record.key;
+				var rev    = record.rev;
 				record.destroy();
 
 				this.total = this._records.length;
 				this.revision++;
 
-				this._trigger("delete", key, null, value, recNum );
-				if (this.eventable && !this.suppressEvents) {
-					this._emit("delete", {item: value, at:-1, from:recNum}, true);
+				if (this.transaction) {
+					this.transaction._journal( this, Transaction.DELETE, key, null, value, rev, recNum );
+				} else {
+					this._commit( Transaction.DELETE, key, null, value, rev, recNum );
 				}
 			}
 			return false;
@@ -242,34 +248,13 @@ define(["dojo/_base/declare",
 			this._index[record.key] = recNum;
 		},
 
-		_moveRecord: function (record, from, to) {
-			// summary:
-			//		Move a record within the natural order of the store.
-			// record: Record
-			//		Record to be moved.
-			// from: Number
-			//		Current record location
-			// to: Number
-			//		New record location
-			// tag:
-			//		Private
-			this._records.splice( to, 0, record );
-			if (from != -1) {
-				this._records.splice( (to <= from ? from+1 : from), 1);
-			}
-			this._indexRecord(record, to);
-			this._reindex();
-		},
-
 		_reindex: function () {
 			// summary:
 			//		Re-index all store records. This function is called when either a
 			//		record is deleted or moved.
 			// tag:
 			//		Private
-			var max = this._records.length;
-			var rec, i;
-
+			var rec, i, max = this._records.length;
 			this._index = {};			// Drop local index.
 			for (i=0; i<max; i++) {
 				rec = this._records[i];
@@ -283,10 +268,10 @@ define(["dojo/_base/declare",
 			//		Retrieve the first record from the store whose key matches key and
 			//		return a locator object if found.
 			// key: Key|KeyRange
-			//		Key identifying the record to be retrieved. The key arguments can also
-			//		be an KeyRange.
+			//		Key identifying the record to be retrieved. The key arguments can
+			//		also be an KeyRange.
 			// returns: Location
-			//		A location object. (see the ./_base/Location module for detais).
+			//		A Location object. (see the Location module for detais).
 			// tag:
 			//		Private
 			var recNum, max = this._records.length;
@@ -362,33 +347,36 @@ define(["dojo/_base/declare",
 					before = this._retrieveRecord(before);
 				}
 			}
-
-			// Test if the primary key already exists.
-			var baseVal  = Keys.getKey(this, value, optKey);
-			var keyVal   = this.uppercase ? Keys.toUpperCase(baseVal) : baseVal;
-			var locator  = this._retrieveRecord(keyVal);
-			var location = {at: locator.eq, from:locator.eq};
-			var curRec   = locator.record;
-			var curVal   = curRec && curRec.value;
-			var curAt    = locator.eq;
+			// Extract key value and test if the primary key already exists.
+			var baseVal = Keys.getKey(this, value, optKey);
+			var keyVal  = this.uppercase ? Keys.toUpperCase(baseVal) : baseVal;
+			// Try to locate the record.
+			var curLoc  = this._retrieveRecord(keyVal);
+			var curRec  = curLoc.record;
+			var curRev  = (curRec && curRec.rev) || 0;
+			var curVal  = (curRec && curRec.value);
+			var curAt   = curLoc.eq;
+			var opType  = curRec ? Transaction.UPDATE : Transaction.NEW;
 			
 			if (curRec) {
 				if (!overwrite) {
-					throw new StoreError("ConstraintError", "_storeRecord", "record with key [%{0}] already exist", keyVal);
+					throw new StoreError("ConstraintError", "_storeRecord", C_MSG_CONSTRAINT_ERROR, keyVal);
 				}
 				this._removeFromIndex( curRec );
 			}
 
 			try {
 				newVal = this._clone ? clone(value) : value;
-				newRec = new Record( keyVal, newVal );
+				newRec = new Record( keyVal, newVal, ++curRev );
 			} catch(err) {
 				throw new StoreError( "DataCloneError", "_storeRecord" );
 			}
 
 			if (before && before.record) {
-				this._moveRecord(newRec, curAt, before.eq);
-				at = location.at = before.eq;
+				move( this._records, curAt, before.eq, newRec );
+				this._indexRecord(newRec, before.eq);
+				this._reindex();
+				at = before.eq;
 			} else {
 				at = curRec ? curAt : this._records.length;
 				if (curRec) {
@@ -397,23 +385,75 @@ define(["dojo/_base/declare",
 					this._records.push( newRec );
 				}
 				this._indexRecord(newRec, at);
-				location.at = at;
 			}
 			this.total = this._records.length;
 			this.revision++;
 			
-			// Check if any extension added a callback.
-			this._trigger("write", keyVal, value, curVal, at, options );
-
-			// Next, Event handling ....
-			if (this.eventable && !this.suppressEvents) {
-				if (curRec) {
-					this._emit( "change", {item: value, oldItem: curVal, at: location.at}, true);
-				} else {
-					this._emit( "new", {item: value, at: location.at}, true);
-				}
+			if (this.transaction) {
+				this.transaction._journal( this, opType, keyVal, value, curVal, curRev, curAt, options);
+			} else {
+				this._commit( opType, keyVal, value, curVal, curRev, curAt, options);
 			}
 			return keyVal;
+		},
+
+		_undo: function (trans, opType, key, curVal, oldVal, oldRev, at) {
+			// summary:
+			//		Undo previous operation. When a transaction failed or was aborted
+			//		all operations associated with the transaction will be reversed.
+			//		This _undo() method should ONLY be called by the Transaction Manager
+			//		(See TransactionMgr.js for details.).
+			// trans: Transaction
+			//		The transaction that failed or was aborted.
+			// opType: Number
+			//		Type of operation
+			// key: Key
+			//		Record key
+			// curVal: any
+			//		The current value property value of the store record.
+			// oldVal: any
+			//		The old value property value of the store record.
+			// oldRev: Number
+			//		The old revision number of the store record.
+			// at: Number?
+			//		Previous record location
+			// tag:
+			//		private
+
+			if (trans == this.transaction && !trans.active) {
+				var locator = this._retrieveRecord(key);
+				var curRec  = locator.record;
+				var curAt   = locator.eq;
+
+				if (opType != Transaction.NEW) {
+					// Reassamble previous record.
+					var prvRec = new Record( key, oldVal, oldRev);
+					var prvAt  = curRec ? curAt : at;
+				}
+
+				switch (opType) {
+					case Transaction.NEW:
+						// Remove newly inserted record....
+						this._removeFromIndex(curRec);
+						this._records.splice(curAt, 1);
+						break;
+					case Transaction.DELETE:
+						// Re-insert deleted record....
+						this._indexRecord( prvRec );
+						this._records.splice(prvAt, 0, prvRec)
+						break;
+					case Transaction.UPDATE:
+						// Restore previous record....
+						if (curRec) {
+							this._removeFromIndex(curRec);
+							this._indexRecord(prvRec);
+							this._records[prvAt] = prvRec;
+						}
+						break;
+				}
+				this.total = this._records.length;
+				this.revision--;
+			}
 		},
 
 		//=========================================================================
@@ -443,7 +483,7 @@ define(["dojo/_base/declare",
 		},
 
 		toString: function () {
-			return "[object Natural]";
+			return "[object Store]";
 		}
 
 	});	/* end declare() */

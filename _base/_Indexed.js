@@ -15,25 +15,25 @@ define(["dojo/_base/declare",
 				"./Library",
 				"./Location",
 				"./Record",
+				"./Transaction",
 				"../error/createError!../error/StoreErrors.json"
 			 ], function (declare, Cursor, Keys, KeyRange, Lib, Location, Record,
-										 createError) {
+										 Transaction, createError) {
 	"use strict";
 	// module:
-	//		IndexedStore/_base/_Indexed
+	//		indexedStore/_base/_Indexed
 	// summary:
-	// 		The _Indexed class is used in combination with the store/_base/_Store
-	//		class and will organize all object store records in a binary tree.
-	//		As a result, this type of store also support the use of cursors. For
-	//		detailed information on cursors please refer to:
+	// 		The _Indexed class arranges all object store records by key in ascending
+	//		order. As a result, this type of store also support the use of cursors.
+	//		For detailed information on cursors please refer to:
 	//
 	//			http://www.w3.org/TR/IndexedDB/#cursor-concept
 	//
 	// restrictions:
-	//		Stores based on the _Indexed class do NOT support the PutDirective
-	//		'before'. If a natural record order is required by your application
-	//		for example, you want to support 'before' with Drag-n-Drop, use the
-	//		_Natural class instead.
+	//		Stores based on the _Indexed class do NOT support the Store.PutDirective
+	//		'before'. If a natural record order is required by your application for
+	//		example, you want to support 'before' with Drag-n-Drop, use the _Natural
+	//		class instead.
 	// NOTE:
 	//		The _Indexed base class does NOT determine if a store can have an index
 	//		or not, it merely determines the internal record structure, but because
@@ -55,14 +55,19 @@ define(["dojo/_base/declare",
 	//	|	  var cursor = store.openCursor(range);
 	//	|	  while (cursor && cursor.value) {
 	//	|	    console.log( "Name: " + cursor.primaryKey );
-	//	|	    cursor.continue();
+	//	|	    cursor.cont();
 	//	|	  } 
 	//	|	});
 	
 	var StoreError = createError( "Indexed" );		// Create the StoreError type.
 	var isObject   = Lib.isObject;
 	var clone      = Lib.clone;										// HTML5 structured clone.
+	var mixin      = Lib.mixin;
 	var undef;
+	
+	var C_MSG_MUTUAL_EXCLUSIVE = "base class '_Natural' and '_Indexed' are mutual exclusive";
+	var C_MSG_CONSTRAINT_ERROR = "record with key [%{0}] already exist";
+	var C_MSG_DEPENDENCY       = "base class '_Store' must be loaded first";
 	
 	var _Indexed = declare (null, {
 
@@ -72,13 +77,13 @@ define(["dojo/_base/declare",
 		constructor: function () {
 			if (this.features.has("store")) {
 				if (this.features.has("natural")) {
-					throw new StoreError("Dependency", "constructor", "base class '_Natural' and '_Indexed' are mutual exclusive");
+					throw new StoreError("Dependency", "constructor", C_MSG_MUTUAL_EXCLUSIVE);
 				}
 				this.features.add("indexed");
 				Lib.defProp( this,"indexed", {value:true, writable:false, enumerable: true} );
 				Lib.protect(this);
 			} else {
-				throw new StoreError("Dependency", "constructor", "base class '_Store' must be loaded first");
+				throw new StoreError("Dependency", "constructor", C_MSG_DEPENDENCY);
 			}
 		},
 		
@@ -150,15 +155,16 @@ define(["dojo/_base/declare",
 				var record = this._records.splice( recNum, 1 )[0];
 				var value  = record.value;
 				var key    = record.key;
+				var rev    = record.rev;
 				record.destroy();
 
 				this.total = this._records.length;
 				this.revision++;
 				
-				this._trigger("delete", key, null, value, recNum );
-
-				if (this.eventable && !this.suppressEvents) {
-					this._emit( "delete", {item: value}, true );
+				if (this.transaction) {
+					this.transaction._journal( this, Transaction.DELETE, key, null, value, rev, recNum );
+				} else {
+					this._commit( Transaction.DELETE, key, null, value, rev, recNum );
 				}
 			}
 			return false;
@@ -170,7 +176,6 @@ define(["dojo/_base/declare",
 			//		exception reverse the index operation and re-throw the error.
 			// record: Record
 			//		Record to index.
-			// exceptions:
 			// tag:
 			//		Private
 			var name, index;
@@ -189,12 +194,12 @@ define(["dojo/_base/declare",
 		_retrieveRecord: function (key) {
 			// summary:
 			//		Retrieve the first record from the store whose key matches key and
-			//		return a locator object if found.
+			//		return a Locator object if found.
 			// key: Key|KeyRange
 			//		Key identifying the record to be retrieved. The key arguments can also
 			//		be an KeyRange.
-			// returns:
-			//		A location object. (see the Location module for detais).
+			// returns: Location
+			//		A Location object. (see the Location module for detais).
 			// tag:
 			//		Private
 			if (key instanceof KeyRange) {
@@ -230,38 +235,39 @@ define(["dojo/_base/declare",
 
 		_storeRecord: function (value, options) {
 			// summary:
-			//		Add a record to the store. Throws a StoreError of type ConstraintError
-			//		if the key already exists and overwrite flag is set to true.
+			//		Add a record to the store. Throws an exception of type ConstraintError
+			//		if the key already exists and overwrite flag is set to false.
 			// NOTE:
 			//		Indexed stores do not include location information in events as the
 			//		record location is not related to any natural order.
 			// value: Any
-			//		Record value property
-			// options: PutDirectives
+			//		Record value property (the object)
+			// options: Store.PutDirectives
 			//		Optional, PutDirectives
 			// returns:
 			//		Record key.
 			// tag:
 			//		Private
-			var newRec, newVal, event, at;
-			var optKey, overwrite = false;
+			var at, newRec, newVal, optKey, overwrite = false;
 			
 			if (options) {
 				overwrite = "overwrite" in options ? !!options.overwrite : false;
 				optKey    = options.key != undef ? options.key : (options.id != undef ? options.id : null);
 			}
-
-			// Test if the primary key already exists.
-			var baseVal = Keys.getKey(this, value, optKey);		// Extract key value
+			// Extract key value and test if the primary key already exists.
+			var baseVal = Keys.getKey(this, value, optKey);
 			var keyVal  = this.uppercase ? Keys.toUpperCase(baseVal) : baseVal;
-			var locator = this._retrieveRecord(keyVal);
-			var curRec  = locator.record;
-			var curVal  = curRec && curRec.value;
-			var curAt   = locator.eq;
+			// Try to locate the record.
+			var curLoc = this._retrieveRecord(keyVal);
+			var curRec = curLoc.record;
+			var curRev = (curRec && curRec.rev) || 0;
+			var curVal = (curRec && curRec.value);
+			var curAt  = curLoc.eq;
+			var opType = curRec ? Transaction.UPDATE : Transaction.NEW;
 			
 			if (curRec) {
 				if (!overwrite) {
-					throw new StoreError("ConstraintError", "_storeRecord", "record with key [%{0}] already exist", keyVal);
+					throw new StoreError("ConstraintError", "_storeRecord", C_MSG_CONSTRAINT_ERROR, keyVal);
 				}
 				this._removeFromIndex( curRec );
 			} else {
@@ -272,34 +278,87 @@ define(["dojo/_base/declare",
 
 			try {
 				newVal = this._clone ? clone(value) : value;
-				newRec = new Record( keyVal, newVal );
+				newRec = new Record( keyVal, newVal, curRev+1 );
 			} catch(err) {
 				throw new StoreError( "DataCloneError", "_storeRecord" );
 			}
 
-			at = curRec ? curAt : locator.gt;
 			// Index the record first in case an error occurs.
 			this._indexRecord( newRec );
 			if (curRec) {
-				this._records[at] = newRec;
+				this._records[curAt] = newRec;
 			} else {
-				this._records.splice( at, 0, newRec );
+				this._records.splice( curLoc.gt, 0, newRec );
+				curAt = curLoc.gt;
 			}
 			this.total = this._records.length;
 			this.revision++;
 			
-			// Check if any extension added a callback.
-			this._trigger("write", keyVal, value, curVal, at, options );
-
-			// Next, event handling ....
-			if (this.eventable && !this.suppressEvents) {
-				if (curRec) {
-					this._emit( "change", {item: value, oldItem: curVal}, true);
-				} else {
-					this._emit( "new", {item: value}, true);
-				}
+			if (this.transaction) {
+				this.transaction._journal( this, opType, keyVal, value, curVal, curRev, curAt, options);
+			} else {
+				this._commit( opType, keyVal, value, curVal, curRev, curAt, options);
 			}
 			return keyVal;
+		},
+
+		_undo: function (trans, opType, key, curVal, oldVal, oldRev, at) {
+			// summary:
+			//		Undo previous operation. When a transaction failed or was aborted
+			//		all operations associated with the transaction will be reversed.
+			//		This _undo() method should ONLY be called by the Transaction Manager
+			//		(See TransactionMgr.js for details.).
+			// trans: Transaction
+			//		The transaction that failed or was aborted.
+			// opType: Number
+			//		Type of operation
+			// key: Key
+			//		Record key
+			// curVal: any
+			//		The current value property value of the store record.
+			// oldVal: any
+			//		The old value property value of the store record.
+			// oldRev: Number
+			//		The old revision number of the store record.
+			// at: Number?
+			//		Previous record location
+			// tag:
+			//		private
+
+			if (trans == this.transaction && !trans.active) {
+				var locator = this._retrieveRecord(key);
+				var curRec  = locator.record;
+				var curAt   = locator.eq;
+
+				if (opType != Transaction.NEW) {
+					// Reassamble previous record.
+					var prvRec = new Record( key, oldVal, oldRev);
+					var prvAt  = curRec ? curAt : locator.gt;
+				}
+
+				switch (opType) {
+					case Transaction.NEW:
+						// Remove newly inserted record....
+						this._removeFromIndex(curRec);
+						this._records.splice(curAt, 1);
+						break;
+					case Transaction.DELETE:
+						// Re-insert deleted record....
+						this._indexRecord( prvRec );
+						this._records.splice(prvAt, 0, prvRec)
+						break;
+					case Transaction.UPDATE:
+						// Restore previous record....
+						if (curRec) {
+							this._removeFromIndex(curRec);
+							this._indexRecord(prvRec);
+							this._records[prvAt] = prvRec;
+						}
+						break;
+				}
+				this.total = this._records.length;
+				this.revision--;
+			}
 		},
 
 		//=========================================================================
@@ -333,19 +392,19 @@ define(["dojo/_base/declare",
 			//		Open a new cursor. A cursor is a transient mechanism used to iterate
 			//		over multiple records in the store.  A cursor does NOT contain any
 			//		store data and therefore does NOT have a length property like a Range
-			//		does.
+			//		object does.
 			// keyRange: Key|KeyRange?
 			//		The key range to use as the cursor's range.
 			// direction: DOMString?
-			//		The cursor's required direction. Valid options are: 'next', 'nextunique',
-			//		'prev' or 'prevunique'.
+			//		The cursor's required direction: 'next', 'nextunique', 'prev' or
+			//		'prevunique'. Default is 'next'.
 			// returns:
 			//		A cursorWithValue object.
 			// example:
 			//		| var cursor = store.openCursor();
 			//		| while( cursor && cursor.value ) {
 			//		|       ...
-			//		|     cursor.continue();
+			//		|     cursor.cont();
 			//		| };
 			// tag:
 			//		Public
@@ -364,7 +423,7 @@ define(["dojo/_base/declare",
 		},
 
 		toString: function () {
-			return "[object Indexed]";
+			return "[object Store]";
 		}
 
 	});	/* end declare() */

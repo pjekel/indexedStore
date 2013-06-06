@@ -18,16 +18,24 @@ define(["dojo/_base/declare",
 	// module:
 	//		indexedStore/_base/_Loader
 	// summary:
-
+	//		Replaces the default store loader (LoaderBase) with the enhanced store
+	//		loader (LoaderPlus) and overwrite the store's load() method. 
+	// 		The enhanced loader adds the ability to load data using URLs, filter
+	//		data and register custom data handlers. For detailed information on the
+	//		enhanced loader please refer to the LoaderPlus.js module.
+	
 	var StoreError = createError("Loader");		// Create the StoreError type.
 	var isObject   = Lib.isObject;
 	var mixin      = Lib.mixin;
 	
 	var _Loader = declare(null, {
-		// summary:
 
 		//=========================================================================
-		// Constructor keyword arguments:
+		// Constructor keyword arguments (LoadDirectives):
+
+		// data: Array
+		//		An array of objects to be loaded in the store.
+		data: null, 
 
 		// dataHandler: Function|Object
 		//		The data handler for the data/response. If dataHandler is an key:value
@@ -75,6 +83,13 @@ define(["dojo/_base/declare",
 		//		aborted.
 		maxErrors: 0,
 		
+		// overwrite: Boolean
+		//		If true, overwrite store objects if objects with the same key already
+		//		exist, otherwise an exception of type ConstraintError is thrown.
+		//		This overwrite property only applies when loading data.
+		//		(See also maxErrors)
+	  overwrite: false,
+
 		// progress: Boolean
 		//		If true, the loader reports progress.
 		progress: false,
@@ -93,9 +108,7 @@ define(["dojo/_base/declare",
 
 		constructor: function (kwArgs) {
 			// summary:
-			//		Creates a generic memory object store capable of loading data from
-			//		either an in memory data object or URL.	 If both the data and url
-			//		properties are specified the data object takes precedence.
+			//		Replace the default store loader with an instance of LoaderPlus.
 			// kwArgs: Object?
 			//		A JavaScript key:value pairs object
 			//			{
@@ -150,7 +163,8 @@ define(["dojo/_base/declare",
 
 		load: function (options) {
 			// summary:
-			// options: LoadDirectives?
+			//		Initiate a new load request.
+			// options: Store.LoadDirectives?
 			// returns: dojo/promise/Promise
 			//		dojo/promise/Promise
 			// tag:
@@ -170,7 +184,8 @@ define(["dojo/_base/declare",
 				handleAs: this.handleAs,
 				timeout: Number(this.timeout) || 0,
 				maxErrors: Number(this.maxErrors) || 0,
-				progress: this.progress || false
+				progress: this.progress || false,
+				overwrite: !!this.overwrite
 			};
 			var options  = mixin( directives, options );
 			var suppress = this.suppressEvents;

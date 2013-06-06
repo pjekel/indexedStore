@@ -8,7 +8,8 @@
 //	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["dojo/_base/declare",
+define(["require",
+				"dojo/_base/declare",
 				"dojo/Deferred",
 				"dojo/when",
 				"./FeatureList",
@@ -19,6 +20,7 @@ define(["dojo/_base/declare",
 				"./KeyRange",
 				"./Range",
 				"./Record",
+				"./Transaction",
 				"../error/createError!../error/StoreErrors.json",
 				"../dom/event/EventTarget",
 				"../dom/string/DOMStringList",
@@ -26,10 +28,10 @@ define(["dojo/_base/declare",
 				"../util/QueryEngine",
 				"../util/QueryResults",
 				"../util/Sorter"
-			 ], function (declare, Deferred, when, FeatureList, Index, Lib, Loader, 
-			               Keys, KeyRange, Range, Record, createError, EventTarget,
-			               DOMStringList, ListenerList, QueryEngine, QueryResults,
-			               Sorter ) {
+			 ], function (require, declare, Deferred, when, FeatureList, Index, Lib, Loader, 
+			               Keys, KeyRange, Range, Record, Transaction, createError, 
+			               EventTarget, DOMStringList, ListenerList, QueryEngine,
+			               QueryResults, Sorter ) {
 	"use strict";
 	// module:
 	//		IndexedStore/_base/_Store
@@ -54,12 +56,11 @@ define(["dojo/_base/declare",
 	//			The base class _Natural will organize all store records in a natural
 	//			order, that is, in the order the records are added to the store.
 	//			This class provides support for the dojo/store/api/Store PutDirective
-	//			property 'before' but does not support Cursors, only the query engine.
+	//			property 'before' but does not support Cursors.
 	// 
 	//		_Loader:
-	//			The base class _Loader adds the ability to load the store with either
-	//			in memory objects or objects retrieved using a URL. In addition, it
-	//			adds support for custom data handlers.
+	//			The _Loader class adds the ability to load the store with retrieved
+	//			using a URL. In addition, it adds support for custom data handlers.
 	// 
 	//		The _Indexed or _Natural base classes have no effect on the store's
 	//		ability to create indexes, they merely determine the internal data
@@ -90,7 +91,8 @@ define(["dojo/_base/declare",
 	//			Cross-Origin Resource Sharing (CORS) capabilities. When applied
 	//			URL's with the schema http: or https: can be used.
 	//		Observable:
-	//			Monitors for, and Notifies the user, of changes to query results.
+	//			Monitors for, and Notifies the user, of changes to query or range
+	//			results.
 	//		Watch:
 	//			Monitors store objects for changes to specific object properties.
 	//			If an object property that is being monitored changes a set event
@@ -141,25 +143,27 @@ define(["dojo/_base/declare",
 	//	|	         "store/_base/_Loader",
 	//	|	         "store/extension/Hierarchy",
 	//	|	        ], function (declare, _Store, _Indexed, _Loader, Hierarchy) {
-	//	|	  var store = declare([_Store, _Indexed, Loader, Hierarchy]);
+	//	|	  var store = declare([_Store, _Indexed, _Loader, Hierarchy]);
 	//	|	  var myStore = new store( {url:"../data/Simpsons.json", keyPath:"name"} );
 	//	|	                       ...
 	//	|	  var index  = store.index("parents");
 	//	|	  var cursor = index.openCursor();
 	//	|	  while (cursor && cursor.value) {
 	//	|	    console.log( "Parent name: " + cursor.primaryKey );
-	//	|	    cursor.next();
+	//	|	    cursor.cont();
 	//	|	  } 
 	//	|	});
 	//
 
-	var StoreError  = createError( "_Store" );			// Create the StoreError type.
+	var StoreError  = createError( "_Store" );		// Create the StoreError type.
 	var isDirection = Lib.isDirection; 
 	var isObject    = Lib.isObject;								// Test for [object Object];
 	var isString    = Lib.isString;
-	var clone       = Lib.clone;										// HTML5 structured clone.
+	var clone       = Lib.clone;									// HTML5 structured clone.
 	var mixin       = Lib.mixin;
-	var uniqueId    = 0;
+
+	var opTypes  = ["new", "delete", "update"];
+	var uniqueId = 0;
 	var undef;
 	
 	function AbstractOnly (/*String*/ method) {
@@ -210,11 +214,11 @@ define(["dojo/_base/declare",
 		indexes: null,
 
 		// keyPath: String|String[]
-		//		A key path is a DOMString that defines how to extract a key from an
-		//		object. A valid key path is either the empty string, a JavaScript
-		//		identifier, or multiple Javascript identifiers separated by periods (.)
-		//		(Note that spaces are not allowed within a key path.)
-		//		In addition, the keyPath property can also be an array of key paths.
+		//		A key path is a DOMString or sequence<DOMString> that defines how to
+		//		extract a key from an object.  A valid key path is either the empty
+		//		string, a JavaScript identifier, or multiple Javascript identifiers
+		//		separated by periods (.) 
+		//		(Note that spaces are not allowed within a key path)
 		keyPath: null,
 
 		// name: String?
@@ -224,21 +228,21 @@ define(["dojo/_base/declare",
 		name: "",
 		
 		// queryEngine: Function
-		//		Defines the query engine to use for querying the data store
+		//		Defines the query engine to use for querying the data store.
 		queryEngine: QueryEngine,
 
 		// suppressEvents:
 		//		Suppress the dispatching of events. Under certain circumstances it
-		//		may be desirable to to suppress the delivery of events until, for
-		//		example, after a load request has finished. 
+		//		may be desirable to suppress the delivery of events. Both the base
+		//		and extended loader will suppress event delivery while loading the
+		//		store.
 		suppressEvents: false,
 		
 		// uppercase: Boolean
 		//		Indicates if the object key is to be stored in all uppercase chars.
 		//		If true, all key string values are converted to uppercase before
-		//		storing the record. The object properties used to extract the key
-		//		are not effected.  Beyond storage, the store does NOT perform any
-		//		automatic key conversion on API parameters. 
+		//		storing the record. The object property values used to compose the
+		//		key are not affected.
 		uppercase: false,
 		
 		// End constructor keyword
@@ -288,7 +292,7 @@ define(["dojo/_base/declare",
 			this._records    = [];
 			this._storeReady = new Deferred();
 
-			// NOTE: keyPath = null is allowed...
+			// NOTE: A keyPath value of null is allowed...
 			if (kwArgs && "keyPath"in kwArgs) {
 				this.idProperty = kwArgs.keyPath;
 			}
@@ -296,8 +300,9 @@ define(["dojo/_base/declare",
 			this.indexNames  = new DOMStringList();
 			this.keyPath     = this.idProperty;
 			this.loader      = new Loader(this);
-			this.name        = this.name || "store_" + uniqueId++;
-			this.revision    = 1;			// Initial reservation must be > 0 (See Observer).
+			this.sid         = uniqueId++;
+			this.name        = this.name || "store_" + this.sid;
+			this.revision    = 1;			// Initial revision must be > 0 (See Observer).
 			this.total       = 0;
 			this.transaction = null;
 			this.type        = "store";
@@ -325,7 +330,7 @@ define(["dojo/_base/declare",
 				}, this);
 			}
 			Lib.defProp( this, "_emit", {value: function () {}, enumerable: false, configurable: true });
-			Lib.writable( this, "name, type, features", false );
+			Lib.writable( this, "features, name, sid, type", false );
 			Lib.protect( this );	// Hide own private properties.
 
 			this.features.add("store");
@@ -382,6 +387,7 @@ define(["dojo/_base/declare",
 
 		_assertKey: function (key, method, required ) {
 			// summary:
+			//		Assert key argument.
 			// key: Key|KeyRange
 			// method: String
 			//		Name of the calling function.
@@ -399,29 +405,97 @@ define(["dojo/_base/declare",
 		
 		_assertStore: function (store, method, readWrite ) {
 			// summary:
+			//		Assert store.  Validate if the store hasn't been destroyed or, when
+			//		the store is part of a transaction, the transaction is still active
+			//		and of the correct type.
 			// store: Store
 			//		Store to be asserted (this)
 			// method: String
 			//		Name of the calling function.
 			// readWrite: Boolean?
-			//		
+			//		Indicates if the store operation requires read/write access.
 			// tag:
 			//		Private
 			if (store._destroyed) {
 				throw new StoreError( "InvalidState", method, "store has been destroyed");
 			} else if (readWrite) {
-				if (store.transaction && store.transaction.mode == "readonly") {
-					throw new StoreError( "ReadOnly", method);
+				if (store.transaction) {
+					if (!store.transaction.active) {
+						throw new StoreError( "TransactionInactive", method);
+					}
+					if (store.transaction.mode == "readonly") {
+						throw new StoreError( "ReadOnly", method);
+					}
 				}
+			}
+		},
+
+		_commit: function (opType, key, newVal, oldVal, oldRev, at, options) {
+			// summary:
+			//		Commit a store mutation. This method is called either directly from
+			//		the store or, when in transaction mode, from the transaction when
+			//		the transaction completed successfully.
+			// opType:
+			//		Operation type.
+			// key: Key
+			//		Record key.
+			// newVal: any
+			//		The new value property value of the store record.
+			// oldVal: any
+			//		The old value property value of the store record.
+			// oldRev: Number
+			//		The old revision number of the store record.
+			// at: Number
+			//		Record index number
+			// options: Object?
+			//		Operation directives
+			// tag:
+			//		private
+			var action = opTypes[opType];
+			var event;
+			
+			try {
+				switch (opType) {
+					case Transaction.NEW:
+					case Transaction.UPDATE:
+						this._trigger("write", key, newVal, oldVal, at, options );
+						event = mixin ({item: newVal}, (oldVal ? {oldItem: oldVal} : null));
+						break;
+					case Transaction.DELETE:
+						this._trigger("delete", key, null, oldVal, at );
+						event = {item: oldVal};
+						break;
+				}
+				if (this.eventable && !this.suppressEvents) {
+					this._emit( action, event, true);
+				}
+			} catch (err) {
+				throw StoreError.call(err, err, "_commit" );
 			}
 		},
 
 		_register: function ( action, listener, scope ) {
 			// summary:
+			//		Register a listener (callback) with the store. Registering callbacks
+			//		with the store is reserved for store modules and extension only.
+			// action: String
+			//		Store action to register for. Action is one of the following:
+			//			clear, close, delete, loadStart, loadCancel, loadEnd, loadFailed
+			//			or write.
+			// listener: Listener|Function
+			// scope: Object?
+			// tag:
+			//		private
 			return this._listeners.addListener( action, listener, scope );
 		},
 
-		_trigger: function (action) {
+		_trigger: function (action /* [, arg0 [, arg1, ... , argN]] */ ) {
+			// summary:
+			//		Invoke the registered listeners.
+			// action: String
+			//		See _register()
+			// tag:
+			//		private
 			this._listeners.trigger.apply(this, arguments);
 		},
 
@@ -430,7 +504,7 @@ define(["dojo/_base/declare",
 
 		_clearRecords: function () {
 			// summary:
-			//		Remove all records from the store and all indexes.
+			//		Remove all records from the store and all associated indexes.
 			// tag:
 			//		Private
 			AbstractOnly("_clearRecords");
@@ -486,11 +560,11 @@ define(["dojo/_base/declare",
 
 		add: function (object, options) {
 			// summary:
-			//		Add an object to the store , throws an exception if the object already
-			//		exists
+			//		Add an object to the store. If an object with the same key already
+			//		exists an exception of type ConstraintError is thrown.
 			// object: Object
-			//		The object to store.
-			// options: PutDirectives?
+			//		The new object to store.
+			// options: Store.PutDirectives?
 			//		Additional metadata for storing the data.	Includes an "id" or "key"
 			//		property if a specific key is to be used.
 			// returns: Key
@@ -573,19 +647,21 @@ define(["dojo/_base/declare",
 			//		'multiEntry' specifies whether the index's multiEntry flag is set.
 			// returns:
 			//		An store Index object.
+			// example:
+			//	|	store.createIndex("authors", "author", {unique:false, multiEntry:false});
 			// tag:
 			//		Public
 			this._assertStore( this, "createIndex", true );
 			if (name && keyPath) {
 				if (!this.indexNames.contains(name)) {
 					var index = new Index(this, name, keyPath, options);
-					if (index) {
+					index.ready( function (index) {
 						var indexNames = this.indexNames.toArray();
 						indexNames.push(name);
 						this.indexNames = new DOMStringList(indexNames);
 						this._indexes[name] = index;
-						return index;
-					}
+					}, null, this)
+					return index;
 				}
 				throw new StoreError("ConstraintError", "createIndex", "index with name %{0} already exist", name);
 			} 
@@ -653,8 +729,8 @@ define(["dojo/_base/declare",
 
 		getIdentity: function (object) {
 			// summary:
-			//		Returns an object's identity (key).  Note that the key returned
-			//		may not be a valid key!
+			//		Returns an object's identity (key).  Note that if object is not an
+			//		existing store object the key returned may not be a valid key!
 			// object: Object
 			//		The object to get the identity from
 			// returns: Key
@@ -667,16 +743,36 @@ define(["dojo/_base/declare",
 			}
 		},
 
+		getMetadata: function (item) {
+			// summary:
+			//		Returns any metadata about the object. Currently only the object's
+			//		key and property names are returned, that is, if the object exists
+			//		in the store.
+			// item: Key|Object
+			// returns: Object
+			// tag:
+			//		public
+			this._assertStore( this, "getMetadata", false );
+			var key = isObject(item) ? this.getIdentity(object) : item;
+			if (key) {
+				var record = this._retrieveRecord(key).record;
+				if (record) {
+					var meta = {key: key, properties: Object.keys(record.value)};
+					return meta;
+				}
+			}
+		},
+
 		getRange: function (keyRange, options) {
 			// summary:
 			//		Retrieve a range of store records.
 			// keyRange: Key|KeyRange?
 			//		A KeyRange object or valid key.
-			// options: (String|Object)?
+			// options: (String|Store.RangeOptions)?
 			//		If a string, the range required direction: 'next', 'nextunique', 
 			//		'prev' or 'prevunique'. Otherwise a Store.RangeOptions object.
-			// returns: dojo/store/api/Store.QueryResults
-			//		The results of the query, extended with iterative methods.
+			// returns: Store.QueryResults
+			//		The results of the range, extended with iterative methods.
 			// tag:
 			//		Public
 
@@ -733,10 +829,12 @@ define(["dojo/_base/declare",
 			//		LoadDirectives, see (indexedStore/_base/LoaderXXX for details).
 			// returns: dojo/promise/Promise
 			//		dojo/promise/Promise
+			// example:
+			//	|	store.load( {data: myObjects, overwrite: true} );
 			// tag:
 			//		public
 
-			// If the initial load request failed reset _storeReady to allow for
+			// If the initial load request failed, reset _storeReady to allow for
 			// another attempt.
 			if (this._storeReady.isRejected()) {
 				this._storeReady = new Deferred();
@@ -744,7 +842,8 @@ define(["dojo/_base/declare",
 			}
 
 			var directives = {
-				data: this.data
+				data: this.data,
+				overwrite: !!this.overwrite
 			};
 			var options  = mixin( directives, options);
 			var suppress = this.suppressEvents;
@@ -775,7 +874,7 @@ define(["dojo/_base/declare",
 			//		Stores an object
 			// object: Object
 			//		The value to be stored in the record.
-			// options: PutDirectives?
+			// options: Store.PutDirectives?
 			//		Additional metadata for storing the data.
 			// returns: Key
 			//		A valid key.
@@ -796,9 +895,9 @@ define(["dojo/_base/declare",
 			//		in progress.
 			// query: Object?
 			//		The query to use for retrieving objects from the store.
-			// options: QueryOptions?
-			//		The optional arguments to apply to the resultset.
-			// returns: dojo/store/api/Store.QueryResults
+			// options: Store.QueryOptions?
+			//		The optional directives apply to the resultset.
+			// returns: Store.QueryResults
 			//		The results of the query, extended with iterative methods.
 			// tag:
 			//		Public
@@ -817,14 +916,9 @@ define(["dojo/_base/declare",
 
 		ready: function (callback, errback, progress, scope) {
 			// summary:
-			//		Execute the callback when the store has been loaded. If an error
-			//		is detected that will prevent the store from getting ready errback
-			//		is called instead.
-			// NOTE:
-			//		When the promise returned resolves it merely indicates one of
-			//		potentially many load requests was successful. To keep track of
-			//		a specific load request use the promise returned by the load()
-			//		function instead. (See Load() for details).
+			//		Execute the callback when the store has finished loading or entered
+			//		the ready state. If an error is detected that will prevent the store
+			//		from getting ready errback is called instead.
 			// callback: Function?
 			//		Function called when the store is ready.
 			// errback: Function?
@@ -836,6 +930,11 @@ define(["dojo/_base/declare",
 			//		not specified the store is used.
 			// returns: dojo/promise/Promise
 			//		dojo/promise/Promise
+			// NOTE:
+			//		When the promise returned resolves it merely indicates one of
+			//		potentially many load requests was successful. To keep track of
+			//		a specific load request use the promise returned by the load()
+			//		function instead. (See Load() for details).
 			// tag:
 			//		Public
 			if (callback || errback || progress) {
@@ -852,11 +951,15 @@ define(["dojo/_base/declare",
 			// summary:
 			//		Delete object(s) by their key
 			// key: Key|KeyRange
-			//		The key or key range identifying the record to be deleted.
+			//		The key or key range identifying the record(s) to be deleted. If
+			//		a key range, all records within the range will be deleted.
 			// returns: Boolean
 			//		Returns true if an object was removed otherwise false.
 			// tag:
 			//		Public
+
+this._emit("error", {error:"it's a store error"});
+
 			this._assertStore( this, "remove", true );
 			this._assertKey( key, "remove", true );
 			return this._deleteKeyRange(key);

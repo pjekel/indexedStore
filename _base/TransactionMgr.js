@@ -17,24 +17,12 @@ define(["./Library",
 	// module:
 	//		IndexedStore/_base/TransactionMgr
 	// summary:
-	//		This module implements the synchronous Transaction Manager and replaces
+	//		This module implements the indexedStore Transaction Manager and replaces
 	//		the IDBDatabase.transaction() interface. Note, the use of Transactions
-	//		is not required or enforced to interface with an Object Store or Index.
+	//		is not required or enforced to interface with an indexedStore or Index.
 	//		However, using transactions allows you to restrict concurrent access to
-	//		a store based on the transaction type. For a detailed description of
-	//		Transactions please refer to:
-	//
-	//			http://www.w3.org/TR/IndexedDB/#transaction-concept
-	//
-	//	NOTE:
-	//		The http://www.w3.org/TR/IndexedDB/ specifications state that in case of
-	//		synchrounous transaction the application must wait until the transaction
-	//		can be started according to the transaction lifetime rules. This however
-	//		is not possible using JavaScript. Therefore, this Transaction Manager
-	//		implements a hybrid model of synchronous and asynchronous transaction
-	//		execution, that is, if a transaction can not be started immediately due
-	//		to lifetime constraints the transaction is queued for later execution.
-	//		For a detailed description of the Transaction lifecycle please refer to:
+	//		a store based on the transaction type and adds rollback capabilities.
+	//		For a detailed description of Transactions please refer to:
 	//
 	//			http://www.w3.org/TR/IndexedDB/#transaction-concept
 	//
@@ -42,7 +30,7 @@ define(["./Library",
 	//		of stores and indexes, there is no support for 'versionchange' type
 	//		transactions.
 
-	var	TRANSACTION_MANAGER = "dojo.indexedStore.TransactionMgr";
+	var	TRANSACTION_MANAGER = "indexedStore.TransactionMgr";
 	var debug = dojo.config.isDebug || false;
 	var transId = 1;
 	var IDLE    = 0,
@@ -60,13 +48,20 @@ define(["./Library",
 		// tag:
 		//		Public
 
+		function abort (event) {
+			if (debug) { 
+				var trans = event.target;
+				Lib.debug( "Trans: "+trans.tid+" event: "+event.type);
+			}
+		}
+		
 		function cleanup (event) {
 			// summary:
 			//		Cleanup all remnants of a transaction.  This method is called for
 			//		every transaction regardless if the transaction was successful or
 			//		was aborted.
-			// event:
-			//		DOM style event. (see store/dom/event)
+			// event: Event
+			//		DOM style event. (see indexedStore/dom/event)
 			// tag:
 			//		Private
 			
@@ -76,15 +71,15 @@ define(["./Library",
 					list.splice(idx,1);
 				}
 			}
-			var transaction = event.target;
+			var trans = event.target;
 
-			if (debug) { Lib.debug( "Trans: "+transaction.identity+" event: "+event.type);}
+			if (debug) { Lib.debug( "Trans: "+trans.tid+" event: "+event.type);}
 
 			// Remove transactions from the stores
-			setStoreTransaction( transaction, true );
+			setStoreTransaction( trans, true );
 
-			removeFromList(activeTrans, transaction);
-			removeFromList(transactions, transaction);
+			removeFromList(activeTrans, trans);
+			removeFromList(transactions, trans);
 			startTransactions( transactions.slice(0) );
 		}
 
@@ -93,16 +88,12 @@ define(["./Library",
 			//		Initiate the execution of a transaction.   Calling this method does
 			//		not quarentee the transaction is actually started, it may be queued
 			//		due to constraints on the current execution environment.
-			// transaction:
+			// transaction: Transaction
 			//		Transaction to execute.
 			// tag:
 			//		Private
 			if (transaction instanceof Transaction) {
 				if ( !(transaction._done || transaction._aborted) ) {
-					// Add eventlisteners so we can cleanup on completion or abort.
-					transaction.addEventListener("abort", cleanup );
-					transaction.addEventListener("done", cleanup );
-
 					transactions.push(transaction);
 					transaction._state = PENDING;
 					startTransactions( [transaction] );
@@ -113,13 +104,13 @@ define(["./Library",
 			}
 		};
 		
-		function setStoreTransaction(/*Transaction*/ transaction,/*Boolean*/ clear )  {
+		function setStoreTransaction (transaction, clear)  {
 			// summary:
 			//		Set the transaction on the store(s). (e.g. associate the store(s)
 			//		with this transaction).
-			// transaction:
+			// transaction: Transaction
 			//		The transaction the store(s) will belong to.
-			// clear:
+			// clear: Boolean
 			//		If true the store transaction is cleared (transaction complete)
 			//		otherwise it is set.
 			// tag:
@@ -130,13 +121,13 @@ define(["./Library",
 			}
 		}
 
-		function startTransactions(/*Transaction[]*/ transList ) {
+		function startTransactions (transList) {
 			// summary:
 			//		Start transaction(s). The list of transactions is searched for all
 			//		pending transactions, if any. Of those transactions the one's that
 			//		do not violate the indexedDB transaction constraints are started
 			//		sequentially.
-			// transList:
+			// transList: Transaction[]
 			//		List of transactions to search.
 			// tag:
 			//		Private
@@ -149,12 +140,13 @@ define(["./Library",
 					if( !violateConstraint( transaction )) {
 						activeTrans.push(transaction);
 
-						if (debug) { Lib.debug( "Trans: "+transaction.identity+" started");	}
+						if (debug) { Lib.debug( "Trans: "+transaction.tid+" started");	}
 
 						setStoreTransaction( transaction, false );
 						transaction._state = ACTIVE;
-						transaction._start();
-
+						setTimeout( function () {
+							transaction._start();
+						}, 0);
 					} else {
 						// start the timer if specified.
 						if (transaction._timeout > 0) {
@@ -167,24 +159,25 @@ define(["./Library",
 			});
 		}
 
-		function violateConstraint( transaction ) {
+		function violateConstraint (transaction) {
 			// summary:
 			//		Test if a transaction would violate any of the lifetime transaction
 			//		constraints given the currently active transactions.
-			// transaction:
+			// transaction: Transaction
 			//		Transaction to evaluate.
-			// returns:
+			// returns: Boolean
 			//		True if the transaction violates any constraints otherwise false.
 			// tag:
 			//		Private
 
-			function overlap(tranList, transaction) {
+			function overlap (tranList, transaction) {
 				// summary:
 				//		Test if the scope of a transaction overlaps with any of the
 				//		transactions in the given transaction list.
-				// transaction:
+				// tranList: Transaction[]
+				// transaction: Transaction
 				//		Transaction to evaluate.
-				// returns:
+				// returns: Boolean
 				//		True is the transaction scope overlap otherwise false.
 				// tag:
 				//		Private
@@ -214,26 +207,23 @@ define(["./Library",
 			return false;
 		}
 
-		this.transaction = function (/*Store|Store[]*/ stores, /*Function*/ callback, 
-																	/*String?*/ mode, /*Number?*/ timeout ) {
+		this.transaction = function (stores, callback, mode, timeout) {
 			// summary:
 			//		The method creates a Transaction object representing the transaction
 			//		and immediately tries to start the transaction. This method replaces
 			//		the IDBDatabase.transaction interface.
-			// stores:
+			// stores: Store|Store[]
 			// 		The object stores in the scope of the new transaction.
-			// callback:
+			// callback: Function
 			//		A callback which will be called with the newly created transaction.
 			//		When the callback returns, the transaction is committed.
-			// mode:
+			// mode: String?
 			//		The mode for isolating access to data inside the given object stores.
 			//		If this parameter is omitted, the default access mode is "readonly".
-			// timeout:
+			// timeout: Number?
 			//		Maximum time allowed to wait before the transaction can be started.
 			//		If the transaction cannot be started before the timer expires the
 			//		transaction is aborted and the error property is set to TimeOutError.
-			// returns:
-			//		void
 			// example:
 			//	|	require(["dojo/_base/declare",
 			//	|	         "store/_base/_Store",
@@ -261,10 +251,15 @@ define(["./Library",
 				}
 			}
 			var transaction = new Transaction( stores, callback, mode, timeout);
-			execute( transaction );		
+			execute( transaction );
+			return transaction;
 		}
 
 		EventTarget.call(this);
+
+		// Capture the transaction's abort and complete events in the bubble phase.
+		this.addEventListener("abort", abort, true );
+		this.addEventListener("done", cleanup );
 
 	}	/* end TransManager() */
 

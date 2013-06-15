@@ -36,7 +36,7 @@ define(["dojo/_base/declare",
 			// listener with the store until there is something to watch for.
 
 			if (this.eventable && this.eventer instanceof Eventer) {
-				this.eventer.registerEvent("set");
+				this.eventer.addHandler("set");
 			}
 			if (!this._clone) {
 				console.warn("Watch Extension only works when object cloning is enabled");

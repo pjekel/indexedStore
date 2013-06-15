@@ -16,11 +16,13 @@ define(["dojo/Deferred",
 			  "./Library",
 				"./Range",
 			  "./Record",
+			  "../dom/event/Event",
+			  "../dom/event/EventTarget",
 				"../error/createError!../error/StoreErrors.json",
 				"../util/QueryResults",
 				"../util/Sorter"
 			 ], function (Deferred, when, Cursor, Keys, KeyRange, Lib, Range, Record, 
-			               createError, QueryResults, Sorter) {
+			               Event, EventTarget, createError, QueryResults, Sorter) {
 	"use strict";
 
 	//module:
@@ -75,7 +77,8 @@ define(["dojo/Deferred",
 		//		Public
 
 		//=========================================================================
-
+		// private functions
+		
 		function assertKey(index, key, method, required) {
 			// summary:
 			//		Validate if the index and associated store have not been destroyed.
@@ -261,7 +264,7 @@ define(["dojo/Deferred",
 		}
 
 		//=========================================================================
-		// Private methods
+		// Protected methods
 
 		this._add = function (storeRecord) {
 			// summary:
@@ -677,9 +680,12 @@ define(["dojo/Deferred",
 			this.name        = name;
 			this.keyPath     = keyPath;
 			this.store       = store;
+			this.parent      = store;
 			this.type        = "index";
 
-			Lib.writable( this, "keyPath, name, store, type, uppercase, multiEntry, unique", false );
+			EventTarget.call(this);
+
+			Lib.writable( this, "keyPath, name, parent, store, type, uppercase, multiEntry, unique", false );
 			Lib.protect( this );
 
 			var async = !!indexOptions.async;
@@ -688,6 +694,9 @@ define(["dojo/Deferred",
 			// Register callbacks with the store.
 			store._register( "loadStart, loadCancel, loadEnd, loadFailed", loadAction, this );
 
+			this._indexReady.then(null, function (err) {
+				index.dispatchEvent(new Event("error", {error:err, bubbles:true, cancelable:true}));
+			});
 			if (async) {
 				setTimeout( function () {
 					indexStore( store, index, index._indexReady );
@@ -701,6 +710,9 @@ define(["dojo/Deferred",
 		}
 
 	} /* end Index() */
+
+	Index.prototype = new EventTarget();
+	Index.prototype.constructor = Index;
 
 	return Index;
 

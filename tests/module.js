@@ -19,6 +19,7 @@ define(["doh/main", "require"], function(doh, require){
 	doh.register("Observer_Listeners", require.toUrl("./test_Observer_Listener.html"), 999999);
 	doh.register("Observer_Query", require.toUrl("./test_Observer_Query.html"), 999999);
 	doh.register("Observer_Range", require.toUrl("./test_Observer_Range.html"), 999999);
+	doh.register("Transactions", require.toUrl("./test_Transactions.html"), 999999);
 	doh.register("CORS Extension", require.toUrl("./test_CORS_Extension.html"), 999999);
 	doh.register("Hierarchy Extension", require.toUrl("./test_Hierarchy_Extension.html"), 999999);
 	doh.register("Ancestry Extension", require.toUrl("./test_Ancestry_Extension.html"), 999999);

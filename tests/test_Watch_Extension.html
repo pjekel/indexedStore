@@ -83,6 +83,7 @@
 								// Calling 'watcher.watch()' without a listener on a non-eventable store
 								// this should fail.
 								t.e( Error, watcher, "watch", ["name"]);
+								watcher.destroy();
 							}
 						},
 
@@ -115,6 +116,7 @@
 								handle.remove();
 								t.is( 1, props.length );
 
+								watcher.destroy();
 							}
 						},
 

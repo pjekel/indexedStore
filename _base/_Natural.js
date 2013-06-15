@@ -14,10 +14,9 @@ define(["dojo/_base/declare",
 				"./Library",
 				"./Location",
 				"./Record",
-				"./Transaction",
-				"../error/createError!../error/StoreErrors.json"
-			 ], function (declare, Keys, KeyRange, Lib, Location, Record, Transaction,
-			               createError) {
+				"../error/createError!../error/StoreErrors.json",
+				"../transaction/_opcodes"
+			 ], function (declare, Keys, KeyRange, Lib, Location, Record, createError, _opcodes) {
 	"use strict";
 	// module:
 	//		IndexedStore/_base/_Natural
@@ -88,7 +87,7 @@ define(["dojo/_base/declare",
 				if (this.features.has("indexed")) {
 					throw new StoreError("Dependency", "constructor", C_MSG_MUTUAL_EXCLUSIVE );
 				}
-				this._index      = {};			// Local record index.
+				this._index = {};			// Local record index.
 
 				this.features.add("natural");
 				Lib.defProp( this,"natural", {value:true, writable:false, enumerable:true} );
@@ -99,13 +98,13 @@ define(["dojo/_base/declare",
 		},
 
 		//===================================================================
-		// Private methods.
+		// protected methods.
 
 		_clearRecords: function () {
 			// summary:
 			//		Remove all records from the store and all indexes.
 			// tag:
-			//		Private
+			//		protected
 			var name, index;
 			for(name in this._indexes) {
 				index = this._indexes[name];
@@ -131,7 +130,7 @@ define(["dojo/_base/declare",
 			// returns: Boolean
 			//		true on successful completion otherwise false.
 			// tag:
-			//		Private
+			//		protected
 
 			var deleted = false;
 			var record;
@@ -170,7 +169,7 @@ define(["dojo/_base/declare",
 			// returns: Boolean
 			//		true on successful completion otherwise false.
 			// tag:
-			//		Private
+			//		protected
 
 			try {
 				this._removeFromIndex(record);
@@ -189,9 +188,9 @@ define(["dojo/_base/declare",
 				this.revision++;
 
 				if (this.transaction) {
-					this.transaction._journal( this, Transaction.DELETE, key, null, value, rev, recNum );
+					this.transaction._journal( this, _opcodes.DELETE, key, null, value, rev, recNum );
 				} else {
-					this._commit( Transaction.DELETE, key, null, value, rev, recNum );
+					this._notify( _opcodes.DELETE, key, null, value, rev, recNum );
 				}
 			}
 			return false;
@@ -206,7 +205,7 @@ define(["dojo/_base/declare",
 			// returns: Number[]
 			//		An array of record numbers.
 			// tag:
-			//		Private
+			//		protected
 			var i, max = this._records.length;
 			var recIdx = [], keyVal;
 			
@@ -230,7 +229,7 @@ define(["dojo/_base/declare",
 			// recNum: Number
 			//		Record number
 			// tag:
-			//		Private
+			//		protected
 			var name, index;
 			try {
 				for(name in this._indexes) {
@@ -253,7 +252,7 @@ define(["dojo/_base/declare",
 			//		Re-index all store records. This function is called when either a
 			//		record is deleted or moved.
 			// tag:
-			//		Private
+			//		protected
 			var rec, i, max = this._records.length;
 			this._index = {};			// Drop local index.
 			for (i=0; i<max; i++) {
@@ -273,7 +272,7 @@ define(["dojo/_base/declare",
 			// returns: Location
 			//		A Location object. (see the Location module for detais).
 			// tag:
-			//		Private
+			//		protected
 			var recNum, max = this._records.length;
 
 			if (key != undef) {
@@ -306,7 +305,7 @@ define(["dojo/_base/declare",
 			// record: Record
 			//		Record to be removed.
 			// tag:
-			//		Private
+			//		protected
 			var name, index;
 			try {
 				for(name in this._indexes) {
@@ -331,7 +330,7 @@ define(["dojo/_base/declare",
 			// returns: Key
 			//		Record key.
 			// tag:
-			//		Private
+			//		protected
 			var newRec, newVal, event, before, cb, at, i;
 			var optKey, overwrite = false;
 			
@@ -356,7 +355,7 @@ define(["dojo/_base/declare",
 			var curRev  = (curRec && curRec.rev) || 0;
 			var curVal  = (curRec && curRec.value);
 			var curAt   = curLoc.eq;
-			var opType  = curRec ? Transaction.UPDATE : Transaction.NEW;
+			var opType  = curRec ? _opcodes.UPDATE : _opcodes.NEW;
 			
 			if (curRec) {
 				if (!overwrite) {
@@ -392,68 +391,9 @@ define(["dojo/_base/declare",
 			if (this.transaction) {
 				this.transaction._journal( this, opType, keyVal, value, curVal, curRev, curAt, options);
 			} else {
-				this._commit( opType, keyVal, value, curVal, curRev, curAt, options);
+				this._notify( opType, keyVal, value, curVal, curRev, curAt, options);
 			}
 			return keyVal;
-		},
-
-		_undo: function (trans, opType, key, curVal, oldVal, oldRev, at) {
-			// summary:
-			//		Undo previous operation. When a transaction failed or was aborted
-			//		all operations associated with the transaction will be reversed.
-			//		This _undo() method should ONLY be called by the Transaction Manager
-			//		(See TransactionMgr.js for details.).
-			// trans: Transaction
-			//		The transaction that failed or was aborted.
-			// opType: Number
-			//		Type of operation
-			// key: Key
-			//		Record key
-			// curVal: any
-			//		The current value property value of the store record.
-			// oldVal: any
-			//		The old value property value of the store record.
-			// oldRev: Number
-			//		The old revision number of the store record.
-			// at: Number?
-			//		Previous record location
-			// tag:
-			//		private
-
-			if (trans == this.transaction && !trans.active) {
-				var locator = this._retrieveRecord(key);
-				var curRec  = locator.record;
-				var curAt   = locator.eq;
-
-				if (opType != Transaction.NEW) {
-					// Reassamble previous record.
-					var prvRec = new Record( key, oldVal, oldRev);
-					var prvAt  = curRec ? curAt : at;
-				}
-
-				switch (opType) {
-					case Transaction.NEW:
-						// Remove newly inserted record....
-						this._removeFromIndex(curRec);
-						this._records.splice(curAt, 1);
-						break;
-					case Transaction.DELETE:
-						// Re-insert deleted record....
-						this._indexRecord( prvRec );
-						this._records.splice(prvAt, 0, prvRec)
-						break;
-					case Transaction.UPDATE:
-						// Restore previous record....
-						if (curRec) {
-							this._removeFromIndex(curRec);
-							this._indexRecord(prvRec);
-							this._records[prvAt] = prvRec;
-						}
-						break;
-				}
-				this.total = this._records.length;
-				this.revision--;
-			}
 		},
 
 		//=========================================================================

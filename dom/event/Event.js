@@ -21,13 +21,14 @@ define(["../../_base/Library",
 
 	var StoreError = createError("Event");		// Create the StoreError type.
 
-	var EVENT_FLAGS = ["dispatch", "stopDeferred", "stopImmediate", "stopPropagate"];
+	var EVENT_FLAGS = ["dispatch", "canceled", "stopImmediate", "stopPropagate"];
 	var EVENT_INIT  = { bubbles: false, cancelable: false, detail: null };
 
 	var isObject = Lib.isObject;
 	var isEmpty  = Lib.isEmpty;
 	var isString = Lib.isString;
-	var mixin    = Lib.mixin; 
+	var mixin    = Lib.mixin;
+	var defProp  = Lib.defProp;
 	
 	function setEventType( event, type ) {
 		// summary:
@@ -59,15 +60,14 @@ define(["../../_base/Library",
 		}
 
 		// Public properties
-		this.currentTarget    = null;
-		this.target           = null;
-		this.bubbles          = false;
-		this.cancelable       = false;
-		this.eventPhase       = Event.NONE;
-		this.isTrusted        = false;				// False by default...
-		this.timeStamp        = Date.now();
-		this.type             = "";
-		this.defaultPrevented = false;
+		this.currentTarget = null;
+		this.target        = null;
+		this.bubbles       = false;
+		this.cancelable    = false;
+		this.eventPhase    = Event.NONE;
+		this.isTrusted     = false;				// False by default...
+		this.timeStamp     = Date.now();
+		this.type          = "";
 
 		this.initEvent = function (type, bubbles, cancelable, detail) {
 			// summary:
@@ -92,13 +92,12 @@ define(["../../_base/Library",
 				if (detail && isObject(detail) && !isEmpty(detail)) {
 					this.detail = detail;
 				}
-				this.currentTarget    = null;
-				this.defaultPrevented = false;
-				this.eventPhase       = Event.NONE;
-				this.stopDeferred     = false;
-				this.stopImmediate    = false;
-				this.stopPropagate    = false;
-				this.target           = null;
+				this.currentTarget = null;
+				this.canceled      = false;
+				this.eventPhase    = Event.NONE;
+				this.stopImmediate = false;
+				this.stopPropagate = false;
+				this.target        = null;
 			}
 		}
 
@@ -112,7 +111,7 @@ define(["../../_base/Library",
 			// tag:
 			//		Public
 			if (this.cancelable) {
-				this.defaultPrevented = true;
+				this.canceled = true;  // DOM4						
 			}
 		}
 
@@ -133,10 +132,9 @@ define(["../../_base/Library",
 			// tag:
 			//		Public
 			this.stopPropagate = true;
-			this.stopDeferred  = true;
 		}
 
-		// Add private flags
+		// Add and hide protected flags
 		EVENT_FLAGS.forEach( function (flag) {
 			Lib.defProp( this, flag, {value:false, enumerable: false, writable:true});
 		}, this);

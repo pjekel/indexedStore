@@ -20,18 +20,20 @@ define(["require",
 				"./KeyRange",
 				"./Range",
 				"./Record",
-				"./Transaction",
-				"../error/createError!../error/StoreErrors.json",
+				"../dom/event/Event",
 				"../dom/event/EventTarget",
 				"../dom/string/DOMStringList",
+				"../error/createError!../error/StoreErrors.json",
 				"../listener/ListenerList",
+				"../transaction/_opcodes",
 				"../util/QueryEngine",
 				"../util/QueryResults",
 				"../util/Sorter"
 			 ], function (require, declare, Deferred, when, FeatureList, Index, Lib, Loader, 
-			               Keys, KeyRange, Range, Record, Transaction, createError, 
-			               EventTarget, DOMStringList, ListenerList, QueryEngine,
-			               QueryResults, Sorter ) {
+			               Keys, KeyRange, Range, Record, 
+			               Event, EventTarget,
+			               DOMStringList, createError, 
+			               ListenerList, _opcodes, QueryEngine, QueryResults, Sorter ) {
 	"use strict";
 	// module:
 	//		IndexedStore/_base/_Store
@@ -162,7 +164,6 @@ define(["require",
 	var clone       = Lib.clone;									// HTML5 structured clone.
 	var mixin       = Lib.mixin;
 
-	var opTypes  = ["new", "delete", "update"];
 	var uniqueId = 0;
 	var undef;
 	
@@ -331,7 +332,7 @@ define(["require",
 			}
 			Lib.defProp( this, "_emit", {value: function () {}, enumerable: false, configurable: true });
 			Lib.writable( this, "features, name, sid, type", false );
-			Lib.protect( this );	// Hide own private properties.
+			Lib.protect( this );	// Hide own protected properties.
 
 			this.features.add("store");
 		},
@@ -343,7 +344,7 @@ define(["require",
 			// kwArg: Object
 			//		See constructor()
 			// tag:
-			//		Private
+			//		protected
 
 			if (this.async) {
 				var methods = ["add", "get", "put", "remove"];
@@ -351,9 +352,13 @@ define(["require",
 					var func = this[method];
 					this[method] = function () {
 						var args = arguments;
-						return this._storeReady.then( function (store) {
+						var prom = this._storeReady.then( function (store) {
 							return func.apply(store, args);
 						});
+						if (this.cloned && this.transaction) {
+							this.transaction._waitFor(prom);
+						}
+						return prom;
 					} 
 				}, this );
 			}
@@ -367,7 +372,7 @@ define(["require",
 		},
 
 		//===================================================================
-		// Private methods
+		// protected methods
 		
 		_applyDefaults: function (object) {
 			// summary:
@@ -375,7 +380,7 @@ define(["require",
 			// object: Object
 			//		Store object.
 			// tag:
-			//		Private
+			//		protected
 			var prop;
 			
 			for (prop in this.defaultProperties) {
@@ -393,7 +398,7 @@ define(["require",
 			//		Name of the calling function.
 			// required: Boolean?
 			// tag:
-			//		Private
+			//		protected
 			if (key != undef) {
 				if (!(key instanceof KeyRange) && !Keys.validKey(key)) {
 					throw new StoreError( "DataError", method, "invalid key specified");
@@ -415,22 +420,28 @@ define(["require",
 			// readWrite: Boolean?
 			//		Indicates if the store operation requires read/write access.
 			// tag:
-			//		Private
+			//		protected
+			if (store.transaction) {
+				if (!store.transaction.active) {
+					throw new StoreError( "TransactionInactive", method);
+				}
+				if (store.transaction.mode == "readonly" && readWrite) {
+					throw new StoreError( "ReadOnly", method);
+				}
+				if (!store.cloned) {
+					throw new StoreError( "AccessError", method, "no access allowed inside a transaction");
+				}
+			} else {
+				if (store.cloned) {
+					throw new StoreError( "AccessError", method, "no access allowed outside a transaction");
+				}
+			}
 			if (store._destroyed) {
 				throw new StoreError( "InvalidState", method, "store has been destroyed");
-			} else if (readWrite) {
-				if (store.transaction) {
-					if (!store.transaction.active) {
-						throw new StoreError( "TransactionInactive", method);
-					}
-					if (store.transaction.mode == "readonly") {
-						throw new StoreError( "ReadOnly", method);
-					}
-				}
 			}
 		},
 
-		_commit: function (opType, key, newVal, oldVal, oldRev, at, options) {
+		_notify: function (opType, key, newVal, oldVal, oldRev, at, options) {
 			// summary:
 			//		Commit a store mutation. This method is called either directly from
 			//		the store or, when in transaction mode, from the transaction when
@@ -450,27 +461,38 @@ define(["require",
 			// options: Object?
 			//		Operation directives
 			// tag:
-			//		private
-			var action = opTypes[opType];
-			var event;
-			
+			//		protected
+			var action, event;
 			try {
+				// If the operation was performed on a transactional (cloned) store add
+				// the info to the transaction journal.
+				if (this.cloned) {
+					this.transaction._journal( this, arguments);
+				}
 				switch (opType) {
-					case Transaction.NEW:
-					case Transaction.UPDATE:
+					case _opcodes.NEW:
+					case _opcodes.UPDATE:
 						this._trigger("write", key, newVal, oldVal, at, options );
 						event = mixin ({item: newVal}, (oldVal ? {oldItem: oldVal} : null));
 						break;
-					case Transaction.DELETE:
+					case _opcodes.DELETE:
 						this._trigger("delete", key, null, oldVal, at );
 						event = {item: oldVal};
 						break;
 				}
-				if (this.eventable && !this.suppressEvents) {
-					this._emit( action, event, true);
+				if (event && this.eventable && !this.suppressEvents) {
+					action = _opcodes.name(opType);
+					event  = this._emit( action, event, true);
+					if (event.error) {
+						// An error was encountered in the user specified handler. Although
+						// not an actual store error threat it as one as it may be the only
+						// to get notfied.
+						throw event.error;
+					}
 				}
 			} catch (err) {
-				throw StoreError.call(err, err, "_commit" );
+				// Don't rely on _emit() being available, use dispatchEvent() instead.
+				this.dispatchEvent( new Event("error", {error:err, bubbles:true, cancelable:true}) );
 			}
 		},
 
@@ -485,7 +507,7 @@ define(["require",
 			// listener: Listener|Function
 			// scope: Object?
 			// tag:
-			//		private
+			//		protected
 			return this._listeners.addListener( action, listener, scope );
 		},
 
@@ -495,7 +517,7 @@ define(["require",
 			// action: String
 			//		See _register()
 			// tag:
-			//		private
+			//		protected
 			this._listeners.trigger.apply(this, arguments);
 		},
 
@@ -506,7 +528,7 @@ define(["require",
 			// summary:
 			//		Remove all records from the store and all associated indexes.
 			// tag:
-			//		Private
+			//		protected
 			AbstractOnly("_clearRecords");
 		},
 
@@ -519,7 +541,7 @@ define(["require",
 			// returns: Boolean
 			//		true on successful completion otherwise false.
 			// tag:
-			//		Private
+			//		protected
 
 			AbstractOnly("_deleteKeyRange");
 		},
@@ -534,7 +556,7 @@ define(["require",
 			// returns: Location
 			//		A location object. (see the ./util/Keys module for detais).
 			// tag:
-			//		Private
+			//		protected
 
 			AbstractOnly("_retrieveRecord");
 		},
@@ -550,7 +572,7 @@ define(["require",
 			// returns: Key
 			//		Record key.
 			// tag:
-			//		Private
+			//		protected
 
 			AbstractOnly("_storeRecord");
 		},
@@ -572,8 +594,8 @@ define(["require",
 			// tag:
 			//		Public
 
+			this._assertStore( this, "add", true );
 			if (object) {
-				this._assertStore( this, "add", true );
 				options = mixin( options, {overwrite: false} );
 				return this._storeRecord( object, options );
 			}
@@ -660,6 +682,7 @@ define(["require",
 						indexNames.push(name);
 						this.indexNames = new DOMStringList(indexNames);
 						this._indexes[name] = index;
+						this._notify(_opcodes.CREATE_INDEX);
 					}, null, this)
 					return index;
 				}
@@ -675,13 +698,13 @@ define(["require",
 			//		The name of an existing index.
 			// tag:
 			//		Public
-			var index = this._indexes[name];
-			var names;
-			
+			this._assertStore( this, "deleteIndex", true );
+			var index = this._indexes[name];	
 			if (index) {
 				delete this._indexes[name];
 				this.indexNames = new DOMStringList( Object.keys(this._indexes) );
 				index._destroy();
+				this._notify(_opcodes.DELETE_INDEX);
 			} else {
 				throw new StoreError("NotFound", "deleteIndex", "index with name %{0} does not exist", name);
 			}
@@ -693,15 +716,14 @@ define(["require",
 			//		destroyed.
 			// tag:
 			//		Public
-			var name, index;
+			var name;
 
-			this._assertStore( this, "destroy", true );
-			this._destroyed = true;
 			this._clearRecords();
 			// Destroy all indexes.
 			for(name in this._indexes) {
 				this.deleteIndex(name);
 			}
+			this._destroyed = true;
 			this._listeners.removeListener();			// Remove all listeners...
 			this._indexes   = {};
 			this.indexNames = null;
@@ -776,6 +798,7 @@ define(["require",
 			// tag:
 			//		Public
 
+			this._assertStore( this, "getRange", false );
 			var direction = "next", paginate = false, range = keyRange;
 			var defer = this.waiting || this.loader.loading;
 			var store = this;
@@ -880,8 +903,8 @@ define(["require",
 			//		A valid key.
 			// tag:
 			//		Public
+			this._assertStore( this, "put", true );
 			if (object) {
-				this._assertStore( this, "put", true );
 				options = mixin( {overwrite: true}, options );
 				return this._storeRecord( object, options );
 			}
@@ -957,9 +980,6 @@ define(["require",
 			//		Returns true if an object was removed otherwise false.
 			// tag:
 			//		Public
-
-this._emit("error", {error:"it's a store error"});
-
 			this._assertStore( this, "remove", true );
 			this._assertKey( key, "remove", true );
 			return this._deleteKeyRange(key);

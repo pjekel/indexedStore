@@ -46,13 +46,15 @@ define(["dojo/Deferred",
 		// store: Store
 		//		Instance of a Store object
 
-		function loadError (err) {
+		function loadError (err, defer) {
 			// summary:
 			// err: Error
 			//		Error condition, typeically an instance of Error
 			// tag:
 			//		private
-			store.dispatchEvent( new Event("error", {error:err}));
+			store._trigger("loadFailed");
+			store.dispatchEvent( new Event("error", {error:err, bubbles:true, cancelable:true}));
+			defer.reject(err);
 		}
 
 		this.cancel = function (reason) {
@@ -75,7 +77,7 @@ define(["dojo/Deferred",
 
 			if (data instanceof Array) {
 				var i, max = data.length;
-
+				// Temporarily install an error event handler
 				loader.loading = ldrDef.promise;
 				store._trigger("loadStart");
 				try {
@@ -89,9 +91,7 @@ define(["dojo/Deferred",
 				} catch (err) {
 					loader.loading = false;
 					loader.error   = err;
-					store._trigger("loadFailed");
-					loadError( StoreError.call(err, err, "load") );
-					ldrDef.reject(err);
+					loadError( StoreError.call(err, err, "load"), ldrDef );
 				}
 			} else {
 				throw new StoreError("DataError", "load", "data must be an array of objects");

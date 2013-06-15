@@ -123,9 +123,11 @@ define(["./Listener",
 			// aspect: String
 			// tag:
 			//		Public
-			var list = isString(aspect) && actionList[aspect.toLowerCase()];
+			var list = actionList[aspect];
 			if (list && list.length) {
-				list.trigger(type);
+				var args = Array.prototype.slice.call(arguments,2);
+				args.unshift(type);
+				list.trigger.apply(list, args);
 			}
 		};
 
@@ -144,7 +146,6 @@ define(["./Listener",
 		// and ListenerLists...
 		aspects = aspects ? C_DEFAULTS.concat( aspects ) : C_DEFAULTS;
 		aspects.forEach( function (aspect) {
-			aspect = aspect.toLowerCase();
 			if (reserved.indexOf(aspect) == -1) {
 				actionList[aspect] = new ListenerList();
 				// Create a method for the aspect

@@ -188,7 +188,7 @@ define(["dojo/Deferred",
 			//		private
 			if (!defer.isFulfilled()) {
 				store._trigger("loadFailed");
-				store.dispatchEvent( new Event("error", {error:err}) );
+				store.dispatchEvent( new Event("error", {error:err, bubbles:true, cancelable:true}) );
 				defer.reject(err);
 			}
 			defer.error  = err;
@@ -208,6 +208,7 @@ define(["dojo/Deferred",
 			var handleAs = options.handleAs;
 			var data     = options.data;
 			var url      = options.url;
+			var handle;
 			
 			if (data || url) {
 				loader.loading = defer.promise;

@@ -15,7 +15,7 @@ define(["dojo/_base/lang",
 	"use strict";
 
 	// module:
-	//		cbtree/errors/createError
+	//		indexedStore/error/createError
 	// summary:
 	//		The createError module returns a function which enables the definition
 	//		of a custom Error type that uses pre-defined 'named' error messages.
@@ -27,7 +27,7 @@ define(["dojo/_base/lang",
 	//		using an external, JSON encoded, resource file.
 	//
 	//	|	require(["module", 
-	//	|          "cbtree/errors/createError"
+	//	|          "indexedStore/error/createError"
 	//	|         ], function (module, createError) {
 	//	|
 	//	|	  var errDefs = [
@@ -43,7 +43,7 @@ define(["dojo/_base/lang",
 	//	|	});
 	//
 	//	|	require(["module", 
-	//	|          "cbtree/errors/createError!cbtree/errors/DOMErrors.json"
+	//	|          "indexedStore/error/createError!indexedStore/error/DOMErrors.json"
 	//	|         ], function (module, createError) {
 	//	|
 	//	|	  var myError = createError( module.id );
@@ -79,7 +79,7 @@ define(["dojo/_base/lang",
 	//
 	var errorNames = {};
 
-	function addMessage(/*Object*/ messages ) {
+	function addMessage (messages) {
 		// summary:
 		//		Add message defintions to the internal message table. Each message
 		//		is defined by a key (e.g. the message type) and a value. The value
@@ -88,7 +88,7 @@ define(["dojo/_base/lang",
 		//		as the alias for message type.
 		//		Please note that the code property has been deprecated in the DOM
 		//		specification and is provided for backward compatability only.
-		// messages:
+		// messages: Object
 		//		A single JavaScript key:value pairs object where each key:value pair
 		//		defines a message. Alternatively an array of key:value pair objects
 		//		where each object defines a message. The following is an example of
@@ -96,7 +96,7 @@ define(["dojo/_base/lang",
 		//
 		//		{"NotFoundError":{"text":"The object can not be found here","code":18}}
 		// tag:
-		//		Private
+		//		private
 		function validMsg( msgObj ) {
 			var key, value;
 			for(key in msgObj) {
@@ -119,11 +119,11 @@ define(["dojo/_base/lang",
 		}
 	}
 
-	function getMessage (/*String*/ type, /*String?*/ text) {
+	function getMessage (type, text) {
 		// summary:
 		//		Create and return a message object base of the specified type and
 		//		optional message text.
-		// type:
+		// type: String
 		//		The message type with or without the 'Error' suffix, for example: 
 		//		'NotFoundError' or 'NotFound', both types are equivalent and are 
 		//		referred to as the long and abbreviated version. Please note that
@@ -131,7 +131,7 @@ define(["dojo/_base/lang",
 		//		the value of the type property unless the pre-defined message has
 		//		a 'type' property in which case the message type property is used
 		//		instead.
-		// text:
+		// text: String?
 		//		Optional message text. If specified overrides the text associated
 		//		with the message type. 
 		// returns:
@@ -139,7 +139,7 @@ define(["dojo/_base/lang",
 		//		and 'text'. For example:
 		//			{type:"NotFoundError", text:"Object not found", code:18}
 		// tag:
-		//		Private
+		//		private
 		var abbr = (type || "").replace(/Error$/, "");
 		var base = abbr + "Error";
 		var msg  = {type: base, text: "", code: 0};
@@ -151,13 +151,13 @@ define(["dojo/_base/lang",
 		return msg;
 	}
 
-	function createError(/*String?*/ module, /*Object?*/ errors ) {
+	function createError (module, errors) {
 		// summary:
 		//		Initialize and return the custom error type function/object.
-		// module:
+		// module: String?
 		//		Optional module name string. If specified it is used as the first part
 		//		of the prefix applied to every message.
-		// errors:
+		// errors: Object?
 		//		Optional, A JavaScript key:value pairs object where each key:value pair
 		//		defines a message. Alternatively an array of key:value pair objects
 		//		where each object defines a message.
@@ -165,21 +165,21 @@ define(["dojo/_base/lang",
 		// tag:
 		//		Public
 
-		function StoreError (/*String|Error*/ type,/*String?*/ method,/*String?*/ message) {
+		function StoreError (type, method, message) {
 			// summary:
 			//		Constructor, create a new instance of the custom error type.
-			// type:
+			// type: String|Error
 			//		If a string it identifies the message type, otherwise an instance
 			//		or Error.
-			// method:
+			// method: String?
 			//		Method or function name used a the second part, module being the
 			//		first, of the prefix applied to the message. The general format
 			//		of any error messages looks like: <module><method><message>
-			// message:
+			// message: String?
 			//		Optional message text. If specified overrides the text assigned to
 			//		the message type or, in case type is an Error, the Error message.
 			// tag:
-			//		Private
+			//		private
 			var path = module + (method ? (prefix + method + "()") : "");
 			var msgObj;
 
@@ -225,39 +225,21 @@ define(["dojo/_base/lang",
 		return StoreError;
 	};
 
-	createError.normalize = function(/*String*/ resource,/*Function*/ toAbsMid) {
-		// summary:
-		//		resource may be relative.
-		// resource:
-		//		The resource string is a list of one or more module ids separated by
-		//		exclamation marks: '/path0/file0!/path1/file1!/path2/file2'
-		// toAbsMid:
-		//		Function to convert a relative module Id to an absolute URL.
-		// tag:
-		//		Private.
-		var paths = resource.split("!"),
-		paths = paths.map( function(path) {
-			return /^\./.test(path) ? toAbsMid(path) : path;
-		});
-		// Re-assamble resource string and return it.
-		return paths.join("!");
-	};
-
-	createError.load = function(/*String*/ resource,/*Function*/ require,/*Function*/ loaded ) {
+	createError.load = function (resource, require, loaded) {
 		// summary:
 		//		dojo loader plugin portion. Called by the dojo loader whenever the
-		//		module identifier, "cbtree/errors/createError", is followed by an
-		//		exclamation mark (!) and a resource string. 
-		// resource:
+		//		module identifier, "indexedStore/error/createError", is followed by
+		//		an exclamation mark (!) and a resource string. 
+		// resource: String
 		//		The resource string is a list of one or more module ids separated by
 		//		exclamation marks: '/path0/file0!/path1/file1!/path2/file2'
-		// require:
+		// require: Function
 		//		AMD require function.
-		// loaded
+		// loaded: Function
 		//		dojo loader callback function. Called by this plugin loader when all
 		//		resources have been processed.
 		// tag:
-		//		Private
+		//		public
 		
 		function resourceDone() {
 			// Notify the dojo loader when all resources have been processed.
@@ -290,6 +272,14 @@ define(["dojo/_base/lang",
 				resourceDone();
 			}
 		});
+	};
+
+	createError.getMessage = function (type) {
+		// summary:
+		// type: String
+		// tag:
+		//		public
+		return errorNames[type];
 	};
 
 	return createError;

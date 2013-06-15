@@ -128,7 +128,7 @@ define(["dojo/_base/declare",
 			if (this.data && this.url) {
 				throw new StoreError("DataError", "constructor","DATA and URL property are mutal exclusive");
 			}
-			this.loader = new Loader(this);
+			this.loader = new Loader(this);		// Overwrite default store loader.
 			this.features.add("loader");
 		},
 

@@ -31,14 +31,18 @@ define(["../_base/Keys",
 	// interface:
 	//		[Constructor(Store store)]
 	//		interface Watcher {
-	//			read-only		attribute	properties;
-	//			array getListeners(optional (string or sequence<string>) property);
-	//			handle watch((string or sequence<string>) property,
-	//			             optional Listener listener, 
-	//			             optional object scope);
-	//			void unwatch((string or sequence<string>) property,
-	//			             optional Listener listener,
-	//			             optional object scope);
+	//			read-only		attribute	sequence<string> properties;
+	//			void destroy ();
+	//			sequence<Listener> getListeners (optional (string or sequence<string>) property);
+	//			Handle watch ((string or sequence<string>) property,
+	//			              optional Listener listener, 
+	//			              optional object scope);
+	//			void unwatch ((string or sequence<string>) property,
+	//			              optional Listener listener,
+	//			              optional object scope);
+	//		};
+	//		interface Handle {
+	//			void remove ();
 	//		};
 	//
 	// example:
@@ -49,7 +53,10 @@ define(["../_base/Keys",
 	//	|		function itemChanged (prop, item, newVal, oldVal ) {
 	//	|	    console.log(item.name," property: ",prop," has changed");
 	//	|	  }
-	//	|	  spotter.watch("hair", itemChanged );
+	//	|	  var handle = spotter.watch("hair", itemChanged );
+	//	|	         ...
+	//	|	   handle.remove();
+	//	|	   spotter.destroy();
 	//	| }); 
 	//
 	//	|	require(["./Watcher", ... ], function ( Watcher, ... ) {
@@ -62,6 +69,9 @@ define(["../_base/Keys",
 	//	|	  }
 	//	|	  spotter.watch("hair");
 	//	|	  store.on("set", itemChanged);
+	//	|	         ...
+	//	|	   handle.remove();
+	//	|	   spotter.destroy();
 	//	| }); 
 
 	var StoreError = createError( "Watcher" );			// Create the StoreError type.
@@ -71,7 +81,7 @@ define(["../_base/Keys",
 
 	function Watcher (source) {
 		// summary:
-		//		Create a new instance of the Watcher object.
+		//		Create a new instance of a Watcher object.
 		// source: Store
 		//		The store to monitor.
 		// tag:
@@ -116,6 +126,14 @@ define(["../_base/Keys",
 
 		//======================================================================
 		// Public methods
+		
+		this.destroy = function () {
+			// summary:
+			// tag:
+			//		public
+			spotters.removeListener();
+			handle && handle.remove();
+		};
 		
 		this.getListeners = function (property) {
 			// summary:

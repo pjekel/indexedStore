@@ -26,9 +26,10 @@ define(["../../_base/Library",
 
 	var StoreError = createError("EventTarget");		// Create the StoreError type.
 	var isString   = Lib.isString;
+	var mixin      = Lib.mixin;
 	
 	var nativeEvent = window.Event;
-	var PROPERTY = "parentNode";
+	var PROPERTY = "parent";
 
 	function copyEvent( nativeEvent ) {
 		// summary:
@@ -68,37 +69,38 @@ define(["../../_base/Library",
 		//		Event to be dispatched.
 		// tag:
 		//		Private
-		var ct, i = 0, e = event;
+		var ct, i = 0, evt = event;
 
-		while( (ct = path[i++]) && !e.stopPropagate) {
+		while( (ct = path[i++]) && !evt.stopPropagate) {
 			if (ct instanceof EventTarget) {
-				e.currentTarget = ct;
-				e.eventPhase = phase;			
 				try {
-					var lstn = ct.getEventListeners(e.type, phase);
+					var lstn = ct.getEventListeners(evt.type, phase);
 					if (lstn && lstn.length) {
 						var l, j = 0;
-						while ( (l = lstn[j++]) && !e.stopImmediate) {
+						evt.currentTarget = ct;
+						evt.eventPhase    = phase;
+
+						while ( (l = lstn[j++]) && !evt.stopImmediate) {
 							// Make sure the event propagation is not interrupted and that any
-							// exceptions thrown inside a handler are caught here.
+							// exception thrown by the handler is caught here.
 							try {
 								var cb = l.listener || (l.scope || window)[l.bindName];
 								if (cb) {
-									cb.call( ct, e );
+									cb.call( ct, evt );
 								}
-							} catch(err) {
-								console.error( err );
-								e.error = err;
+							} catch (err) {
+//								console.error( "EventHandler (",event.type,"): ",err );
+								event.error = err;
 							}
 						}
 					}
-				} catch (e) {
+				} catch (err) {
 					// Probably not an instance of EventTarget
-					console.error( e );
+					console.error( err );
 				} 
 			}
 		}
-		return !e.stopPropagate;
+		return !evt.stopPropagate;
 	}
 
 	function validatePath (path, target) {
@@ -120,10 +122,12 @@ define(["../../_base/Library",
 		return validPath;
 	}
 
-	function EventTarget() {
+	function EventTarget(parent) {
 		// summary:
 		//		Implements the DOM Level 3/4 EvenTarget interface.
 		//		http://www.w3.org/TR/dom/#interface-eventtarget
+		// parent: Object?
+		//		Optional, the parent object of this Event Target.
 		// tag:
 		//		Public
 
@@ -133,7 +137,7 @@ define(["../../_base/Library",
 			capture: new ListenerList()
 		}
 		
-		Lib.defProp( this, "parentNode", {	enumerable: false, 	writable: true });
+		Lib.defProp( this, PROPERTY, {value:parent,	enumerable: true, writable: true });
 
 		this.getEventListeners = function (type, phase) {
 			// summary:
@@ -238,7 +242,6 @@ define(["../../_base/Library",
 			if (event instanceof Event && event.type) {
 				if (!event.dispatch && event.eventPhase == Event.NONE) {		
 					var parent = this[PROPERTY];
-					var result = false;
 					var path   = [];
 
 					if (propagationPath) {
@@ -253,8 +256,10 @@ define(["../../_base/Library",
 					event.target   = this;
 
 					// Trigger any default actions required BEFORE dispatching
-					if (!event.defaultPrevented) {
-						EventDefaults.trigger(event.type, "before");
+					if (!event.canceled) {
+						try {
+							EventDefaults.trigger(event.type, "before", event);
+						} catch (err) {}
 					}
 					if (!event.stopPropagate) {
 						// If there is no propagation path simply fire the event at the
@@ -270,15 +275,16 @@ define(["../../_base/Library",
 						}
 					}
 					// Trigger any default actions required AFTER dispatching
-					if (!event.defaultPrevented) {
-						EventDefaults.trigger(event.type, "after");
-					} else {
-						result = true;
+					if (!event.canceled) {
+						try {
+							EventDefaults.trigger(event.type, "after", event);
+						} catch (err) {}
 					}
 					// Reset the event allowing it to be re-dispatched.
-					event.dispatch = false;
-					event.initEvent();
-					return result;			
+					event.currentTarget = null;
+					event.eventPhase    = Event.NONE;
+					event.dispatch      = false;
+					return !event.canceled;			
 				}
 				throw new StoreError( "InvalidStateError", "dispatchEvent" );
 			} else {

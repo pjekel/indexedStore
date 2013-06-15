@@ -22,6 +22,7 @@ define(["dojo/_base/lang",
 	
 	var StoreError = createError( "ListenerList" );		// Create the StoreError type.
 	var isString   = Lib.isString;
+	var defProp    = Lib.defProp;
 	
 	function assert( object, method ) {
 		if (!object || !(object instanceof ListenerList)) {
@@ -58,7 +59,7 @@ define(["dojo/_base/lang",
 						var lsByType = listeners[type];
 						if (lsByType) {
 							delete listeners[type];
-							self.length -= lsByType.length;
+							count -= lsByType.length;
 						}
 					}
 				} else {
@@ -66,7 +67,7 @@ define(["dojo/_base/lang",
 				}
 			} else {
 				listeners = {};
-				self.length = 0;
+				count = 0;
 			}
 		}
 
@@ -104,7 +105,7 @@ define(["dojo/_base/lang",
 
 					lsByType.push(listener);
 					listeners[type] = lsByType;
-					self.length++;
+					count++;
 				} else {
 					throw new StoreError("Parameter", "addListener", "invalid type argument");
 				}
@@ -213,7 +214,7 @@ define(["dojo/_base/lang",
 								if ((l.bindName && (l.bindName == listener.bindName && l.scope == listener.scope)) ||
 										(l.listener == listener.listener)) {
 									lsByType.splice(i, 1);
-									self.length--;
+									count--;
 									return true;
 								}
 							});
@@ -283,9 +284,10 @@ define(["dojo/_base/lang",
 
 		var destroyed = false;
 		var listeners = {};
+		var count     = 0;
 		var self = this;
 
-		this.length = 0;
+		defProp( this, "length", {get: function () {return count;}, enumerable:true});
 
 		if (actions) {
 			this.setActions(actions);

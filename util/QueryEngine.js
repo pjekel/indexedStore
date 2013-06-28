@@ -4,66 +4,66 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
 define(["../_base/Record",
-				"../_base/Library",
-				"../error/createError!../error/StoreErrors.json",
-				"./Sorter"
-			 ], function(Record, Lib, createError, Sorter) {
-		"use strict";
+		"../_base/library",
+		"../error/createError!../error/StoreErrors.json",
+		"./sorter"
+	], function (Record, lib, createError, sorter) {
+	"use strict";
 	// module:
 	//		store/util/QueryEngine
 
-	var StoreError  = createError("QueryEngine");		// Create the StoreError type.
-	var getProp     = Lib.getProp;
-	
-	function anyOf(/*any*/ valueA, /*any[]*/ valueB, /*Boolean*/ ignoreCase ) {
+	var StoreError = createError("QueryEngine");		// Create the StoreError type.
+	var getProp    = lib.getProp;
+
+	function anyOf(valueA, valueB, ignoreCase) {
 		// summary:
 		//		Test if valueA matches any of valueB values.
-		// valueA:
-		//		Value to match agains all entries in valueB.
-		// valueB:
+		// valueA: any
+		//		Value to match against all entries in valueB.
+		// valueB: any[]
 		//		Array of allowed values
-		// ignoreCase:
+		// ignoreCase: Boolean?
 		//		If true perform case insensitive value matching.
-		return valueB.some( function (value) {
-			return match( valueA, value, ignoreCase );
+		return valueB.some(function (value) {
+			return match(valueA, value, ignoreCase);
 		});
 	}
 
-	function contains(/*any[]*/ valueA, /*any|any[]*/ valueB, /*Boolean?*/ ignoreCase) {
+	function contains(valueA, valueB, ignoreCase) {
 		// summary:
 		//		Test if an array contains specific value(s) or if array valueA valueB
 		//		regular expression(s).
-		// valueA:
+		// valueA: any
 		//		Array of valueA to search.
-		// valueB:
+		// valueB: any
 		//		A value or regular expression or an array of the previous types to valueB.
 		//		If valueB is an array, all elements in the array must valueB.
-		// ignoreCase:
+		// ignoreCase: Boolean?
 		//		If set to true and the array valueA have a toLowerCase method a case
 		//		insensitive valueB is performed.
-		// returns:
+		// returns: Boolean
 		//		Boolean true or false
 		// tag:
 		//		Private
 		if (valueB) {
 			if (valueB.test) {
-				return valueA.some( function (value) {
+				return valueA.some(function (value) {
 					return valueB.test(value);
 				});
 			}
 			if (valueB instanceof Array) {
-				return valueB.every( function (value) {
+				return valueB.every(function (value) {
 					value = (ignoreCase && value.toLowerCase) ? value.toLowerCase() : value;
 					return contains(valueA, value, ignoreCase);
 				});
 			}
 			if (ignoreCase) {
-				return valueA.some( function (value) {
+				return valueA.some(function (value) {
 					value  = (ignoreCase && value.toLowerCase) ? value.toLowerCase() : value;
 					return (value == valueB);
 				});
@@ -73,13 +73,14 @@ define(["../_base/Record",
 		return false;
 	}
 
-	function hasPropertyPath( query ) {
+	function hasPropertyPath(query) {
 		// summary:
 		//		Returns true is the query object includes dot-separated property name(s)
 		//		otherwise false.
-		// query:
+		// query: Object
 		//		JavaScript key:value pairs object.
-		for(var key in query) {
+		var key;
+		for (key in query) {
 			if (/\./.test(key)) {
 				return true;
 			}
@@ -87,15 +88,15 @@ define(["../_base/Record",
 		return false;
 	}
 
-	function match(/*any*/ valueA, /*any*/ valueB, /*Boolean?*/ ignoreCase ) {
+	function match(valueA, valueB, ignoreCase) {
 		// summary:
 		//		Test if two values match or, if valueA is an array, if valueA contains
 		//		valueB.
-		// valueA:
+		// valueA: any
 		//		Value or an array of values.
-		// valueB:
+		// valueB: any
 		//		A value or regular expression or an array for the previous types.
-		// ignoreCase:
+		// ignoreCase: Boolean?
 		//		If true perform case insensitive value matching.
 		// returns:
 		//		True if there is a match or valueA contains valueB otherwise false.
@@ -116,7 +117,7 @@ define(["../_base/Record",
 		if (valueA instanceof Array) {
 			return contains(valueA, valueB, ignoreCase);
 		}
-		// Thrid, check if the object has a test method, which makes it also work
+		// Third, check if the object has a test method, which makes it also work
 		// with regular expressions (RegExp).
 		if (valueB && valueB.test) {
 			return valueB.test(valueA);
@@ -128,22 +129,21 @@ define(["../_base/Record",
 		return false;
 	}
 
-	var QueryEngine = function (/*Object|Function|String*/ query, /*Store.QueryOptions?*/options) {
+	function QueryEngine(query, options) {
 		// summary:
 		//		Query engine that matches using filter functions, named filter functions
 		//		or a key:value pairs objects (hash).
-		// query:
-		//		- If query is a key:value pairs object, each	key:value pair is matched
-		//		with	the corresponding key:value pair of	the store objects unless the
+		// query: Object|Function
+		//		- If query is a key:value pairs object, each key:value pair is matched
+		//		with the corresponding key:value pair of the store objects unless the
 		//		query property value is a function in which case the function is called
-		//		as: func(object,key,value).		Query property values can be a string, a
+		//		as: func(object,key,value).	Query property values can be a string, a
 		//		number, a regular expression, an object providing a test() method or an
 		//		array of any of the previous types or a function.
-		//		- If query is a function, the fuction is called once for every store
+		//		- If query is a function, the function is called once for every store
 		//		object as query(object). The query function must return boolean true
 		//		or false.
-		//		- If query is a string, the string value is the name of a store method.
-		// options:
+		// options: Store.QueryOptions?
 		//		Optional dojo/store/api/Store.QueryOptions object that contains optional
 		//		information such as sort, start or count.	In addition to the standard
 		//		QueryOptions properties, this query engine also support the ignoreCase
@@ -156,16 +156,16 @@ define(["../_base/Record",
 		//		Define a store with a reference to this engine, and set up a query method.
 		//
 		//	| require([ ... ,
-		//	|					"./util/QueryEngine",
-		//	|					 ...
-		//	|				 ], function( ... , QueryEngine, ... ) {
+		//	|			"./util/QueryEngine",
+		//	|				 ...
+		//	|		  ], function(... , QueryEngine, ...) {
 		//	|	 var myStore = function(options) {
-		//	|		 //	...more properties here
-		//	|		 this.queryEngine = QueryEngine;
-		//	|		 //	define our query method
-		//	|		 this.query = function(query, options) {
-		//	|				return QueryResults(this.queryEngine(query, options)(this.data));
-		//	|		 };
+		//	|		//	...more properties here
+		//	|		this.queryEngine = QueryEngine;
+		//	|		//	define our query method
+		//	|		this.query = function(query, options) {
+		//	|			return QueryResults(this.queryEngine(query, options)(this.data));
+		//	|		};
 		//	|	 };
 		//	|	 return myStore;
 		//	| });
@@ -173,21 +173,21 @@ define(["../_base/Record",
 		var ignoreCase = options && !!options.ignoreCase;
 		var hasDotPath = false;
 		var queryFunc  = null;
-		
+
 		// Create matching query function. If no query is specified only pagination
 		// options will be applied to a dataset.
 
-		switch ( typeof query) {
+		switch (typeof query) {
 			case "undefined":
 			case "object":
 				// Test query object for dot-separated property names.
 				hasDotPath = hasPropertyPath(query);
 				queryFunc  = function (object) {
 					var key, value, required;
-					for(key in query) {
+					for (key in query) {
 						required = query[key];
-						value		 = hasDotPath ? getProp(key,object) : object[key];
-						if (!match( value, required, ignoreCase )) {
+						value    = hasDotPath ? getProp(key, object) : object[key];
+						if (!match(value, required, ignoreCase)) {
 							if (typeof required == "function") {
 								if (required(value, key, object)) {
 									continue;
@@ -199,24 +199,17 @@ define(["../_base/Record",
 					return true;
 				};
 				break;
-			case "string":
-				// named query
-				if (!this[query] || typeof this[query] != "function") {
-					throw new StoreError( "MethodMissing", "QueryEngine", "No filter function " + query + " was found in store");
-				}
-				queryFunc = this[query];
-				break;
 			case "function":
 				queryFunc = query;
 				break;
 			default:
 				throw new StoreError("InvalidType", "QueryEngine", "Can not query with a " + typeof query);
 		} /*end switch() */
-		
-		function uniqueness(/*Object[]*/ data,/*Object*/ options) {
+
+		function uniqueness(data, options) {
 			// summary:
-			// data:
-			// options:
+			// data: Object[]
+			// options: Object
 			// tag:
 			//		Private
 			if (data) {
@@ -226,8 +219,8 @@ define(["../_base/Record",
 				}
 				if (unique instanceof Array) {
 					var key, keys = {};
-					var results = data.filter( function (object) {
-						key = unique.map( function (prop) {
+					var results = data.filter(function (object) {
+						key = unique.map(function (prop) {
 							return getProp(prop, object);
 						});
 						return keys[key] ? false  : keys[key] = true;
@@ -238,26 +231,25 @@ define(["../_base/Record",
 			return data;
 		}
 
-		function execute(/*(Object|Record)[]*/ data) {
+		function execute(data) {
 			// summary:
 			//		Execute the query on a set of objects and apply pagination to the
 			//		query result. This function is returned as the result of a call to
 			//		function QueryEngine(). The QueryEngine method provides the closure
 			//		for this execute() function.
-			// data:
+			// data: (Object|Record)[]
 			//		An array of objects or Records on which the query is performed.
-			// returns:
-			//		An array of objects matching the query.
+			// returns: Object[]
+			//		A new array of objects matching the query.
 			// tag:
 			//		Private
-			"use strict";
-			var paginate = options && (options.start || options.count || options.sort);
-			var unique   = options && options.unique;
-			var data     = data || [];
-			var results  = [];
-			var total;
-			
-			data.forEach( function (any) {
+			var paginate, unique, total, results = [];
+
+			paginate = options && (options.start || options.count || options.sort);
+			unique   = options && options.unique;
+			data     = data || [];
+
+			data.forEach(function (any) {
 				var object = any instanceof Record ? any.value : any;
 				if (queryFunc(object)) {
 					results.push(object);
@@ -269,7 +261,7 @@ define(["../_base/Record",
 			}
 			total = results.length;
 			if (!!paginate) {
-				results = Sorter( results, options );
+				results = sorter(results, options);
 			}
 			results.total = total;
 			return results;
@@ -277,8 +269,7 @@ define(["../_base/Record",
 
 		execute.matches = queryFunc;
 		return execute;
-
-	};	/* end QueryEngine */
+	}	/* end QueryEngine */
 
 	return QueryEngine;
 });

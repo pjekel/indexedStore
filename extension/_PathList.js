@@ -8,14 +8,14 @@
 //	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define (["../_base/Library",
-				 "../error/createError!../error/StoreErrors.json",
-         "./_Path"
-        ], function (Lib, createError, Path) {
+define(["../_base/library",
+		"../error/createError!../error/StoreErrors.json",
+		"./_Path"
+	], function (lib, createError, Path) {
 	"use strict";
 
-	var StoreError = createError("PathList");		// Create the StoreError 
-	var defProp    = Lib.defProp;
+	var StoreError = createError("PathList");		// Create the StoreError
+	var defProp    = lib.defProp;
 
 	function argsToPaths() {
 		// summary:
@@ -25,15 +25,15 @@ define (["../_base/Library",
 		var args  = Array.prototype.slice.call(arguments);
 		var items = [];
 
-		args.forEach( function( argument ) {
+		args.forEach(function (argument) {
 			if (typeof argument === "string" || argument instanceof String) {
-				items.push( new Path(argument) );
+				items.push(new Path(argument));
 			} else if (argument instanceof Path) {
 				items.push(argument);
 			} else if (argument instanceof Array) {
-				items = items.concat( argsToPaths.apply( this, argument ));
+				items = items.concat(argsToPaths.apply(this, argument));
 			} else if (argument instanceof PathList) {
-				items = items.concat( argsToPaths.apply( this, Array.prototype.slice.call(argument) ));
+				items = items.concat(argsToPaths.apply(this, Array.prototype.slice.call(argument)));
 			} else {
 				throw new StoreError("InvalidType", "argsToPaths");
 			}
@@ -41,28 +41,29 @@ define (["../_base/Library",
 		return items;
 	}
 
-	function intersect (/*PathList*/ pathsA,/*PathList*/ pathsB,/*Boolean*/ inclusive,/*Boolean*/ same ) {
+	function intersect(pathsA, pathsB, inclusive, same) {
 		// summary:
 		//		Get all intersections of two sets of paths
-		// pathsA:
+		// pathsA: PathList
 		//		PathList or array of Paths.
-		// pathsB:
+		// pathsB: PathList
 		//		PathList or array of Paths.
-		// inclusive:
+		// inclusive: Boolean
 		//		Indicates if the list of intersections should include the end-points.
-		// same:
+		// same: Boolean
 		//		Indicates if arguments pathsA and pathsA are the same set of paths.
 		// returns:
 		//		An array of segments.
 		// tag:
 		//		Private.
 		var res = [];
-		
-		pathsA.forEach (function (pathA) {
-			if (same) { pathsB.shift(); };
-			
-			pathsB.forEach( function (pathB) {
-				pathA.intersect(pathB, inclusive).forEach( function (segment) {
+
+		pathsA.forEach(function (pathA) {
+			if (same) {
+				pathsB.shift();
+			}
+			pathsB.forEach(function (pathB) {
+				pathA.intersect(pathB, inclusive).forEach(function (segment) {
 					if (res.indexOf(segment) == -1) {
 						res.push(segment);
 					}
@@ -72,7 +73,7 @@ define (["../_base/Library",
 		return res;
 	}
 
-	function PathList () {
+	function PathList() {
 		// summary:
 		//		The PathList is an array 'like' object whose content is a set of objects
 		//		of type Path.
@@ -87,8 +88,8 @@ define (["../_base/Library",
 		//
 		this.contains = function (segment) {
 			if (this !=  null && segment) {
-				return this.some( function (path) {
-					if (path.contains( segment )) {
+				return this.some(function (path) {
+					if (path.contains(segment)) {
 						return true;
 					}
 				});
@@ -98,28 +99,28 @@ define (["../_base/Library",
 
 		this.intersect = function (paths, inclusive) {
 			if (this != null) {
-				var pathList, sameList = false;
+				var pathList, sameList = false, incl = inclusive;
 				if (arguments.length) {
 					if (typeof paths == "boolean") {
-						inclusive = !!arguments[0];
+						incl = !!paths;	// paths was omitted...
 					} else {
 						pathList = argsToPaths(paths);
 					}
 				}
 				if (!pathList) {
 					pathList = Array.prototype.slice.call(this, 0);
-					sameList  = true;
+					sameList = true;
 				}
-				return intersect( this, pathList, inclusive, sameList );
+				return intersect(this, pathList, incl, sameList);
 			}
 			throw new StoreError("InvalidType", "intersect");
 		};
-		
+
 		this.segments = function () {
 			if (this != null) {
 				var res = [];
-				this.forEach( function (path) {
-					path.segments().forEach( function (segment) {
+				this.forEach(function (path) {
+					path.segments().forEach(function (segment) {
 						if (res.indexOf(segment) == -1) {
 							res.push(segment);
 						}
@@ -130,20 +131,20 @@ define (["../_base/Library",
 			throw new StoreError("InvalidType", "segments");
 		};
 
-		//===
+		//==============================================================
 		// Array style methods.
 
-		this.filter = function ( callback, thisArg ) {
+		this.filter = function (callback, thisArg) {
 			if (this !=  null && typeof callback == "function") {
 				var res = new PathList();
-				var obj = Object(this);
+				var obj = Object.create(this);
 				var idx, val;
 
-				for (idx=0; idx < obj.length; idx++) {
-					if (idx in obj) {
+				for (idx = 0; idx < obj.length; idx++) {
+					if (obj[idx] !== undefined) {
 						val = obj[idx];
-						if (callback.call( thisArg, val, idx, obj)) {
-							res.add( val );
+						if (callback.call(thisArg, val, idx, obj)) {
+							res.add(val);
 						}
 					}
 				}
@@ -152,41 +153,41 @@ define (["../_base/Library",
 			throw new StoreError("InvalidType", "filter");
 		};
 
-		this.forEach = function ( callback , thisArg ) {
+		this.forEach = function (callback, thisArg) {
 			if (this !=  null && typeof callback == "function") {
-				var obj = Object(this);
+				var obj = Object.create(this);
 				var idx = 0;
 
-				for (idx=0; idx < obj.length; idx++) {
-					if (idx in obj) {
-						callback.call( thisArg, obj[idx], idx, obj );
+				for (idx = 0; idx < obj.length; idx++) {
+					if (obj[idx] !== undefined) {
+						callback.call(thisArg, obj[idx], idx, obj);
 					}
 				}
 			} else {
 				throw new StoreError("InvalidType", "forEach");
 			}
-		}
+		};
 
 		this.push = function () {
 			if (arguments.length > 0) {
-				var paths = argsToPaths.apply(this, arguments );
+				var paths = argsToPaths.apply(this, arguments);
 				if (paths.length > 0) {
-					paths.forEach( function( item, idx ) {
-						defProp( this, this.length+idx, {	value: item, enumerable: true, writable: false	});
+					paths.forEach(function (item, idx) {
+						defProp(this, this.length + idx, {value: item, enumerable: true, writable: false});
 						this.length++;
 					}, this);
 				}
 			}
 		};
 
-		this.some = function ( callback, thisArg ) {
+		this.some = function (callback, thisArg) {
 			if (this !=  null && typeof callback == "function") {
-				var obj = Object(this);
+				var obj = Object.create(this);
 				var idx = 0;
 
-				for (idx=0; idx < obj.length; idx++) {
-					if (idx in obj) {
-						if (callback.call( thisArg, obj[idx], idx, obj)) {
+				for (idx = 0; idx < obj.length; idx++) {
+					if (obj[idx] !== undefined) {
+						if (callback.call(thisArg, obj[idx], idx, obj)) {
 							return true;
 						}
 					}
@@ -196,17 +197,14 @@ define (["../_base/Library",
 			throw new StoreError("InvalidType", "some");
 		};
 
-		defProp( this, "length", { writable: true,  enumerable: false	});
-		defProp( this, "filter", { writable: false, enumerable: false	});
-		defProp( this, "forEach",{ writable: false, enumerable: false	});
-		defProp( this, "some",   { writable: false, enumerable: false	});
-		defProp( this, "push",   { writable: false, enumerable: false	});
+		defProp(this, "length",  { writable: true,  enumerable: false	});
+		defProp(this, "filter",  { writable: false, enumerable: false	});
+		defProp(this, "forEach", { writable: false, enumerable: false	});
+		defProp(this, "some",    { writable: false, enumerable: false	});
+		defProp(this, "push",    { writable: false, enumerable: false	});
 
 		this.length = 0;
-		
 		this.push.apply(this, arguments);
 	}
-
 	return PathList;
-	
 });

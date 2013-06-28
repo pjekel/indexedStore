@@ -4,25 +4,25 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
 define(["dojo/Deferred",
-				"dojo/when",
-			  "./Cursor",
-			  "./Keys",
-			  "./KeyRange",
-			  "./Library",
-				"./Range",
-			  "./Record",
-			  "../dom/event/Event",
-			  "../dom/event/EventTarget",
-				"../error/createError!../error/StoreErrors.json",
-				"../util/QueryResults",
-				"../util/Sorter"
-			 ], function (Deferred, when, Cursor, Keys, KeyRange, Lib, Range, Record, 
-			               Event, EventTarget, createError, QueryResults, Sorter) {
+		"dojo/when",
+		"./Cursor",
+		"./Keys",
+		"./KeyRange",
+		"./library",
+		"./range",
+		"./Record",
+		"../dom/event/Event",
+		"../dom/event/EventTarget",
+		"../error/createError!../error/StoreErrors.json",
+		"../util/QueryResults",
+		"../util/sorter"
+	], function (Deferred, when, Cursor, Keys, KeyRange, lib, recRange, Record,
+	             Event, EventTarget, createError, QueryResults, sorter) {
 	"use strict";
 
 	//module:
@@ -34,24 +34,22 @@ define(["dojo/Deferred",
 	//
 	//	In addition to the IDBIndex interface this module provides the following
 	//	methods:
-	//		
+	//
 	//		getRange()
 	//		getKeyRange()
 	//		ready()
-	
+
 	// Define default index properties.
 	var IDBIndexOptions = { unique: false, multiEntry: false, uppercase: false, async: false };
-	
-	var StoreError  = createError( "Index" );		// Create the StoreError type.
-	var isDirection = Lib.isDirection;
-	var isObject    = Lib.isObject;
-	var isString    = Lib.isString;
-	var clone       = Lib.clone;
-	var mixin       = Lib.mixin;
-	var undef;
-	
-	function Index (store, name, keyPath, optionalParameters) {
-		"use strict";
+
+	var StoreError  = createError("Index");		// Create the StoreError type.
+	var isDirection = lib.isDirection;
+	var isObject    = lib.isObject;
+	var isString    = lib.isString;
+	var clone       = lib.clone;
+	var mixin       = lib.mixin;
+
+	function Index(store, name, keyPath, optionalParameters) {
 		// summary:
 		//		Implements a synchronous version of the IDBIndex interface
 		// store: Store
@@ -76,9 +74,11 @@ define(["dojo/Deferred",
 		// tag:
 		//		Public
 
+		var index = this;
+
 		//=========================================================================
 		// private functions
-		
+
 		function assertKey(index, key, method, required) {
 			// summary:
 			//		Validate if the index and associated store have not been destroyed.
@@ -90,19 +90,13 @@ define(["dojo/Deferred",
 			// required: Boolean?
 			// tag:
 			//		Private
-			if ( index._destroyed || index.store._destroyed || index.store._beingDestroyed ) {
+			if (index._destroyed || index.store._destroyed || index.store._beingDestroyed) {
 				throw new StoreError("InvalidStateError", method);
 			}
-			if (key != undef) {
-				if (!(key instanceof KeyRange) && !Keys.validKey(key)) {
-					throw new StoreError("DataError", method, "Invalid key or key range");
-				}
-			} else if (required) {
-				throw new StoreError("ParameterMissing", method, "key is a required argument");
-			}
+			index.store._assertKey(key, method, required);
 		}
 
-		function addIndexRecord(index, indexKey, storeKey ) {
+		function addIndexRecord(index, indexKey, storeKey) {
 			// summary:
 			//		Add a record to the index.
 			// description:
@@ -120,7 +114,7 @@ define(["dojo/Deferred",
 			//		Private
 			var locator = Keys.search(index, indexKey);
 			var record  = locator.record;
-			
+
 			if (record) {
 				if (record.value.push(storeKey) > 1) {
 					if (!index._loading) {
@@ -130,13 +124,13 @@ define(["dojo/Deferred",
 					}
 				}
 			} else {
-				record = new Record( indexKey, [storeKey]);
+				record = new Record(indexKey, [storeKey]);
 				index._records.splice(locator.gt, 0, record);
 			}
 			index._updates++;
 		}
 
-		function indexStore( store, index, defer ) {
+		function indexStore(store, index, defer) {
 			// summary:
 			//		Index all existing store records but not until the store finished
 			//		loading. This will avoid an index being created while the store is
@@ -148,18 +142,18 @@ define(["dojo/Deferred",
 			// defer: dojo.Deferred
 			// tag:
 			//		Private
-			var delay = store.loader.loading;
-			when (delay, function () {
+			var delay = store.loader && store.loader.loading;
+			when(delay, function () {
 				var records = store._records;
 				try {
 					index._loading = true;
 					index._updates = 0;
 					index._clear();
-					records.forEach( index._add, index );
-					sortDuplicates( index );
+					records.forEach(index._add, index);
+					sortDuplicates(index);
 					defer.resolve(index);		// Index is ready.
-				} catch(err) {
-					var error = new StoreError( err, "indexStore" );
+				} catch (err) {
+					var error = new StoreError(err, "indexStore");
 					defer.reject(error);
 					throw error;
 				} finally {
@@ -168,29 +162,29 @@ define(["dojo/Deferred",
 			});
 		}
 
-		function loadAction( type ) {
+		function loadAction(type) {
 			// summary:
 			//		This method is called when the store loader triggered one of the
 			//		following events: loadStart, loadEnd, loadFailed or loadCancel
 			// tag:
 			//		private, callback
-			switch( type ) {
+			switch (type) {
 				case "loadStart":
-					this._loading = true;
-					this._updates = 0;
+					index._loading = true;
+					index._updates = 0;
 					break;
 				case "loadFailed":
 				case "loadCancel":
 				case "loadEnd":
-					delete this._loading;
-					sortDuplicates( this );
+					delete index._loading;
+					sortDuplicates(index);
 					break;
 				default:
 					throw new StoreError("DataError", "loadAction", "unknown operation: [%{0}]", type);
 			}
 		}
 
-		function sortDuplicates (index) {
+		function sortDuplicates(index) {
 			// summary:
 			//		Sort all duplicate index entries. This method is called when either
 			//		a store was indexed or a store load request completed, this because
@@ -204,10 +198,10 @@ define(["dojo/Deferred",
 
 			// Only sort when strictly required and only those records that require it.
 			if (!index.unique && index._updates) {
-				for (i=0; i<max; i++) {
+				for (i = 0; i < max; i++) {
 					record = records[i];
 					if (record._NS) {
-						Keys.sortKeys( record.value );
+						Keys.sortKeys(record.value);
 						delete record._NS;
 					}
 				}
@@ -217,7 +211,7 @@ define(["dojo/Deferred",
 		//=========================================================================
 		// Database operations (http://www.w3.org/TR/IndexedDB/#database-operations)
 
-		function retrieveIndexValue (index, key) {
+		function retrieveIndexValue(index, key) {
 			// summary:
 			//		Retrieve the value of an index record. If key is a key range, the
 			//		value of the first record in range is returned.
@@ -232,7 +226,6 @@ define(["dojo/Deferred",
 			if (key instanceof KeyRange) {
 				record = Keys.getRange(index, key).record;
 			} else {
-				key = index.uppercase ? Keys.toUpperCase(key) : key;
 				record = Keys.search(index, key).record;
 			}
 			if (record) {
@@ -240,7 +233,7 @@ define(["dojo/Deferred",
 			}
 		}
 
-		function retrieveReferenceValue (index, key) {
+		function retrieveReferenceValue(index, key) {
 			// summary:
 			//		Retrieve the referenced value from a store and return a structured
 			//		clone. If key is a key range, the value of the first record in range
@@ -252,9 +245,9 @@ define(["dojo/Deferred",
 			// returns: Object
 			// tag:
 			//		Private
-			var indexValue = retrieveIndexValue( index, key );
+			var indexValue = retrieveIndexValue(index, key);
 			if (indexValue) {
-				var value = index.store.get( indexValue );
+				var value = index.store.get(indexValue);
 				if (value) {
 					return value;
 				}
@@ -277,7 +270,7 @@ define(["dojo/Deferred",
 			// tag:
 			//		Private
 
-			function hasKey (index, indexKey) {
+			function hasKey(index, indexKey) {
 				// summary:
 				//		Return true if an index key already exists otherwise false. If the
 				//		key is an array and multiEntry is enabled each entry in the array
@@ -288,7 +281,7 @@ define(["dojo/Deferred",
 				// tag:
 				//		Private
 				if (indexKey instanceof Array && index.multiEntry) {
-					return indexKey.some( function(key) {
+					return indexKey.some(function (key) {
 						return !!Keys.search(index, key).record;
 					});
 				}
@@ -296,25 +289,24 @@ define(["dojo/Deferred",
 			}
 
 			if (storeRecord instanceof Record) {
-				var indexKey = Keys.keyValue( this.keyPath, storeRecord.value );
+				var indexKey = Keys.keyValue(this.keyPath, storeRecord.value, this.uppercase);
 				if (indexKey) {
 					if (this.multiEntry && indexKey instanceof Array) {
 						// Remove duplicate elements and invalid key values.
-						indexKey = Keys.purgeKey( indexKey );
+						indexKey = Keys.purgeKey(indexKey);
 					}
 					if (Keys.validKey(indexKey)) {
-						indexKey = index.uppercase ? Keys.toUpperCase( indexKey ) : indexKey;
 						if (!hasKey(this, indexKey) || !this.unique) {
 							if (this.multiEntry && indexKey instanceof Array) {
-								indexKey.forEach( function(key) {
-									addIndexRecord( this, key, storeRecord.key );
+								indexKey.forEach(function (key) {
+									addIndexRecord(this, key, storeRecord.key);
 								}, this);
 								return;
 							}
 							// Add a single index record.
-							addIndexRecord( this, indexKey, storeRecord.key );
+							addIndexRecord(this, indexKey, storeRecord.key);
 						} else {
-							throw new StoreError("ConstraintError", "_add", "Key [%{0}] already exist in index [%{1}]", 
+							throw new StoreError("ConstraintError", "_add", "Key [%{0}] already exist in index [%{1}]",
 																	indexKey, this.name);
 						}
 					}
@@ -348,23 +340,20 @@ define(["dojo/Deferred",
 			//		Store record whose index record(s) are to be deleted.
 			// tag:
 			//		Private
-			var indexKey   = Keys.keyValue( this.keyPath, storeRecord.value );
+			var indexKey   = Keys.keyValue(this.keyPath, storeRecord.value, this.uppercase);
 			var storeKey   = storeRecord.key;
 			var candidates = [];
 			var location;
 			var i;
 
 			if (indexKey) {
-				if (this.uppercase) {
-					indexKey = Keys.toUpperCase(indexKey);
-				}
 				// First, based on the index key(s) collect all candidate index records.
 				if (indexKey instanceof Array && this.multiEntry) {
 					indexKey = Keys.purgeKey(indexKey);
-					indexKey.forEach( function (key) {
+					indexKey.forEach(function (key) {
 						location = Keys.search(this, key);
 						if (location.record) {
-							for (i=location.eq; i<location.gt; i++) {
+							for (i = location.eq; i < location.gt; i++) {
 								candidates.push(i);
 							}
 						}
@@ -377,13 +366,13 @@ define(["dojo/Deferred",
 				}
 				// Of all candidate index records get only those whose value length equals
 				// zero AFTER removing the store key.
-				candidates = candidates.filter( function (recNum) {
+				candidates = candidates.filter(function (recNum) {
 					var value = this._records[recNum].value;
-					var index = value.indexOf(storeKey);
+					var index = Keys.indexOf(value, storeKey);
 					// If the index record value contains the store key, remove it from the
 					// record value.
 					if (index != -1) {
-						value.splice(index,1);
+						value.splice(index, 1);
 						return (value.length == 0);
 					}
 					return false;
@@ -392,14 +381,14 @@ define(["dojo/Deferred",
 				// If any candidates are left reverse the record order (descending) and delete
 				// the records starting with the highest record number.
 				if (candidates.length > 0) {
-					candidates.reverse().forEach( function(recNum) {
-						this._records.splice(recNum,1);
+					candidates.reverse().forEach(function (recNum) {
+						this._records.splice(recNum, 1);
 					}, this);
 				}
 			}
 		};
 
-		Lib.enumerate( this, "_add, _clear, _destroy, _remove", false);
+		lib.enumerate(this, "_add, _clear, _destroy, _getInRange, _remove", false);
 
 		//=========================================================================
 		// Public methods
@@ -417,32 +406,29 @@ define(["dojo/Deferred",
 			//		Number of index entries.
 			// tag:
 			//		Public
-
+			var count = 0, i, range;
 			if (arguments.length == 1) {
-				if (typeof arguments[0] == "boolean") {
-					unique = arguments[0];
-					key    = undef;
+				if (typeof key == "boolean") {
+					unique = key;
+					key    = undefined;
 				}
 			}
-			assertKey( this, key, "count", false );
-			if (key != undef) {
+			assertKey(this, key, "count");
+			if (key != null) {
 				if (!(key instanceof KeyRange) && Keys.validKey(key)) {
-					key = KeyRange.only( this.uppercase ? Keys.toUpperCase(key) : key );
+					key = KeyRange.only(key);
 				} else {
 					throw new StoreError("DataError", "count", "invalid key");
 				}
 			}
-
-			var range = Keys.getRange(this, key);
-			var count = 0, i;
-			
-			if (range.length) {
+			range = Keys.getRange(this, key);
+			if (range.total) {
 				if (!unique) {
 					for (i = range.first; i <= range.last; i++) {
 						count += this._records[i].value.length;
 					}
 				} else {
-					count = range.length;
+					count = range.total;
 				}
 			}
 			return count;
@@ -460,8 +446,8 @@ define(["dojo/Deferred",
 			// tag:
 			//		Public
 
-			assertKey( this, key, "get", true );
-			return retrieveReferenceValue( this, key );
+			assertKey(this, key, "get", true);
+			return retrieveReferenceValue(this, key);
 		};
 
 		this.getKey = function (key) {
@@ -477,7 +463,7 @@ define(["dojo/Deferred",
 			// tag:
 			//		Public
 			assertKey(this, key, "getKey", true);
-			return retrieveIndexValue( this, key );
+			return retrieveIndexValue(this, key);
 		};
 
 		this.getRange = function (keyRange, options) {
@@ -486,18 +472,19 @@ define(["dojo/Deferred",
 			// keyRange: Key|KeyRange?
 			//		A KeyRange object or a valid key.
 			// options: (String|Object)?
-			//		If a string, the range required direction: 'next', 'nextunique', 
+			//		If a string, the range required direction: 'next', 'nextunique',
 			//		'prev' or 'prevunique'. Otherwise a Store.RangeOptions object.
 			// returns: Store.QueryResults
 			//		The range results, extended with iterative methods.
 			// tag:
 			//		Public
 
-			var defer = this.store.waiting || this.store.loader.loading;
+			var defer = this.store.waiting || (this.store.loader && this.store.loader.loading);
 			var range = keyRange, direction = "next", duplicates = true;
 			var paginate = false;
 			var index = this;
-			
+
+			assertKey(this, range, "getRange");
 			if (options) {
 				if (isString(options)) {
 					direction = options;
@@ -512,13 +499,13 @@ define(["dojo/Deferred",
 			if (!isDirection(direction)) {
 				throw new StoreError("DataError", "getRange", "invalid direction");
 			}
-			duplicates = duplicates != undef ? !!duplicates : true;
+			duplicates = duplicates != null ? !!duplicates : true;
 
-			var results = QueryResults ( 
-				when (defer, function () {
-					var objects = Range( index, range, direction, duplicates, false );
+			var results = QueryResults(
+				when(defer, function () {
+					var objects = recRange(index, range, direction, duplicates, false);
 					if (paginate) {
-						objects = Sorter(objects, options);
+						objects = sorter(objects, options);
 					}
 					return index.store._clone ? clone(objects) : objects;
 				})
@@ -532,17 +519,18 @@ define(["dojo/Deferred",
 			// keyRange: Key|KeyRange?
 			//		A KeyRange object or a valid key.
 			// options: (String|Object)?
-			//		If a string, the range required direction: 'next', 'nextunique', 
+			//		If a string, the range required direction: 'next', 'nextunique',
 			//		'prev' or 'prevunique'. Otherwise a Store.RangeOptions object.
 			// returns: Store.QueryResults
 			//		The range results, extended with iterative methods.
 			// tag:
 			//		Public
 
-			var defer = this.store.waiting || this.store.loader.loading;
+			var defer = this.store.waiting || (this.store.loader && this.store.loader.loading);
 			var range = keyRange, direction = "next", duplicates = true;
 			var index = this;
-			
+
+			assertKey(this, range, "getKeyRange");
 			if (options) {
 				if (isString(options)) {
 					direction = options;
@@ -557,11 +545,11 @@ define(["dojo/Deferred",
 			if (!isDirection(direction)) {
 				throw new StoreError("DataError", "getKeyRange", "invalid direction");
 			}
-			duplicates = duplicates != undef ? !!duplicates : true;
+			duplicates = duplicates != null ? !!duplicates : true;
 
-			var results = QueryResults ( 
-				when (defer, function () {
-					var objects = Range( index, range, direction, duplicates, true );
+			var results = QueryResults(
+				when(defer, function () {
+					var objects = recRange(index, range, direction, duplicates, true);
 					return index.store._clone ? clone(objects) : objects;
 				})
 			);
@@ -580,22 +568,23 @@ define(["dojo/Deferred",
 			//		A cursorWithValue object.
 			// example:
 			//		| var cursor = store.openCursor();
-			//		| while( cursor && cursor.value ) {
+			//		| while(cursor && cursor.value) {
 			//		|       ...
-			//		|     cursor.continue();
+			//		|     cursor.next();
 			//		| };
 			// tag:
 			//		Public
 
 			var range = keyRange, dir = "next";
 			if (arguments.length > 1) {
-				if (Lib.isDirection(arguments[1])) {
-					dir = arguments[1];
+				if (lib.isDirection(direction)) {
+					dir = direction;
 				} else {
 					throw new StoreError("DataError", "openCursor");
 				}
 			}
-			var cursor = new Cursor( this, range, dir, false );
+			assertKey(this, range, "openCursor");
+			var cursor = new Cursor(this, range, dir, false);
 			return cursor;
 		};
 
@@ -611,22 +600,22 @@ define(["dojo/Deferred",
 			//		A cursor Object.
 			// example:
 			//		| var cursor = store.openCursor();
-			//		| while( cursor && cursor.value ) {
+			//		| while(cursor && cursor.value) {
 			//		|       ...
-			//		|     cursor.continue();
+			//		|     cursor.next();
 			//		| };
 			// tag:
 			//		Public
 
 			var range = keyRange, dir = "next";
 			if (arguments.length > 1) {
-				if (Lib.isDirection(arguments[1])) {
-					dir = arguments[1];
+				if (lib.isDirection(direction)) {
+					dir = direction;
 				} else {
 					throw new StoreError("DataError", "openKeyCursor");
 				}
 			}
-			var cursor = new Cursor( this, range, dir, true );
+			var cursor = new Cursor(this, range, dir, true);
 			return cursor;
 		};
 
@@ -653,7 +642,7 @@ define(["dojo/Deferred",
 			//		Public
 			if (callback || errback) {
 				this._indexReady.then(
-					callback ? callback.bind(scope) : null, 
+					callback ? callback.bind(scope) : null,
 					errback  ? errback.bind(scope)  : null
 				);
 			}
@@ -663,7 +652,7 @@ define(["dojo/Deferred",
 		//=========================================================================
 
 		if (typeof name === "string" && keyPath && store) {
-			var indexOptions = mixin( clone(IDBIndexOptions), optionalParameters || {});
+			var indexOptions = mixin(clone(IDBIndexOptions), optionalParameters || {});
 			// If keyPath is and Array and the multiEntry property is true throw an
 			// exception of type NotSupportedError.
 			if (keyPath instanceof Array && !!indexOptions.multiEntry) {
@@ -685,35 +674,32 @@ define(["dojo/Deferred",
 
 			EventTarget.call(this);
 
-			Lib.writable( this, "keyPath, name, parent, store, type, uppercase, multiEntry, unique", false );
-			Lib.protect( this );
+			lib.writable(this, "keyPath, name, parent, store, type, uppercase, multiEntry, unique", false);
+			lib.protect(this);
 
 			var async = !!indexOptions.async;
-			var index = this;
 
 			// Register callbacks with the store.
-			store._register( "loadStart, loadCancel, loadEnd, loadFailed", loadAction, this );
+			store._register("loadStart, loadCancel, loadEnd, loadFailed", loadAction, this);
 
 			this._indexReady.then(null, function (err) {
-				index.dispatchEvent(new Event("error", {error:err, bubbles:true, cancelable:true}));
+				index.dispatchEvent(new Event("error", {error: err, bubbles: true, cancelable: true}));
 			});
 			if (async) {
-				setTimeout( function () {
-					indexStore( store, index, index._indexReady );
+				setTimeout(function () {
+					indexStore(store, index, index._indexReady);
 				}, 0);
 			} else {
-				indexStore( store, index, index._indexReady );
+				indexStore(store, index, index._indexReady);
 			}
 
 		} else {
-			throw new StoreError( "SyntaxError", "constructor" );
+			throw new StoreError("SyntaxError", "constructor");
 		}
 
 	} /* end Index() */
-
 	Index.prototype = new EventTarget();
 	Index.prototype.constructor = Index;
 
 	return Index;
-
 });

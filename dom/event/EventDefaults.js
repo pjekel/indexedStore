@@ -4,13 +4,13 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["../../_base/Library",
-				"../../listener/Actions"
-			], function (Lib, Actions) {
+define(["../../_base/library",
+		"../../listener/Actions"
+		], function (lib, Actions) {
 	"use strict";
 
 	// module:
@@ -41,15 +41,12 @@ define(["../../_base/Library",
 	//	|	            ...
 	//	|	  store.put( {name:"Homer", lastname:"Simpson"} );
 	//	|	});
-	
-	var DEFAULT_ACTIONS = "indexedStore.event.EventDefaults"
+	var DEFAULT_ACTIONS = "indexedStore.event.EventDefaults";
 
-	var defaultActions = Lib.getProp( DEFAULT_ACTIONS, window );
+	var defaultActions = lib.getProp(DEFAULT_ACTIONS, window);
 	if (!defaultActions) {
 		defaultActions = new Actions();
-		Lib.setProp( DEFAULT_ACTIONS, defaultActions, window );
+		lib.setProp(DEFAULT_ACTIONS, defaultActions, window);
 	}
-
 	return defaultActions;
-
 });

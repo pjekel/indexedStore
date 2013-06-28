@@ -1,11 +1,21 @@
+//
+// Copyright (c) 2013, Peter Jekel
+// All rights reserved.
+//
+//	The IndexedStore is released under to following two licenses:
+//
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//
+
 define(["dojo/_base/declare",
-				"./Library",
-				"../dom/event/Event",
-				"../dom/event/EventTarget",
-				"../error/createError!../error/StoreErrors.json"
-			 ], function (declare, Lib, Event, EventTarget, createError) {
+		"./library",
+		"../dom/event/Event",
+		"../dom/event/EventTarget",
+		"../error/createError!../error/StoreErrors.json"
+	], function (declare, lib, Event, EventTarget, createError) {
 	"use strict";
-	
+
 	// module
 	//		indexedStore/_base/Eventer
 	// summary:
@@ -22,20 +32,22 @@ define(["dojo/_base/declare",
 	// example:
 	//	|	require(["./Eventer", ... ], function (Eventer, ... ) {
 	//	|		store.eventer = new Eventer();
-	//	|		store.eventer.register("delete", "new", "update");
+	//	|		store.eventer.addHandler("delete", "new", "update");
 	//	|		store.emit = store.eventer.emit;
 	//	|	});
 
 	var StoreError = createError("Eventer");		// Create the StoreError type.
-	var isObject   = Lib.isObject;
-	var isString   = Lib.isString;
-	var defProp    = Lib.defProp;
-	
+	var isObject   = lib.isObject;
+	var isString   = lib.isString;
+	var defProp    = lib.defProp;
+
 	function Eventer(source, types) {
 		// summary:
 		// source: EventTarget
 		// types: String|String[]?
-		
+
+		var callbacks = {};
+
 		function removeHandler(source, type) {
 			// summary:
 			//		Remove the current event listener for the given type unless it is
@@ -50,22 +62,22 @@ define(["dojo/_base/declare",
 			var i, listeners = source.getEventListeners(type);
 			// Keep the dummy listener so advice can still be added....
 			if (listeners && listeners.length > 1) {
-				source.removeEventListener( type, callbacks[type] );
+				source.removeEventListener(type, callbacks[type]);
 			}
 		}
-	
+
 		this.destroy = function () {
 			// summary:
 			// tag:
 			//		public
 			var types = Object.keys(callbacks);
-			types.forEach( function (type) {
+			types.forEach(function (type) {
 				source.removeEventListener(type);
-				delete source["on"+type];
+				delete source["on" + type];
 			});
 			callbacks = {};
 		};
-		
+
 		this.addHandler = function (type) {
 			// summary:
 			//		Add an event handler to the store.
@@ -86,7 +98,7 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Public
 			if (type instanceof Array) {
-				type.forEach( function (type) {
+				type.forEach(function (type) {
 					this.addHandler(type);
 				}, this);
 			} else if (isString(type)) {
@@ -94,7 +106,7 @@ define(["dojo/_base/declare",
 					this.addHandler(type.split(/\s*,\s*/));
 				} else {
 					var prop = "on" + type.toLowerCase();
-					Lib.defProp( source, prop, {
+					lib.defProp(source, prop, {
 						get: function () {
 							var listener = source.getEventListeners(type)[0];
 							if (listener) {
@@ -104,14 +116,14 @@ define(["dojo/_base/declare",
 						set: function (callback) {
 							if (callback !== null) {
 								if (callback instanceof Function) {
-									removeHandler( source, type );
-									source.addEventListener( type, callback );
+									removeHandler(source, type);
+									source.addEventListener(type, callback);
 									callbacks[type] = callback;
 								} else {
 									throw new StoreError("TypeError", "register", "callback is not a callable object");
 								}
 							} else {
-								removeHandler( source, type );
+								removeHandler(source, type);
 							}
 						},
 						configurable: true,
@@ -121,7 +133,7 @@ define(["dojo/_base/declare",
 					source[prop] = function () {};
 				}
 			} else {
-				 throw new StoreError("TypeError", "register", "invalid type");
+				throw new StoreError("TypeError", "register", "invalid type");
 			}
 		};
 
@@ -137,31 +149,29 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Public
 			var event, props = properties;
-			if (type && isString(type)) {
-				if (custom && props) {
-					var custProp = props;
-					if (!props.detail) {
-						custProp = {
-							cancelable: !!props.cancelable,
-							bubbles: !!props.bubbles,
-							detail: props
-						};
-						delete  props.cancelable;
-						delete  props.bubbles;
-					}
-					props = custProp;
-				}
-				event = new Event (type, props);
-				source.dispatchEvent( event );
-				return event;
-			} else {
-				throw new StoreError( "TypeError", "emit", "invalid type property");
+			if (!type || !isString(type)) {
+				throw new StoreError("TypeError", "emit", "invalid type property");
 			}
+			if (custom && props) {
+				var custProp = props;
+				if (!props.detail) {
+					custProp = {
+						cancelable: !!props.cancelable,
+						bubbles: !!props.bubbles,
+						detail: props
+					};
+					delete props.cancelable;
+					delete props.bubbles;
+				}
+				props = custProp;
+			}
+			event = new Event(type, props);
+			source.dispatchEvent(event);
+			return event;
 		};
 
 		//=======================================================================
-		var callbacks = {};
-		
+
 		if (source instanceof EventTarget) {
 			if (types) {
 				this.addHandler(types);
@@ -173,9 +183,9 @@ define(["dojo/_base/declare",
 				enumerable: true
 			});
 		} else {
-			throw new StoreError( "DataError", "constructor", "source must be an instance of EventTarget");
+			throw new StoreError("DataError", "constructor", "source must be an instance of EventTarget");
 		}
 	}	/* end Eventer() */
-	
+
 	return Eventer;
 });

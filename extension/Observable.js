@@ -4,17 +4,17 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
 define(["dojo/_base/declare",
-				"dojo/when",
-				"../_base/Library",
-				"../_base/Observer",
-				"../error/createError!../error/StoreErrors.json"
-			 ], function (declare, when, Lib, Observer, createError) {
-	
+		"dojo/when",
+		"../_base/library",
+		"../_base/Observer",
+		"../error/createError!../error/StoreErrors.json"
+	 ], function (declare, when, lib, Observer, createError) {
+
 	// module:
 	//		store/extension/Observable
 	// summary:
@@ -26,13 +26,13 @@ define(["dojo/_base/declare",
 	//		is a store wrapper.
 	// example:
 	//	|	define(["dojo/_base/declare",
-	//	|         "store/_base/_Store",
+	//	|           "store/_base/_Store",
 	//	|	        "store/_base/_Indexed",
 	//	|	        "store/extension/Observable"
 	//	|	       ], function  (declare, _Store, _Indexed, Observable) {
 	//	|	  var MyStore = declare([_Store, _Indexed, Observable]);
 	//	|	  var store = new MyStore({data: someData});
-	//	|	               ..
+	//	|	               ...
 	//	|	  function listener(object, removedFrom, insertedInto) {
 	//	|	    if (removedFrom == insertedInto) {
 	//	|	      console.log( "Object with key "+objKey+" was updated");
@@ -45,23 +45,21 @@ define(["dojo/_base/declare",
 	//	|	      console.log( "Object with key "+objKey+" was inserted at location: "+removedFrom");
 	//	|	    }
 	//	|	  }
-	//	|	               ..
+	//	|	               ...
 	//	|	  var results = store.query({name:/^A/i});
 	//	|	  var handle = results.observe( listener, true );
 	//	|	});
-	
-	var StoreError = createError( "Observable" );		// Create the StoreError type.
-	var clone      = Lib.clone;
-	var mixin      = Lib.mixin;
-	var undef;
-	
-	function paginate (results, options) {
+	var StoreError = createError("Observable");		// Create the StoreError type.
+	var clone      = lib.clone;
+	var mixin      = lib.mixin;
+
+	function paginate(results, options) {
 		// summary:
 		// results:
 		// options:
 		// tag:
 		//		Private
-		return when( results, function (dataset) {
+		return when(results, function (dataset) {
 			var end  = options.start + (options.count || Infinity);
 			var page = Array.prototype.slice.call(dataset, options.start, end);
 
@@ -72,13 +70,13 @@ define(["dojo/_base/declare",
 			return page;
 		});
 	}
-	
+
 	var Observable = declare(null, {
 
 		//=========================================================================
 		// constructor
-		
-		constructor: function (kwArgs) {
+
+		constructor: function () {
 			// Either the base class store/_base/_Natural or store/_base/_Indexed is
 			// required.
 			if (this.features.has("indexed, natural")) {
@@ -89,7 +87,7 @@ define(["dojo/_base/declare",
 				throw new StoreError("Dependency", "constructor", message);
 			}
 		},
-		
+
 		//=========================================================================
 		// Public IndexedStore/api/store API methods
 
@@ -99,14 +97,15 @@ define(["dojo/_base/declare",
 			// keyRange: Key|KeyRange?
 			//		A KeyRange object or valid key.
 			// options: (String|Object)?
-			//		If a string, the range required direction: 'next', 'nextunique', 
+			//		If a string, the range required direction: 'next', 'nextunique',
 			//		'prev' or 'prevunique'. Otherwise a Store.RangeOptions object.
 			// returns: dojo/store/api/Store.QueryResults
 			//		The results of the query, extended with iterative methods.
 			// tag:
 			//		Public
+			var chunked, chunkOff, chunkOn, results, store, observer;
 
-			function observe (listener, includeUpdates, scope) {
+			function observe(listener, includeUpdates, scope) {
 				// summary:
 				//		The observe method added to the query results, that is, if the
 				//		query results has a forEach method. When called the listener is
@@ -125,10 +124,9 @@ define(["dojo/_base/declare",
 				//		to remove the listener from the Observer object.
 				// tag:
 				//		Public
-				
 				if (!observer) {
 					observer = new Observer(store, keyRange, options, results);
-					observer.done( function () { observer = null;	});
+					observer.done(function () { observer = null; });
 				}
 				return observer.addListener(listener, includeUpdates, scope);
 			}
@@ -136,20 +134,20 @@ define(["dojo/_base/declare",
 			// For an Observer to properly monitor paginated query results we must
 			// first pass it ALL matching objects, therefore perform the initial
 			// query with pagination turned off.
-			
-			var options  = mixin( {start:0, count: 0}, options);
-			var chunked  = !!(options.start || options.count);
-			var chunkOff = mixin( clone(options), {start:0, count: 0});
-			var chunkOn  = {start: options.start, count: options.count};
 
-			var results  = this.inherited(arguments, [keyRange, chunkOff]);	// Call 'parent' query()
-			var store     = this;
-			var observer  = null;
-			
+			options  = mixin({start: 0, count: 0}, options);
+			chunked  = !!(options.start || options.count);
+			chunkOff = mixin(clone(options), {start: 0, count: 0});
+			chunkOn  = {start: options.start, count: options.count};
+
+			results  = this.inherited(arguments, [keyRange, chunkOff]);	// Call 'parent' query()
+			store    = this;
+			observer = null;
+
 			// Test if the results can be iterated.
 			if (results && typeof results.forEach == "function") {
-				when (results, function (dataset) {
-					dataset.revision = "revision" in dataset ? dataset.revision : store.revision;
+				when(results, function (dataset) {
+					dataset.revision = dataset.revision || store.revision;
 				});
 				results.observe = observe;
 			}
@@ -169,13 +167,14 @@ define(["dojo/_base/declare",
 			//		The results of the query, extended with iterative methods.
 			// tag:
 			//		Public
+			var chunked, chunkOff, chunkOn, results, observer, store;
 
-			function observe (listener, includeUpdates, scope) {
+			function observe(listener, includeUpdates, scope) {
 				// summary:
 				//		See getRange.observer()
 				if (!observer) {
 					observer = new Observer(store, query, options, results);
-					observer.done( function () { observer = null;	});
+					observer.done(function () { observer = null; });
 				}
 				return observer.addListener(listener, includeUpdates, scope);
 			}
@@ -183,28 +182,25 @@ define(["dojo/_base/declare",
 			// For an Observer to properly monitor paginated query results we must
 			// first pass it ALL matching objects, therefore perform the initial
 			// query with pagination turned off.
-			
-			var options  = mixin( {start:0, count: 0}, options);
-			var chunked  = !!(options.start || options.count);
-			var chunkOff = mixin( clone(options), {start:0, count: 0});
-			var chunkOn  = {start: options.start, count: options.count};
 
-			var results  = this.inherited(arguments, [query, chunkOff]);	// Call 'parent' query()
-			var observer = null;
-			var store    = this;
-			
+			options  = mixin({start: 0, count: 0}, options);
+			chunked  = !!(options.start || options.count);
+			chunkOff = mixin(clone(options), {start: 0, count: 0});
+			chunkOn  = {start: options.start, count: options.count};
+
+			results  = this.inherited(arguments, [query, chunkOff]);	// Call 'parent' query()
+			observer = null;
+			store    = this;
+
 			// Test if the results can be iterated.
 			if (results && typeof results.forEach == "function") {
-				when (results, function (dataset) {
-					dataset.revision = "revision" in dataset ? dataset.revision : store.revision;
+				when(results, function (dataset) {
+					dataset.revision = dataset.revision !== undefined ? dataset.revision : store.revision;
 				});
 				results.observe = observe;
 			}
 			return chunked ? paginate(results, chunkOn) : results;
 		}
-
 	});	/* end declare() */
-	
 	return Observable;
-
 });	/* end define() */

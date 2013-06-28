@@ -4,15 +4,14 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
-
-define([], function() {
+define([], function () {
 	"use strict";
 
 	// module:
-	//		cbtree/store/handlers/csvHandler
+	//		indexedStore/handler/csvHandler
 	// summary:
 	//		Sample CSV data handler.
 	// description:
@@ -26,119 +25,120 @@ define([], function() {
 	//
 	// example:
 	//	| require(["cbtree/store/Memory",
-	//	|					"cbtree/store/handlers/csvHandler"
-	//	|				 ], function (ObjectStore, csvHandler) {
+	//	|		   "cbtree/store/handlers/csvHandler"
+	//	|		  ], function (ObjectStore, csvHandler) {
 	//	|
 	//	|	 var store = new ObjectStore(
-	//	|									{ url: "/some/data/location/myFile.csv",
-	//	|										handleAs:"csv",
-	//	|										dataHandler: {
-	//	|													handler: csvHandler,
-	//	|													options: {
-	//	|															fieldNames: ["Name", "LastName"],
-	//	|															trim: true
-	//	|													}
-	//	|										}
-	//	|									});
+	//	|					{url: "/some/data/location/myFile.csv",
+	//	|					 handleAs:"csv",
+	//	|					 dataHandler: {
+	//	|						handler: csvHandler,
+	//	|						options: {
+	//	|							fieldNames: ["Name", "LastName"],
+	//	|										trim: true
+	//	|						}
+	//	|					}
+	//	|				});
 	//	| });
 	//
 	//		To register the CSV handler directly with dojo/request/handlers use the
 	//		following code sample.
 	//
 	//	| require(["dojo/request",
-	//	|					"dojo/request/handlers",
-	//	|					"dojo/store/Memory",
-	//	|					"cbtree/store/Hierarchy",
-	//	|					"cbtree/store/handlers/csvHandler"
-	//	|				 ], function (request, handlers, Memory, Hierarchy, csvHandler) {
+	//	|		   "dojo/request/handlers",
+	//	|		   "dojo/store/Memory",
+	//	|		   "cbtree/store/Hierarchy",
+	//	|		   "cbtree/store/handlers/csvHandler"
+	//	|		  ], function (request, handlers, Memory, Hierarchy, csvHandler) {
 	//	|
-	//	|	 var myHandler = new csvHandler( { fieldNames: ["Name", "LastName"],
-	//	|																		 trim: true });
+	//	|	var myHandler = new csvHandler( {fieldNames: ["Name", "LastName"],
+	//	|									 trim: true });
 	//	|
-	//	|	 // Register the CSV data handler
-	//	|	 handlers.register("csv", myHandler.handler);
+	//	|	// Register the CSV data handler
+	//	|	handlers.register("csv", myHandler.handler);
 	//	|
-	//	|	 var result = request("/some/data/location/myFile.csv", {handleAs:"csv"});
-	//	|	 result.then( function (data) {
-	//	|		 // Create a dojo/store/Memory store...
-	//	|		 var store = new Memory( {data: data} );
-	//	|	 });
+	//	|	var result = request("/some/data/location/myFile.csv", {handleAs:"csv"});
+	//	|	result.then( function (data) {
+	//	|	  // Create a dojo/store/Memory store...
+	//	|	  var store = new Memory( {data: data} );
+	//	|	});
 	//	|
-	//	|		// First change the field names
-	//	|	 myHandler.set( {fieldNames: ["city", "zipcode", "county", "state"]} );
-	//	|	 var ObjStore = new Hierarchy( {url:"/another/location/myCities.csv",
-	//	|																	handleAs:"csv"} );
+	//	|	// First change the field names
+	//	|	myHandler.set( {fieldNames: ["city", "zipcode", "county", "state"]} );
+	//	|	var ObjStore = new Hierarchy({url:"/another/location/myCities.csv",
+	//	|								  handleAs:"csv"} );
 	//	| });
 	//
-	//		Note: Because the CSV handler was registered before the creation of the
-	//					Hierarchy Store we can now simply set the 'handleAs' property to
-	//					"csv"
+	//	Note:
+	//		Because the CSV handler was registered before the creation of the
+	//		Hierarchy Store we can now simply set the 'handleAs' property to
+	//		"csv"
 
 	if (!String.prototype.trim) {
 		String.prototype.trim = function () {
-			return this.replace(/^\s+|\s+$/g,'');
+			return this.replace(/^\s+|\s+$/g, '');
 		};
 	}
 
 	if (!String.prototype.occuranceOf) {
 		String.prototype.occuranceOf = function (c) {
-			return (this.length - this.replace(new RegExp(c,"g"), '').length) / c.length;
+			return (this.length - this.replace(new RegExp(c, "g"), '').length) / c.length;
 		};
 	}
 
-	function fieldsToIdentifier(/*String[]*/ values) {
+	function fieldsToIdentifier(values) {
 		// summary:
 		//		If the field names are extracted from the CSV data convert the fields
 		//		to valid JavaScript identifiers.
-		// values:
+		// values: String[]
 		//		Array of strings
 		// tag:
 		//		Private
 		var i, id;
 
-		for (i=0; i<values.length; i++) {
+		for (i = 0; i < values.length; i++) {
 			if ((id = values[i]) && typeof id == "string") {
 				// Camelcase identifier, removing spaces, dashes and underscores
-				id = id.trim().replace(/(^[A-Z])|([\s-_]+[A-Z,a-z])/g, function(m, p1, p2, offset){
-						return offset ? m.toUpperCase().replace(/[\s-_]*/,'') : m.toLowerCase();
+				id = id.trim().replace(/(^[A-Z])|([\s-_]+[A-Z,a-z])/g, function (m, p1, p2, offset) {
+					return offset ? m.toUpperCase().replace(/[\s-_]*/, '') : m.toLowerCase();
 				});
 				if (/^\d/.test(id)) {
-					values[i] = "$" + id
+					values[i] = "$" + id;
 				}
 			} else {
-				values[i] = "$column"+i;
+				values[i] = "$column" + i;
 			}
 		}
 		return values;
 	}
 
-	function valuesToHash(/*String[]*/ keys, /*any[]*/ values) {
+	function valuesToHash(keys, values) {
 		// summary:
 		//		Convert an array of values to a JavaScript key:value pairs object.
-		// keys:
+		// keys: String[]
 		//		Array of strings. Each string represents a property name (key) in
 		//		the JavaScript object.
-		// values:
+		// values: any[]
 		//		Array of values
 		// tag:
 		//		Private
 		var hash = {};
 		var i;
 
-		for(i=0; i<keys.length; i++) {
+		for (i = 0; i < keys.length; i++) {
 			hash[keys[i]] = values[i];
 		}
 		return hash;
 	}
 
-	function split(/*String*/ str, /*String*/ separator) {
+	function split(str, separator) {
 		// summary:
 		//		Splits a String object into an array of strings by separating the string
 		//		into substrings.	If the separtor is enclosed by double quotes (") it is
 		//		ignored.
-		// str:
+		// str: String
 		//		String object
-		// separator:
+		// separator: String
 		//		String object
 		//returns:
 		//		A new array of substrings.
@@ -149,7 +149,7 @@ define([], function() {
 		var array  = [];
 		var i, count = 1;
 
-		for(i=0; i<tokens.length; i++) {
+		for (i = 0; i < tokens.length; i++) {
 			substr += prefix + tokens[i];
 			if (!(substr.occuranceOf('"') % 2)) {
 				array.push(substr);
@@ -160,19 +160,19 @@ define([], function() {
 			}
 		}
 		if (substr.length) {
-			var error = new TypeError("Unterminated quoted string at substr: "+count+" {"+tokens[count-1]+"}");
+			var error = new TypeError("Unterminated quoted string at substr: " + count + " {" + tokens[count - 1] + "}");
 			error.name = "SyntaxError";
 			throw error;
 		}
 		return array;
 	}
 
-	function stringToValue(/*String*/ value, /*Boolean*/ trim) {
+	function stringToValue(value, trim) {
 		// summary:
 		//		Convert string value to a native JavaScript type.
-		// value:
+		// value: String
 		//		String value
-		// trim:
+		// trim: Boolean?
 		//	Indicates if leading and trailing spaces are to be removed.
 		// tag:
 		//		Private
@@ -181,7 +181,7 @@ define([], function() {
 		var newVal = value;
 
 		if (/^".*"$/.test(tmpVal)) {
-			newVal = tmpVal.replace(/^"|"$/g,'').replace(/""/g,'"');
+			newVal = tmpVal.replace(/^"|"$/g, '').replace(/""/g, '"');
 			tmpVal = newVal.trim();
 			isQuoted = true;
 		}
@@ -191,9 +191,9 @@ define([], function() {
 			if (array = tmpVal.match(/^\[(.*)\]$/)) {
 				newVal = [];
 				if (args = array[1]) {
-					var values = split(args, ",");
-					for (var i =0; i<values.length; i++) {
-						newVal.push( stringToValue(values[i], trim) );
+					var i, values = split(args, ",");
+					for (i = 0; i < values.length; i++) {
+						newVal.push(stringToValue(values[i], trim));
 					}
 				}
 				return newVal;
@@ -208,29 +208,30 @@ define([], function() {
 				return (tmpVal == "true");
 			}
 		}
-		return (trim ? tmpVal: newVal);
+		return (trim ? tmpVal : newVal);
 	}
 
-	function csvHandler(/*Object?*/ options) {
+	function csvHandler(options) {
 		// summary:
 		//		Closure for the data handler (e.g this.handler());
-		// options:
+		// options: Object?
 		// tag:
 		//		Public
 		var self = this;
 
+		this.name       = "csv";
 		this.delimiter  = ",";
 		this.newline    = "\r\n";
 		this.trim       = false;
 		this.fieldNames = null;
 
-		this.handler = function (/*Object*/ response) {
+		this.handler = function (response) {
 			// summary:
 			//		The data handler. The handler is registered with dojo/request/handlers
 			//		The response data is converted into an array of JavaScript key:value
 			//		pairs objects. On successful completion of a dojo/request this method
 			//		is called with the request response.
-			// response:
+			// response: Object
 			// tag:
 			//		Public
 			if (response) {
@@ -238,23 +239,23 @@ define([], function() {
 				var line, tokens, i, j;
 
 				// dojo 1.8 work-around. dojo/request/xhr calls the data handler regardless
-				// if a network error occured.
+				// if a network error occurred.
 				if (response.status >= 400) {
 					return response;
 				}
 
-				var csvLines = split( (response.data || response.text), self.newline);
-				for(i = 0; i<csvLines.length; i++) {
+				var csvLines = split((response.data || response.text), self.newline);
+				for (i = 0; i < csvLines.length; i++) {
 					if (line = csvLines[i].trim()) {
 						tokens = split(line, self.delimiter);
-						for (j=0; j<tokens.length; j++) {
-							values.push( stringToValue(tokens[j], self.trim) );
+						for (j = 0; j < tokens.length; j++) {
+							values.push(stringToValue(tokens[j], self.trim));
 						}
 
 						if (!self.fieldNames) {
-							self.fieldNames = fieldsToIdentifier( values );
+							self.fieldNames = fieldsToIdentifier(values);
 						} else {
-							data.push( valuesToHash( self.fieldNames, values ));
+							data.push(valuesToHash(self.fieldNames, values));
 						}
 						values = [];
 					}
@@ -263,18 +264,19 @@ define([], function() {
 			}
 		};
 
-		this.set = function (/*String|Object*/ property, /*any?*/ value) {
+		this.set = function (property, value) {
 			// summary:
 			//		 Set a property value
-			// property:
+			// property: String|Object
 			//		Property name or a JavaScript key:value pairs object.
-			// value:
+			// value: any?
 			//		The property value.
 			// tag:
 			//		Public
+			var key;
 			if (property) {
 				if (typeof property == "object") {
-					for (var key in property) {
+					for (key in property) {
 						this.set(key, property[key]);
 					}
 				}

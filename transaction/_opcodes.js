@@ -9,10 +9,12 @@
 //
 
 define(["../shim/Object"], function () {
+	"use strict";
+
 	// module
 	//		indexedStore/transaction/_opcodes
 	// summary:
-	
+
 	var opNames = ["new", "delete", "update", "clear", "createIndex", "deleteIndex"];
 	var opcodes = {
 		// Declare transaction states
@@ -33,6 +35,6 @@ define(["../shim/Object"], function () {
 			return opNames[code];
 		}
 	};
-	
+
 	return Object.freeze(opcodes);
-})	/* end define() */
+});	/* end define() */

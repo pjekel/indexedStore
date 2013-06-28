@@ -4,24 +4,25 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
 define(["dojo/_base/declare",
-				"./Keys",
-				"./KeyRange",
-				"./Library",
-				"./Location",
-				"./Record",
-				"../error/createError!../error/StoreErrors.json",
-				"../transaction/_opcodes"
-			 ], function (declare, Keys, KeyRange, Lib, Location, Record, createError, _opcodes) {
+		"./Keys",
+		"./KeyRange",
+		"./library",
+		"./Location",
+		"./Record",
+		"../error/createError!../error/StoreErrors.json",
+		"../transaction/_opcodes"
+	], function (declare, Keys, KeyRange, lib, Location, Record, createError, _opcodes) {
 	"use strict";
+
 	// module:
 	//		IndexedStore/_base/_Natural
 	// summary:
-	// 		The _Natural class arranges all object store records in a natural order.
+	//		The _Natural class arranges all object store records in a natural order.
 	//		The natural order is the order in which records are added to the store
 	//		and/or re-arranged using the Store.PutDirective property 'before'.
 	//		Natural based stores also maintain a record number based index for fast
@@ -49,15 +50,15 @@ define(["dojo/_base/declare",
 	//	|	        ], function (declare, _Store, _Natural, _Loader, KeyRange) {
 	//	|
 	//	|	  var store = declare([ _Store, _Natural, _Loader]);
-	//	|	  var myStore = new store( {url:"../data/Simpsons.json", keyPath:"name"} );
+	//	|	  var myStore = new store({url:"../data/Simpsons.json", keyPath:"name"});
 	//	|	                       ...
-	//	|   var index  = store.createIndex("names", "name", {unique:true});
+	//	|	  var index  = store.createIndex("names", "name", {unique:true});
 	//	|	  var range  = KeyRange.bound("Bart", "Homer");
 	//	|	  var cursor = index.openCursor(range);
 	//	|	  while (cursor && cursor.value) {
-	//	|	    console.log( "Name: " + cursor.primaryKey );
-	//	|	    cursor.cont();
-	//	|	  } 
+	//	|	    console.log("Name: " + cursor.primaryKey);
+	//	|	    cursor.next();
+	//	|	  }
 	//	|	});
 	//
 	// NOTE:
@@ -67,17 +68,16 @@ define(["dojo/_base/declare",
 	//		Although _Natural based stores do support key ranges with certain store
 	//		operations, the use of them is not recommended on large datasets.
 
-	var StoreError = createError( "_Natural" );			// Create the StoreError type.
-	var isObject   = Lib.isObject;
-	var clone      = Lib.clone;											// HTML5 structured clone.
-	var move       = Lib.move;
-	var undef;
-	
+	var StoreError = createError("_Natural");			// Create the StoreError type.
+	var isObject   = lib.isObject;
+	var clone      = lib.clone;							// HTML5 structured clone.
+	var move       = lib.move;
+
 	var C_MSG_MUTUAL_EXCLUSIVE = "base class '_Natural' and '_Indexed' are mutual exclusive";
 	var C_MSG_CONSTRAINT_ERROR = "record with key [%{0}] already exist";
 	var C_MSG_DEPENDENCY       = "base class '_Store' must be loaded first";
-	
-	var _Natural = declare (null, {
+
+	var _Natural = declare(null, {
 
 		//===================================================================
 		// Constructor
@@ -85,13 +85,13 @@ define(["dojo/_base/declare",
 		constructor: function () {
 			if (this.features.has("store")) {
 				if (this.features.has("indexed")) {
-					throw new StoreError("Dependency", "constructor", C_MSG_MUTUAL_EXCLUSIVE );
+					throw new StoreError("Dependency", "constructor", C_MSG_MUTUAL_EXCLUSIVE);
 				}
 				this._index = {};			// Local record index.
 
 				this.features.add("natural");
-				Lib.defProp( this,"natural", {value:true, writable:false, enumerable:true} );
-				Lib.protect(this);
+				lib.defProp(this, "natural", {value: true, writable: false, enumerable: true});
+				lib.protect(this);
 			} else {
 				throw new StoreError("Dependency", "constructor", C_MSG_DEPENDENCY);
 			}
@@ -106,11 +106,11 @@ define(["dojo/_base/declare",
 			// tag:
 			//		protected
 			var name, index;
-			for(name in this._indexes) {
+			for (name in this._indexes) {
 				index = this._indexes[name];
 				index._clear();
 			}
-			this._records.forEach( function (record) {				
+			this._records.forEach(function (record) {
 				record.destroy();
 			});
 			this._records = [];
@@ -125,32 +125,29 @@ define(["dojo/_base/declare",
 			// summary:
 			//		Remove all records from store whose key is in the key range.
 			// key: KeyRange|Key
-			//		Key identifying the record to be deleted. The key arguments can also
-			//		be an KeyRange.
+			//		Key identifying the record to be deleted. The key arguments can
+			//		also be an KeyRange.
 			// returns: Boolean
 			//		true on successful completion otherwise false.
 			// tag:
 			//		protected
-
 			var deleted = false;
-			var record;
-			
-			if( !(key instanceof KeyRange)) {
-				var locator = this._retrieveRecord(key);
-				if (locator.record) {
-					deleted = this._deleteRecord( locator.record, locator.eq );
-				}
-			} else {
-				var range = this._getInRange(key);
+
+			if (key instanceof KeyRange) {
+				var record, range = this._getInRange(key, true);
 				if (range.length) {
 					// Sort the record numbers in descending order.
-					range = range.sort( function (a,b) {return b-a;} );
-					range.forEach( function (index) {
+					range = range.sort(function (a, b) {return b - a; });
+					range.forEach(function (index) {
 						record = this._records[index];
-						this._deleteRecord( record, index );
+						this._deleteRecord(record, index);
 						deleted = true;
-
-					}, this );
+					}, this);
+				}
+			} else {
+				var loc = this._retrieveRecord(key);
+				if (loc.record) {
+					deleted = this._deleteRecord(loc.record, loc.eq);
 				}
 			}
 			if (deleted) {
@@ -170,15 +167,14 @@ define(["dojo/_base/declare",
 			//		true on successful completion otherwise false.
 			// tag:
 			//		protected
-
 			try {
 				this._removeFromIndex(record);
 				return true;
 			} catch (err) {
-				throw new StoreError( err, "_deleteRecord" );
+				throw new StoreError(err, "_deleteRecord");
 			} finally {
 				// Make sure we destroy the real store record and not a clone.
-				var record = this._records.splice( recNum, 1 )[0];
+				record = this._records.splice(recNum, 1)[0];
 				var value  = record.value;
 				var key    = record.key;
 				var rev    = record.rev;
@@ -187,40 +183,57 @@ define(["dojo/_base/declare",
 				this.total = this._records.length;
 				this.revision++;
 
-				if (this.transaction) {
-					this.transaction._journal( this, _opcodes.DELETE, key, null, value, rev, recNum );
-				} else {
-					this._notify( _opcodes.DELETE, key, null, value, rev, recNum );
-				}
+				this._notify(_opcodes.DELETE, key, null, value, rev, recNum);
 			}
 			return false;
 		},
 
-		_getInRange: function (keyRange) {
+		_getInRange: function (keyRange, indexOnly) {
 			// summary:
-			//		Get the record numbers, in store order, of all records within the
-			//		given key range.
+			//		Get all records, or their index number, within the given key
+			//		range. The resulting array is in record order as apposed to
+			//		index order.
 			// keyRange: KeyRange
 			//		Instance of KeyRange
-			// returns: Number[]
-			//		An array of record numbers.
+			// indexOnly: Boolean?
+			//		If true, the result returned will be an array of index number
+			//		otherwise an array of records
+			// returns: (Number|Record)[]
+			//		Depending on indexOnly an array of records or record numbers.
 			// tag:
 			//		protected
-			var i, max = this._records.length;
-			var recIdx = [], keyVal;
-			
-			if (keyRange instanceof KeyRange) {
-				for (i = 0; i < max; i++) {
-					keyVal = this._records[i].key;
-					if (Keys.inRange( keyVal, keyRange )) {
-						recIdx.push(i);
+			var records = this._records;
+			var max     = records.length;
+			var i, results = [];
+
+			if (keyRange) {
+				if (keyRange.lower && keyRange.upper && !Keys.cmp(keyRange.lower, keyRange.upper)) {
+					// if key is a KeyRange.only() simply fetch the record.
+					var loc = this._retrieveRecord(keyRange.lower);
+					if (loc.record) {
+						results.push(indexOnly ? loc.eq : loc.record);
+					}
+				} else {
+					for (i = 0; i < max; i++) {
+						if (Keys.inRange(records[i].key, keyRange)) {
+							results.push(indexOnly ? i : records[i]);
+						}
 					}
 				}
+			} else {
+				if (indexOnly) {
+					// Generate a NUMERIC array, therefor no Object.keys()
+					for (i = 0; i < max; i++) {
+						results.push(i);
+					}
+				} else {
+					results = records.slice();
+				}
 			}
-			return recIdx;
+			return results;
 		},
 
-		_indexRecord: function (/*Record*/ record,/*Number*/ recNum) {
+		_indexRecord: function (record, recNum) {
 			// summary:
 			//		Add the record to each store index. If any of the indexes throws an
 			//		exception reverse the index operation and re-throw the error.
@@ -232,15 +245,15 @@ define(["dojo/_base/declare",
 			//		protected
 			var name, index;
 			try {
-				for(name in this._indexes) {
+				for (name in this._indexes) {
 					index = this._indexes[name];
-					index._add( record );
+					index._add(record);
 				}
 			} catch (err) {
 				// Failed to index the record, reverse operation and re-throw error.
-				for(name in this._indexes) {
+				for (name in this._indexes) {
 					index = this._indexes[name];
-					index._remove( record );
+					index._remove(record);
 				}
 				throw new StoreError(err, "_indexRecord");
 			}
@@ -255,7 +268,7 @@ define(["dojo/_base/declare",
 			//		protected
 			var rec, i, max = this._records.length;
 			this._index = {};			// Drop local index.
-			for (i=0; i<max; i++) {
+			for (i = 0; i < max; i++) {
 				rec = this._records[i];
 				this._index[rec.key] = i;
 			}
@@ -273,30 +286,24 @@ define(["dojo/_base/declare",
 			//		A Location object. (see the Location module for detais).
 			// tag:
 			//		protected
-			var recNum, max = this._records.length;
-
-			if (key != undef) {
+			if (key != null) {
+				var recNum, record;
 				if (key instanceof KeyRange) {
-					recNum = this._getInRange(key)[0];
-					if (recNum == undef) {
-						return new Location( this, max-1, -1, max );
+					recNum = this._getInRange(key, true)[0];
+					if (recNum !== undefined) {
+						return new Location(this, recNum - 1, recNum, recNum + 1);
 					}
 				} else {
-					key = this.uppercase ? Keys.toUpperCase(key) : key;
 					recNum = this._index[key];
-					if (recNum == undef) {
-						return new Location( this, max-1, -1, max );
-					}
-					// Make sure we distinguish between string and numeric keys values
-					// (e.g 100 vs "100")
-					var record = this._records[recNum];
-					if (typeof key != typeof record.key) {
-						return new Location( this, max-1, -1, max );
+					record = this._records[recNum];
+					// Make sure we distinguish between string and numeric key values
+					// (e.g 100 vs "100") by comparing the key and record key.
+					if (record && !Keys.cmp(key, record.key)) {
+						return new Location(this, recNum - 1, recNum, recNum + 1);
 					}
 				}
-				return new Location( this, recNum-1, recNum, this._records.length );
 			}
-			return new Location( this, max-1, -1, max );
+			return new Location(this, this._records.length - 1, -1, this._records.length);
 		},
 
 		_removeFromIndex: function (record) {
@@ -308,12 +315,12 @@ define(["dojo/_base/declare",
 			//		protected
 			var name, index;
 			try {
-				for(name in this._indexes) {
+				for (name in this._indexes) {
 					index = this._indexes[name];
-					index._remove( record );
+					index._remove(record);
 				}
 			} catch (err) {
-				throw new StoreError( err, "_removeFromIndex" );
+				throw new StoreError(err, "_removeFromIndex");
 			} finally {
 				delete this._index[record.key];
 			}
@@ -331,14 +338,15 @@ define(["dojo/_base/declare",
 			//		Record key.
 			// tag:
 			//		protected
-			var newRec, newVal, event, before, cb, at, i;
-			var optKey, overwrite = false;
-			
+			var at, before, opType, optKey, overwrite = false;
+			var curRev, curVal, stale;
+
 			if (options) {
-				overwrite = "overwrite" in options ? !!options.overwrite : false;
-				optKey    = options.key != undef ? options.key : (options.id != undef ? options.id : null);
+				overwrite = !!options.overwrite;
+				optKey    = options.key != null ? options.key : (options.id != null ? options.id : null);
 				before    = options.before || null;
-				
+				stale     = !!options.stale;
+
 				if (before) {
 					if (isObject(before)) {
 						before = this.getIdentity(before);
@@ -347,32 +355,37 @@ define(["dojo/_base/declare",
 				}
 			}
 			// Extract key value and test if the primary key already exists.
-			var baseVal = Keys.getKey(this, value, optKey);
-			var keyVal  = this.uppercase ? Keys.toUpperCase(baseVal) : baseVal;
+			var keyVal = Keys.getKey(this, value, optKey, this.uppercase);
 			// Try to locate the record.
 			var curLoc  = this._retrieveRecord(keyVal);
 			var curRec  = curLoc.record;
-			var curRev  = (curRec && curRec.rev) || 0;
-			var curVal  = (curRec && curRec.value);
 			var curAt   = curLoc.eq;
-			var opType  = curRec ? _opcodes.UPDATE : _opcodes.NEW;
-			
+
 			if (curRec) {
 				if (!overwrite) {
 					throw new StoreError("ConstraintError", "_storeRecord", C_MSG_CONSTRAINT_ERROR, keyVal);
 				}
-				this._removeFromIndex( curRec );
+				opType = _opcodes.UPDATE;
+				curRev = curRec.rev;
+				curVal = curRec.value;
+				this._removeFromIndex(curRec);
+			} else {
+				opType = _opcodes.NEW;
+				curRev = 0;
+				if (this.defaultProperties) {
+					this._applyDefaults(value);
+				}
 			}
 
 			try {
-				newVal = this._clone ? clone(value) : value;
-				newRec = new Record( keyVal, newVal, ++curRev );
-			} catch(err) {
-				throw new StoreError( "DataCloneError", "_storeRecord" );
+				var newVal = this._clone ? clone(value) : value;
+				var newRec = new Record(keyVal, newVal, curRev +1, stale);
+			} catch (err) {
+				throw new StoreError("DataCloneError", "_storeRecord");
 			}
 
 			if (before && before.record) {
-				move( this._records, curAt, before.eq, newRec );
+				move(this._records, curAt, before.eq, newRec);
 				this._indexRecord(newRec, before.eq);
 				this._reindex();
 				at = before.eq;
@@ -381,49 +394,15 @@ define(["dojo/_base/declare",
 				if (curRec) {
 					this._records[at] = newRec;
 				} else {
-					this._records.push( newRec );
+					this._records.push(newRec);
 				}
 				this._indexRecord(newRec, at);
 			}
 			this.total = this._records.length;
 			this.revision++;
-			
-			if (this.transaction) {
-				this.transaction._journal( this, opType, keyVal, value, curVal, curRev, curAt, options);
-			} else {
-				this._notify( opType, keyVal, value, curVal, curRev, curAt, options);
-			}
+
+			this._notify(opType, keyVal, value, curVal, curRev, curAt, options);
 			return keyVal;
-		},
-
-		//=========================================================================
-		// Public IndexedStore/api/store API methods
-
-		count: function (key) {
-			// summary:
-			//		Count the total number of objects that share the key or key range.
-			// key: Key|KeyRange
-			//		Key identifying the record to be retrieved. The key arguments can
-			//		also be an KeyRange.
-			// returns: Number
-			//		Total number of records matching the key or key range. If the key
-			//		argument is omitted the total number of records in the store is
-			//		returned.
-			// tag:
-			//		Public
-
-			this._assertStore( this, "count" );
-			if (key != undef) {
-				if (key instanceof KeyRange) {
-					return this._getInRange(key).length;
-				}
-				return (this.get(key) ? 1 : 0);
-			}
-			return this.total;
-		},
-
-		toString: function () {
-			return "[object Store]";
 		}
 
 	});	/* end declare() */

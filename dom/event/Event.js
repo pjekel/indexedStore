@@ -4,33 +4,47 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["../../_base/Library",
-				"../../error/createError!../../error/StoreErrors.json"
-			 ], function(Lib, createError){
+define(["../../_base/library"], function (lib) {
 	"use strict";
-	
+
 	// module:
 	//		indexedStore/dom/event/Event
 	//
 	//	http://www.w3.org/TR/dom/		(DOM4)
 	//	http://www.w3.org/TR/DOM-Level-3-Events/
 
-	var StoreError = createError("Event");		// Create the StoreError type.
+	var flags = ["dispatch", "stopImmediate", "stopPropagate"];
 
-	var EVENT_FLAGS = ["dispatch", "canceled", "stopImmediate", "stopPropagate"];
-	var EVENT_INIT  = { bubbles: false, cancelable: false, detail: null };
+	var isObject = lib.isObject;
+	var isString = lib.isString;
+	var isEmpty  = lib.isEmpty;
+	var defProp  = lib.defProp;
+	var mixin    = lib.mixin;
 
-	var isObject = Lib.isObject;
-	var isEmpty  = Lib.isEmpty;
-	var isString = Lib.isString;
-	var mixin    = Lib.mixin;
-	var defProp  = Lib.defProp;
-	
-	function setEventType( event, type ) {
+	var NativeEvent = window.Event;
+
+	function mixinEvent(newEvt, orgEvt) {
+		// summary:
+		//		Mixin a synthetic or native event with a new synthetic event.
+		// newEvt: SyntheticEvent
+		// orgEvt: SyntheticEvent|NativeEvent
+		// returns: SyntheticEvent
+		// tag:
+		//		private
+		var key;
+		for (key in orgEvt) {
+			if (typeof orgEvt[key] != "function") {
+				newEvt[key] = orgEvt[key];
+			}
+		}
+		return newEvt;
+	}
+
+	function setEventType(event, type) {
 		// summary:
 		//		Validate and set the event type.
 		// event: Event
@@ -38,14 +52,13 @@ define(["../../_base/Library",
 		// tag:
 		//		Private
 		if (isString(type)) {
-			event.type = type;
-			return type;
-		}  else {
-			throw new StoreError( "TypeError", "setEventType", "invalid event type");
+			defProp(event, "type", {value: type, enumerable: true, writable: false});
+		} else {
+			throw new TypeError("invalid event type");
 		}
 	}
 
-	function Event (type, properties) {
+	function SyntheticEvent(type, properties) {
 		// summary:
 		//		Implements a DOM level 4 event
 		// type: String
@@ -54,20 +67,19 @@ define(["../../_base/Library",
 		// tag:
 		//		Public
 
-		// allow for copying an event: (e.g. new Event(event) )
-		if (type instanceof Event) {
-			return mixin(this,type);
+		if (this == null) {
+			throw new TypeError("SytheticEvent constructor cannot be called as a function");
 		}
-
 		// Public properties
-		this.currentTarget = null;
-		this.target        = null;
-		this.bubbles       = false;
-		this.cancelable    = false;
-		this.eventPhase    = Event.NONE;
-		this.isTrusted     = false;				// False by default...
-		this.timeStamp     = Date.now();
-		this.type          = "";
+		this.type             = "";
+		this.target           = null;
+		this.currentTarget    = null;
+		this.eventPhase       = SyntheticEvent.NONE;
+		this.bubbles          = false;
+		this.cancelable       = false;
+		this.defaultPrevented = false;
+		this.isTrusted        = false;				// False by default...
+		this.timeStamp        = Date.now();
 
 		this.initEvent = function (type, bubbles, cancelable, detail) {
 			// summary:
@@ -87,19 +99,20 @@ define(["../../_base/Library",
 			if (!this.dispatch) {
 				this.cancelable = (cancelable !== undefined ? !!cancelable : this.cancelable);
 				this.bubbles    = (bubbles    !== undefined ? !!bubbles    : this.bubbles);
-				this.type       = type ? setEventType(this, type) : this.type;
+
+				setEventType(this, (type || this.type));
 
 				if (detail && isObject(detail) && !isEmpty(detail)) {
 					this.detail = detail;
 				}
-				this.currentTarget = null;
-				this.canceled      = false;
-				this.eventPhase    = Event.NONE;
-				this.stopImmediate = false;
-				this.stopPropagate = false;
-				this.target        = null;
+				this.target           = null;
+				this.currentTarget    = null;
+				this.eventPhase       = SyntheticEvent.NONE;
+				this.defaultPrevented = false;
+				this.stopImmediate    = false;
+				this.stopPropagate    = false;
 			}
-		}
+		};
 
 		this.preventDefault = function () {
 			// summary:
@@ -107,13 +120,13 @@ define(["../../_base/Library",
 			//		default actions normally taken by the implementation as a result of
 			//		the event must not occur.
 			//
-			// 		Note: This method does not stop the event propagation.
+			//		Note: This method does not stop the event propagation.
 			// tag:
 			//		Public
 			if (this.cancelable) {
-				this.canceled = true;  // DOM4						
+				this.defaultPrevented = true;
 			}
-		}
+		};
 
 		this.stopImmediatePropagation = function () {
 			// summary:
@@ -123,7 +136,7 @@ define(["../../_base/Library",
 			//		Public
 			this.stopPropagate = true;
 			this.stopImmediate = true;
-		}
+		};
 
 		this.stopPropagation = function () {
 			// summary:
@@ -132,26 +145,32 @@ define(["../../_base/Library",
 			// tag:
 			//		Public
 			this.stopPropagate = true;
-		}
+		};
 
 		// Add and hide protected flags
-		EVENT_FLAGS.forEach( function (flag) {
-			Lib.defProp( this, flag, {value:false, enumerable: false, writable:true});
+		flags.forEach(function (flag) {
+			defProp(this, flag, {value: false, writable: true});
 		}, this);
 
 		if (arguments.length) {
-			mixin( this, properties);
-			this.type = type ? setEventType( this, type ) : "";
-
-			Lib.writable( this, "isTrusted, timeStamp", false );
+			var evtType = type;
+			// allow for copying an event: (e.g. new sytheticEvent(event))
+			if (type instanceof SyntheticEvent || (NativeEvent && type instanceof NativeEvent)) {
+				mixinEvent(this, type);
+				evtType = type.type;
+			}
+			mixin(this, properties);
+			setEventType(this, evtType);
+			lib.writable(this, "type, isTrusted, timeStamp", false);
 		}
-	}
+		return this;
+	}	/* end SyntheticEvent() */
 
 	// Event phases...
-	Event.NONE            = 0;
-	Event.CAPTURING_PHASE = 1;
-	Event.AT_TARGET       = 2;
-	Event.BUBBLING_PHASE  = 3;
-	
-	return Event;
+	SyntheticEvent.NONE            = 0;
+	SyntheticEvent.CAPTURING_PHASE = 1;
+	SyntheticEvent.AT_TARGET       = 2;
+	SyntheticEvent.BUBBLING_PHASE  = 3;
+
+	return SyntheticEvent;
 });

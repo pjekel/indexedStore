@@ -4,29 +4,28 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["../_base/Library",
-				"../error/createError!../error/StoreErrors.json"
-			 ], function (Lib, createError) {
+define(["../_base/library",
+		"../error/createError!../error/StoreErrors.json"
+	], function (lib, createError) {
 	"use strict";
-	
+
 	// module:
 	//		indexedStore/listener/Listener
 	// summary:
 
-	var StoreError = createError( "Listener" );		// Create the StoreError type.
-	var isString   = Lib.isString;
-	var mixin      = Lib.mixin;
-	var undef;
-	
-	function Listener (callback, scope /*[,arg0 [,arg1, ..., argn]]*/) {
+	var StoreError = createError("Listener");		// Create the StoreError type.
+	var isString   = lib.isString;
+	var mixin      = lib.mixin;
+
+	function Listener(callback, scope /*[,arg0 [,arg1, ..., argN]]*/) {
 		// summary:
 		//		Create a generic Listener object.
 		// callback: Function|Listener|String
-		//		A function, an instance of Listener or a function name. If callback 
+		//		A function, an instance of Listener or a function name. If callback
 		//		is an instance of Listener a new copy of the Listener is returned.
 		//		If callback is a string it is considered a function name used for
 		//		late binding. (See ListenerList.trigger for details).
@@ -44,24 +43,24 @@ define(["../_base/Library",
 		this.listener = callback;
 		if (arguments.length > 0) {
 			if (callback instanceof Listener) {
-				mixin (this, callback);
+				mixin(this, callback);
 			} else if (isString(callback)) {
 				// allow for late binding.
 				this.bindName = callback;
-				this.listener = undef;
+				this.listener = undefined;
 			}
 			if (this.listener && !(this.listener instanceof Function)) {
 				throw new StoreError("TypeError", "Listener", "callback is not a callable object");
 			}
 			if (arguments.length > 2) {
 				// save optional arguments...
-				this.args = Array.prototype.slice.call(arguments,2);
+				this.args = Array.prototype.slice.call(arguments, 2);
 			}
-			if (scope) this.scope = scope;
+			if (scope) {
+				this.scope = scope;
+			}
 		}
 		return this;
 	}
-	
 	return Listener;
-
 });	/* end define() */

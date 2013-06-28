@@ -4,19 +4,18 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
-
 define(["dojo/_base/declare",
-				"../_base/Keys",
-				"../_base/Library",
-				"../error/createError!../error/StoreErrors.json",
-				"./_Path",
-        "./_PathList"
-        ], function (declare, Keys, Lib, createError, Path, PathList) {
+		"../_base/Keys",
+		"../_base/library",
+		"../error/createError!../error/StoreErrors.json",
+		"./_Path",
+		"./_PathList"
+	], function (declare, Keys, lib, createError, Path, PathList) {
 	"use strict";
-	
+
 	// module:
 	//		store/extension/Ancestry
 	// summary:
@@ -31,30 +30,26 @@ define(["dojo/_base/declare",
 	//			- getSiblings()
 	//
 	//		and many more....
+	var StoreError = createError("Ancestry");		// Create the StoreError
+	var isObject   = lib.isObject;
 
-	var StoreError = createError("Ancestry");		// Create the StoreError 
-	var isObject   = Lib.isObject;
-	var undef;
-	
-	var Ancestry = {
+	var Ancestry = declare(null, {
 		// summary:
 		//		The Ancestry object is a collection of functions adding additional
 		//		capabilities to the Hierarchy extension.
-
 		constructor: function () {
 			if (this.features.has("hierarchy")) {
 				this.features.add("ancestry");
 			} else {
-				throw new StoreError( "MethodMissing", "constructor", "hierarchy extension required");
+				throw new StoreError("MethodMissing", "constructor", "hierarchy extension required");
 			}
 		},
-		
+
 		//=========================================================================
 		// Private methods
-
-		_anyToObject: function (/*Object|Key*/ any) {
+		_anyToObject: function (any) {
 			// summary:
-			// any:
+			// any: Object|Key
 			// returns:
 			//		An Object | undefined
 			// tag:
@@ -71,13 +66,15 @@ define(["dojo/_base/declare",
 
 		//=========================================================================
 		// Public methods
-
-		analyze: function (/*Number*/ maxCount ) {
+		analyze: function (cleanup, maxCount) {
 			// summary:
 			//		Analyze the store hierarchy and report any broken links.
-			// maxCount:
-			//		The maximum number of missing object deteced before the store
-			//		analysis is aborted.
+			// cleanup: Boolean?
+			//		If true, references to missing parents will be removed from
+			//		the child object.
+			// maxCount: Number?
+			//		The maximum number of missing objects detected before store
+			//		analysis is aborted. maxCount is ignored if cleanup is true.
 			// returns:
 			//		A key:value pairs JavaScript object. Each key represents the
 			//		identifier of a missing object.   The value is the array of
@@ -89,35 +86,37 @@ define(["dojo/_base/declare",
 			var data  = this._records || [];
 			var count = 0;
 			var miss  = {};
-			
-			data.some( function (record) {
-				var parentIds = this._getParentArray(record.value);		
-				var oops = parentIds.filter( function(parentId) {
+
+			data.some(function (record) {
+				var parentIds = this._getParentArray(record.value);
+				var oops = parentIds.filter(function (parentId) {
 					var locator = this._retrieveRecord(parentId);
 					return !(locator && locator.record);
 				}, this);
-				
-				oops.forEach( function (parentId) {
-					var ref, itemId = this.getIdentity(record.value);
-					if (ref = miss[parentId]) {
-						ref.push(itemId);
-					} else {
-						ref = [itemId];
+
+				oops.forEach(function (parentId) {
+					var child = record.value;
+					var key   = record.key;
+					var ref   = miss[parentId] || [];
+					if (ref.push(key) == 1) {
+						miss[parentId] = ref;
 						count++;
 					}
-					miss[parentId] = ref;
+					if (cleanup) {
+						this.removeParent(child, parentId);
+					}
 				}, this);
-				return (maxms && maxms <= count);
+				return (!cleanup && maxms && maxms <= count);
 			}, this);
-			return !Lib.isEmpty(miss) ? miss : null;
+			return !lib.isEmpty(miss) ? miss : null;
 		},
 
-		getAncestors: function (/*Object|Id*/ item, /*Boolean?*/ idOnly) {
+		getAncestors: function (item, idOnly) {
 			// summary:
 			//		Get all ancestors of a given item.
-			// item:
+			// item: Object|Id
 			//		A valid store object or object id.
-			// idOnly:
+			// idOnly: Boolean?
 			//		If set to true only the ancestor ids are returned.
 			// returns:
 			//		If the item exists, an array of store object or ids otherwise
@@ -126,9 +125,8 @@ define(["dojo/_base/declare",
 			//		item.
 			// tag:
 			//		Public
-
-			function _getAncestors (store, item) {
-				store.getParents(item).forEach( function (parent) {
+			function _getAncestors(store, item) {
+				store.getParents(item).forEach(function (parent) {
 					var key = store.getIdentity(parent);
 					// Skip duplicates....
 					if (Keys.indexOf(keyList, key) == -1) {
@@ -139,21 +137,20 @@ define(["dojo/_base/declare",
 				});
 			}
 
-			var item = this._anyToObject(item);
 			var ancestors = [], keyList = [];
-
+			item = this._anyToObject(item);
 			if (item) {
-				_getAncestors (this, item);
+				_getAncestors(this, item);
 				return (idOnly ? keyList : ancestors);
 			}
 		},
 
-		getDescendants: function (/*Object|Id*/ item, /*Boolean?*/ idOnly) {
+		getDescendants: function (item, idOnly) {
 			// summary:
 			//		Get all descendants of a given item.
-			// item:
+			// item: Object|Id
 			//		A valid store object or object id.
-			// idOnly:
+			// idOnly: Boolean?
 			//		If set to true only the descendant ids are returned.
 			// returns:
 			//		If the item exists, an array of store object or ids otherwise
@@ -162,9 +159,8 @@ define(["dojo/_base/declare",
 			//		item.
 			// tag:
 			//		Public
-
-			function _getDescendants (store, item) {
-				store.getChildren(item).forEach( function (child) {
+			function _getDescendants(store, item) {
+				store.getChildren(item).forEach(function (child) {
 					var key = store.getIdentity(child);
 					if (Keys.indexOf(keyList, key) == -1) {
 						descendants.push(child);
@@ -174,61 +170,59 @@ define(["dojo/_base/declare",
 				});
 			}
 
-			var item = this._anyToObject(item);
 			var descendants = [], keyList = [];
-
+			item = this._anyToObject(item);
 			if (item) {
 				_getDescendants(this, item);
 				return (idOnly ? keyList : descendants);
 			}
 		},
 
-		getPaths: function (/*Object|Id*/ item, /*String?*/ separator) {
+		getPaths: function (item, separator) {
 			// summary:
 			//		Returns the virtual path(s) of an item. Each path segment represents
 			//		the identifier of an ancestor with the exception of the last segment
 			//		which is the item identifier.
-			// item:
+			// item: Object|Id
 			//		The item whose path(s) are to be returned. Item is either an object
 			//		or an identifier.
-			// separator:
+			// separator: String?
 			//		Specifies the character to use for separating the path segments.
 			//		Default is the forward slash (/).
 			// returns:
 			//		A PathList. If the item does not exist undefined is returned.
 			// tag:
 			//		Public
-			var item = this._anyToObject(item);
-			var sepr = separator || "/";
-			var self = this;
-			
-			function _addPath (item, path, list) {
+			var sepr = separator || "/", self = this;
+			item = this._anyToObject(item);
+
+			function _addPath(item, path, list) {
 				var parents = self.getParents(item);
 				if (parents.length) {
-					parents.forEach( function (parent) {
+					parents.forEach(function (parent) {
 						var currPath = self.getIdentity(parent) + sepr + path;
 						list = _addPath(parent, currPath, list);
 					});
 				} else {
 					// If no more parents, add current path.
 					list = list || new PathList();
-					list.push( new Path(path, sepr) );
+					list.push(new Path(path, sepr));
 				}
 				return list;
 			}
-			
+
 			if (item) {
-				var pathList = _addPath(item, this.getIdentity(item), null );
+				var pathList = _addPath(item, this.getIdentity(item), null);
 				return pathList;
 			}
 		},
 
-		getSiblings: function (/*Object|Id*/ item, /*Boolean?*/ idOnly) {
+		getSiblings: function (item, idOnly) {
 			// summary:
 			//		Get the siblings of an item.
-			// item:
+			// item: Object|Id
 			//		A valid store object or object id.
-			// idOnly:
+			// idOnly: Boolean?
 			//		If set to true only the sibling ids are returned.
 			// returns:
 			//		If the item exists, an array of store object or ids otherwise
@@ -236,103 +230,100 @@ define(["dojo/_base/declare",
 			//		that item has no siblings.
 			// tag:
 			//		Public
-			var item = this._anyToObject(item);
 			var sibl = [], keyList = [];
-			
+			item = this._anyToObject(item);
+
 			if (item) {
 				var id = this.getIdentity(item);
-				this.getParents(item).forEach( function (parent) {
-					this.getChildren(parent).forEach( function (child) {
+				this.getParents(item).forEach(function (parent) {
+					this.getChildren(parent).forEach(function (child) {
 						var key = this.getIdentity(child);
-						if (Keys.cmp(id,key) && Keys.indexOf(keyList,key) == -1) {
+						if (Keys.cmp(id, key) && Keys.indexOf(keyList, key) == -1) {
 							keyList.push(key);
 							sibl.push(child);
 						}
-					},this);
+					}, this);
 				}, this);
 				return (idOnly ? keyList : sibl);
 			}
 		},
 
-		isAncestorOf: function (/*Object|Id*/ ancestor, /*Object|Id*/ item) {
+		isAncestorOf: function (ancestor, item) {
 			// summary:
 			//		Returns true if the object identified by argument 'ancestor' is an
 			//		ancestor of the object identified by argument 'item'.
-			// ancestor:
+			// ancestor: Object|Id
 			//		A valid store object or object id.
-			// item:
+			// item: Object|Id
 			//		A valid store object or object id.
 			// returns:
 			//		Boolean true or false.
 			// tag:
 			//		Public
-			
 			ancestor = this._anyToObject(ancestor);
 			item     = this._anyToObject(item);
 			if (ancestor && item) {
-				var anc  = this.getAncestors( item, true );
+				var anc  = this.getAncestors(item, true);
 				return (Keys.indexOf(anc, this.getIdentity(ancestor)) != -1);
 			}
 			return false;
-			
 		},
-		
-		isChildOf: function (/*Object|Id*/ item, /*Object|Id*/ parent) {
+
+		isChildOf: function (item, parent) {
 			// summary:
 			//		Validate if an item is a child of a given parent.
-			// item:
+			// item: Object|Id
 			//		A valid store object or object id.
-			// parent:
+			// parent: Object|Id
 			//		A valid store object or object id.
 			// returns:
 			//		Boolean true or false.
 			// tag:
 			//		Public
-			var parent = this._anyToObject(parent);
-			var item   = this._anyToObject(item);
+			parent = this._anyToObject(parent);
+			item   = this._anyToObject(item);
 
-			if (this.parentProperty && (parent && item) ) {
+			if (this.parentProperty && (parent && item)) {
 				var parentIds = this._getParentArray(item);
-				return (parentIds.indexOf( this.getIdentity(parent) ) != -1);
+				return (parentIds.indexOf(this.getIdentity(parent)) != -1);
 			}
 			return false;
 		},
 
-		isDescendantOf: function (/*Object|Id*/ item, /*Object|Id*/ ancestor) {
+		isDescendantOf: function (item, ancestor) {
 			// summary:
-			//		Validate if an item is a descendant of a given ancestor. 
+			//		Validate if an item is a descendant of a given ancestor.
 			//		The following assumption must be true:
 			//		- If A is a descendant of B than B must be an ancestor of A.
-			// item:
+			// item: Object|Id
 			//		A valid store object or object id.
-			// ancestor:
+			// ancestor: Object|Id
 			//		A valid store object or object id.
 			// returns:
 			//		Boolean true or false.
 			// tag:
 			//		Public
-			return this.isAncestorOf(ancestor,item);
+			return this.isAncestorOf(ancestor, item);
 		},
-		
-		isSiblingOf: function (/*Object|Id*/ item,/*Object|Id*/ sibling) {
+
+		isSiblingOf: function (item, sibling) {
 			// summary:
 			//		Returns true if the object identified by argument 'item' is the
 			//		sibling of the object identified by argument 'sibling'.
-			// item:
+			// item: Object|Id
+			//		A valid store object or object id.
+			// sibling: Object|Id
 			//		A valid store object or object id.
 			// returns:
 			//		Boolean true or false.
 			// tag:
 			//		Public
-			var sibling = this._anyToObject(sibling);
-			var item    = this._anyToObject(item);
+			sibling = this._anyToObject(sibling);
+			item    = this._anyToObject(item);
 
 			var siblings = this.getSiblings(sibling, true);
-			return (Keys.indexOf( siblings, this.getIdentity(item)) != -1);
+			return (Keys.indexOf(siblings, this.getIdentity(item)) != -1);
 		}
-		
-	};	/* end Ancestry {} */
-
-	return declare( null, Ancestry );
-
+	});	/* end Ancestry {} */
+	return Ancestry;
 });

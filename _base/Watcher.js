@@ -4,17 +4,17 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["../_base/Keys",
-				"../_base/Library",
-				"../error/createError!../error/StoreErrors.json",
-				"../listener/ListenerList"
-			 ], function (Keys, Lib, createError, ListenerList) {
+define(["../error/createError!../error/StoreErrors.json",
+		"../listener/ListenerList",
+		"./Keys",
+		"./library",
+	], function (createError, ListenerList, Keys, lib) {
 	"use strict";
-	
+
 	// module:
 	//		IndexStore/_base/Watcher
 	// description:
@@ -35,7 +35,7 @@ define(["../_base/Keys",
 	//			void destroy ();
 	//			sequence<Listener> getListeners (optional (string or sequence<string>) property);
 	//			Handle watch ((string or sequence<string>) property,
-	//			              optional Listener listener, 
+	//			              optional Listener listener,
 	//			              optional object scope);
 	//			void unwatch ((string or sequence<string>) property,
 	//			              optional Listener listener,
@@ -47,39 +47,39 @@ define(["../_base/Keys",
 	//
 	// example:
 	//	|	require(["./Watcher", ... ], function ( Watcher, ... ) {
-	//	|	  var myStore = new Store( ... );
-	//	|   var spotter = new Watcher( store );
+	//	|		var myStore = new Store( ... );
+	//	|		var spotter = new Watcher( store );
 	//	|
 	//	|		function itemChanged (prop, item, newVal, oldVal ) {
-	//	|	    console.log(item.name," property: ",prop," has changed");
-	//	|	  }
-	//	|	  var handle = spotter.watch("hair", itemChanged );
-	//	|	         ...
-	//	|	   handle.remove();
-	//	|	   spotter.destroy();
-	//	| }); 
+	//	|			console.log(item.name," property: ",prop," has changed");
+	//	|		}
+	//	|		var handle = spotter.watch("hair", itemChanged );
+	//	|					...
+	//	|		handle.remove();
+	//	|		spotter.destroy();
+	//	|	});
 	//
 	//	|	require(["./Watcher", ... ], function ( Watcher, ... ) {
-	//	|	  var myStore = new Store( ... );
-	//	|   var spotter = new Watcher( store );
+	//	|		var myStore = new Store( ... );
+	//	|		var spotter = new Watcher( store );
 	//	|
 	//	|		function itemChanged (event) {
-	//	|	    var details = event.details;
-	//	|	    console.log(details.item.name," property: ",details.property," has changed");
-	//	|	  }
-	//	|	  spotter.watch("hair");
-	//	|	  store.on("set", itemChanged);
+	//	|			var details = event.details;
+	//	|			console.log(details.item.name," property: ",details.property," has changed");
+	//	|		}
+	//	|		spotter.watch("hair");
+	//	|		store.on("set", itemChanged);
 	//	|	         ...
-	//	|	   handle.remove();
-	//	|	   spotter.destroy();
-	//	| }); 
+	//	|		handle.remove();
+	//	|		spotter.destroy();
+	//	|	});
 
-	var StoreError = createError( "Watcher" );			// Create the StoreError type.
-	var isString   = Lib.isString;
-	var defProp    = Lib.defProp;
-	var getProp    = Lib.getProp;
+	var StoreError = createError("Watcher");			// Create the StoreError type.
+	var isString   = lib.isString;
+	var defProp    = lib.defProp;
+	var getProp    = lib.getProp;
 
-	function Watcher (source) {
+	function Watcher(source) {
 		// summary:
 		//		Create a new instance of a Watcher object.
 		// source: Store
@@ -87,7 +87,12 @@ define(["../_base/Keys",
 		// tag:
 		//		public
 
-		function watchProperty (action, key, newObj, oldObj, at) {
+		var handle   = null;
+		var propList = [];
+		var spotters = new ListenerList();
+		var self     = this;
+
+		function watchProperty(action, key, newObj, oldObj, at) {
 			// summary:
 			//		Test if any of the object properties being monitored have changed.
 			//		This method is called immediately after the store is updated.
@@ -102,23 +107,23 @@ define(["../_base/Keys",
 			// at: Number
 			// tag:
 			//		Private, callback
-			
-			function test(store, prop, newObj, oldObj ) {
-				var newVal = getProp( prop, newObj );
-				var oldVal = getProp( prop, oldObj );
+
+			function test(store, prop, newObj, oldObj) {
+				var newVal = getProp(prop, newObj);
+				var oldVal = getProp(prop, oldObj);
 				if (Keys.cmp(newVal, oldVal)) {
 					// Notify all listeners, if any.
 					spotters.trigger(prop, newObj, newVal, oldVal);
 					// Create a DOM4 style custom event.
 					if (store.eventable && !store.suppressEvents) {
 						var props = {	item: newObj,	property: prop,	newValue: newVal, oldValue: oldVal};
-						store._emit( "set", props, true );
+						store._emit("set", props, true);
 					}
 				}
-			};
+			}
 			// Only inspect updated objects, ignore new or deleted objects
 			if (propList.length && at != -1 && oldObj) {
-				propList.forEach( function (prop) {
+				propList.forEach(function (prop) {
 					test(source, prop, newObj, oldObj);
 				});
 			}
@@ -126,7 +131,7 @@ define(["../_base/Keys",
 
 		//======================================================================
 		// Public methods
-		
+
 		this.destroy = function () {
 			// summary:
 			// tag:
@@ -134,7 +139,7 @@ define(["../_base/Keys",
 			spotters.removeListener();
 			handle && handle.remove();
 		};
-		
+
 		this.getListeners = function (property) {
 			// summary:
 			//		Return the list of listeners registered with the Watcher instance
@@ -163,7 +168,7 @@ define(["../_base/Keys",
 			// listener: Function?
 			//		Callback, if specified the listener is called when the property of
 			//		a store object changed. The signature of listener is as follows:
-			//			listener( object, property, newValue, oldValue )
+			//			listener(object, property, newValue, oldValue)
 			//		The listener argument is required if the store is not eventable.
 			//		(See indexedStore/extension/Eventable)
 			//  scope: Object?
@@ -173,17 +178,17 @@ define(["../_base/Keys",
 
 			if (property) {
 				if (property instanceof Array) {
-					property.forEach( function (prop) {
-						self.watch( prop, listener );
+					property.forEach(function (prop) {
+						self.watch(prop, listener);
 					});
 				} else if (isString(property)) {
 					if (/,/.test(property)) {
-						return self.watch( property.split(/\s*,\s*/), listener );
+						return self.watch(property.split(/\s*,\s*/), listener);
 					}
 					// Single property.
 					if (Keys.validPath(property)) {
 						if (listener) {
-							spotters.addListener( property, listener, scope );
+							spotters.addListener(property, listener, scope);
 						} else {
 							if (!source.eventable) {
 								throw new StoreError("ParameterMissing", "watch", "store is not eventable, listener required");
@@ -192,7 +197,7 @@ define(["../_base/Keys",
 						if (propList.indexOf(property) == -1) {
 							// register the listener with the store.
 							if (!handle) {
-								handle = source._register( "write", watchProperty );
+								handle = source._register("write", watchProperty);
 							}
 							propList.push(property);
 						}
@@ -204,9 +209,9 @@ define(["../_base/Keys",
 				}
 				return {
 					remove: function () {
-						self.unwatch( property, listener, scope );
+						self.unwatch(property, listener, scope);
 					}
-				}
+				};
 			}
 		};
 
@@ -223,22 +228,22 @@ define(["../_base/Keys",
 			//		Public
 			if (property) {
 				if (property instanceof Array) {
-					property.forEach( function(prop) {
+					property.forEach(function (prop) {
 						self.unwatch(prop, listener, scope);
 					});
 					return;
 				}
 				if (isString(property)) {
 					if (/,/.test(property)) {
-						return self.unwatch( property.split(/\s*,\s*/), listener, scope );
+						return self.unwatch(property.split(/\s*,\s*/), listener, scope);
 					}
 				}
 				if (Keys.validPath(property)) {
 					spotters.removeListener(property, listener, scope);
 					if (!spotters.getByType(property).length) {
-						var index = Keys.indexOf(propList, property);
-						if ( index > -1) {
-							propList.splice(index,1);
+						var index = propList.indexOf(property);
+						if (index > -1) {
+							propList.splice(index, 1);
 							if (!propList.length) {
 								// Unregister from the store...
 								handle.remove();
@@ -253,15 +258,9 @@ define(["../_base/Keys",
 		};
 
 		//======================================================================
-		
-		var spotters = new ListenerList();
-		var handle   = null;
-		var propList = [];
-		var self     = this;
 
 		if (source && source.type == "store") {
-
-			defProp( this, "properties", {
+			defProp(this, "properties", {
 				get: function () {
 					return propList;
 				},
@@ -271,7 +270,5 @@ define(["../_base/Keys",
 			throw new StoreError("DataError", "constructor", "invalid source");
 		}
 	}
-	
 	return Watcher;
-
 });	/* end define() */

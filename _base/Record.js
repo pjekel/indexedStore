@@ -4,16 +4,17 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define([], function(){
+define([], function () {
+	"use strict";
 
 	// module:
 	//		store/_base/Record
 
-	function Record(key, value, revision) {
+	function Record(key, value, revision, stale) {
 		// summary:
 		//		Definition of an IndexedDB record.
 		// key: Key
@@ -23,18 +24,21 @@ define([], function(){
 		// value: Object
 		//		Record value (a JavaScript key:value pairs object).
 		// revision: Number?
+		// stale: Boolean?
 		// returns: Record
 		//		A new instance of a Record object.
 		// tag:
 		//		Public
 		this.key   = key;
-		this.rev   = revision || 0;
 		this.value = value;
+
+		// indexedStore extensions
+		this.stale = !!stale;
+		this.rev   = revision || 0;
 	}
-	
+
 	Record.prototype.destroy = function () {
-		this._destroyed = true;	
-	}
-	
+		this._destroyed = true;
+	};
 	return Record;
 });

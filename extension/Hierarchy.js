@@ -4,29 +4,29 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
 define(["dojo/_base/declare",
-				"../_base/Keys",
-				"../_base/Library",
-				"../_base/Range",
-				"../error/createError!../error/StoreErrors.json",
-				"../util/QueryResults"
-			 ], function (declare, Keys, Lib, Range, createError, QueryResults) {
+		"dojo/when",
+		"../_base/Keys",
+		"../_base/library",
+		"../_base/range",
+		"../error/createError!../error/StoreErrors.json",
+		"../util/QueryResults"
+	], function (declare, when, Keys, lib, recRange, createError, QueryResults) {
 
-	var StoreError = createError( "Hierarchy" );		// Create the StoreError type.
-	var isObject   = Lib.isObject;
-	var clone      = Lib.clone;
-	var undef;
-	
+	var StoreError = createError("Hierarchy");		// Create the StoreError type.
+	var isObject   = lib.isObject;
+	var clone      = lib.clone;
+
 	var C_INDEXNAME  = "parents";
 	// module:
 	//		store/extension/Hierarchy
 	// summary:
 
-	var Hierarchy = {
+	var Hierarchy = declare(null, {
 
 		// multiParented: Boolean|String
 		//		Indicates if the store is to support multi-parented objects. If true
@@ -52,23 +52,23 @@ define(["dojo/_base/declare",
 
 		//=========================================================================
 		// constructor
-		
-		constructor: function (kwArgs) {
+
+		constructor: function () {
 			if (this.features.has("indexed") || this.features.has("natural")) {
 				if (this.features.has("observable")) {
-					throw new StoreError( "Dependency", "constructor", "Observable must be loaded after the Hierarchy module");
+					throw new StoreError("Dependency", "constructor", "Observable must be loaded after the Hierarchy module");
 				}
 				if (this.parentProperty instanceof Array || !Keys.validPath(this.parentProperty)) {
-					throw new StoreError( "TypeError", "constructor", "invalid keypath: '%{0}'", this.parentProperty );
+					throw new StoreError("TypeError", "constructor", "invalid keypath: '%{0}'", this.parentProperty);
 				}
-				this.createIndex( C_INDEXNAME, this.parentProperty, { unique:false, multiEntry:true});
+				this.createIndex(C_INDEXNAME, this.parentProperty, { unique: false, multiEntry: true});
 
 				this.features.add("hierarchy");
 			} else {
-				throw new StoreError( "Dependency", "constructor", "base class '_Natural' or '_Indexed' must be loaded first");
+				throw new StoreError("Dependency", "constructor", "base class '_Natural' or '_Indexed' must be loaded first");
 			}
 		},
-		
+
 		//=========================================================================
 		// Private methods
 
@@ -101,15 +101,15 @@ define(["dojo/_base/declare",
 
 			if (parents) {
 				parents = (parents instanceof Array ? parents : [parents]);
-				parents.forEach( function (parent) {
+				parents.forEach(function (parent) {
 					if (isObject(parent)) {
 						parent = this.getIdentity(parent);
 					}
 					if (Keys.validKey(parent)) {
 						// Make sure we don't parent ourself or return duplicates.
-						if (Keys.cmp(parent,key) && Keys.indexOf(parentIds, parent) == -1) {
+						if (Keys.cmp(parent, key) && Keys.indexOf(parentIds, parent) == -1) {
 							parentIds.push(parent);
-						}						
+						}
 					} else {
 						throw new StoreError("DataError", "_getParentKeys", "parent id is an invalid key");
 					}
@@ -132,13 +132,54 @@ define(["dojo/_base/declare",
 			if (data instanceof Array && this.multiParented == "auto") {
 				if (data.length > 0) {
 					// Detect the multi parent mode.
-					this.multiParented = data.some( function (object) {
+					this.multiParented = data.some(function (object) {
 						return (object[this.parentProperty] instanceof Array);
 					}, this);
 				}
 			}
 			// Load the store
 			this.inherited(arguments);
+		},
+
+		_setParentType: function (value, parents) {
+			// summary:
+			//		Convert the parent(s) from a single value to an array or vice versa
+			//		depending on the value of the store multiParented property.
+			// value: Object
+			// parents: Key|Key[]
+			// tag:
+			//		Private
+			var isArray = parents instanceof Array;
+			if (this.multiParented === false) {
+				if (isArray) {
+					parents = (parents.length ? parents[0] : undefined);
+				}
+			} else if (this.multiParented === true) {
+				if (!isArray) {
+					parents = (parents ? [parents] : []);
+				}
+			} else if (this.multiParented === "auto") {
+				this.multiParented = (parents instanceof Array);
+			}
+			value[this.parentProperty] = parents;
+		},
+
+		_storeOrder: function (keys) {
+			// summary:
+			//		Retrieve the objects associated with the keys in store (natural)
+			//		order.
+			// keys: Key[]
+			// returns: Object[]
+			//		An array of objects in store order.
+			// tag:
+			//		Private
+			var loc, temp = [];
+
+			keys.forEach(function (key) {
+				loc = this._retrieveRecord(key);
+				temp[loc.eq] = loc.value;
+			}, this);
+			return temp.filter(function () { return true; });
 		},
 
 		_storeRecord: function (value, options) {
@@ -153,62 +194,18 @@ define(["dojo/_base/declare",
 			//		Record key.
 			// tag:
 			//		Private
-			var parents = value[this.parentProperty];
-			
+			var key, optKey, parents;
+
 			if (options && options.parent) {
-				var key = options.key != undef ? options.key : (options.id != undef ? options.id : null);
-				key = Keys.keyValue(this.keyPath, value) || key;
-				key = this.uppercase ? Keys.toUpperCase(key) : key;
+				optKey  = options.key != null ? options.key : (options.id != null ? options.id : null);
+				key     = Keys.keyValue(this.keyPath, value, this.uppercase) || optKey;
 				parents = this._getParentKeys(key, options.parent);
+			} else {
+				parents = value[this.parentProperty];
 			}
-			// Convert the 'parent' property to the correct format.
+			// Convert the 'parent' property to the required format.
 			this._setParentType(value, parents);
 			return this.inherited(arguments);
-		},
-
-		_setParentType: function (value, parents) {
-			// summary:
-			//		Convert the parent(s) from a single value to an array or vice versa
-			//		depending on the value of the store multiParented property.
-			// value: Object
-			// parents: Key|Key[]
-			// tag:
-			//		Private
-			var isArray = parents instanceof Array;
-			switch( this.multiParented ) {
-				case false:
-					if (isArray) { 
-						parents = (parents.length ? parents[0] : undef);	
-					}
-					break;
-				case true:
-					if (!isArray) {
-						parents = (parents ? [parents] : []);
-					}
-					break;
-				case "auto":
-					this.multiParented = (parents instanceof Array);
-					break;
-			}
-			value[this.parentProperty] = parents;
-		},
-
-		_storeOrder: function (range) {
-			// summary:
-			//		Retrieve the objects associated with the range in store (natural)
-			//		order.
-			// range: Range
-			// returns: Object[]
-			//		An array of objects in store store order.
-			// tag:
-			//		Private
-			var loc, temp = [];
-
-			range.forEach( function (key) {
-				loc = this._retrieveRecord( key );
-				temp[loc.eq] = loc.value;
-			}, this);
-			return temp.filter( function() {return true;} );
 		},
 
 		//=========================================================================
@@ -226,34 +223,33 @@ define(["dojo/_base/declare",
 			//		true if parent key(s) were successfully added otherwise false.
 
 			if (isObject(child)) {
-				var newKeys = this._getParentKeys( this.getIdentity(child), parents );
+				var newKeys = this._getParentKeys(this.getIdentity(child), parents);
 				if (newKeys.length) {
-					var oldKeys = this._getParentArray(child);
-					var newKeys = oldKeys.slice();
-					var child   = clone(child);
-					var options = {};
-					newKeys.forEach( function (key) {
+					var oldKeys  = this._getParentArray(child);
+					var oldChild = clone(child);
+					var options  = {};
+					newKeys = oldKeys.slice();
+					newKeys.forEach(function (key) {
 						// key can be an array therefore use Keys.indexOf().
-						if (Keys.indexOf(newKeys,key) == -1) {
+						if (Keys.indexOf(newKeys, key) == -1) {
 							newKeys.unshift(key);
 						}
 					});
 					// If the parents changed go update the store.
 					if (Keys.cmp(oldKeys, newKeys)) {
 						options[this.parentProperty] = newKeys;
-						this.put(child, options);
+						this.put(oldChild, options);
 						return true;
 					}
 				}
 				return false;
 			}
-			throw new StoreError( "DataError", "addParent");
+			throw new StoreError("DataError", "addParent");
 		},
 
 		getChildren: function (parent, options) {
 			// summary:
-			//		Retrieves the children of an object. If the store is a non-indexed
-			//		store the children are returned in their natural order.
+			//		Retrieves the children of an object.
 			// parent: Object
 			//		The object to find the children of.
 			// options: Store.QueryOptions
@@ -266,29 +262,31 @@ define(["dojo/_base/declare",
 
 			if (isObject(parent)) {
 				var key = this.getIdentity(parent);
+				var results;
 				if (key) {
 					var index = this.index(C_INDEXNAME);
 					var range, keys, query = {};
-					
-					// Depending on if this is an indexed or natural store we either fetch
-					// the records directly using the 'parents' index, or simply get the
-					// primary keys and fetch the records locally preserving the store
-					// order.
 
-					if (this.indexed) {
-						range = Range( index, key, "next", true, false );
+					// Depending on if this is an indexed or natural store we either
+					// fetch the records directly using the 'parents' index, or get
+					// the primary keys and fetch the records locally preserving the
+					// store order.
+
+					if (this.natural) {
+						keys  = recRange(index, key, "next", true, true);
+						range = this._storeOrder(keys);
 					} else {
-						keys  = Range( index, key, "next", true, true );
-						range = this._storeOrder( keys );
+						range = recRange(index, key, "next", true, false);
 					}
 					query[this.parentProperty] = key;
 					// Call the query() method so the result can be made observable.
-					return this.query( query, options, range );
+					results = this.query(query, options, range);
 				} else {
-					return QueryResults([]);
+					results = QueryResults([]);
 				}
+				return results;
 			}
-			throw new StoreError( "DataError", "getChildren");
+			throw new StoreError("DataError", "getChildren");
 		},
 
 		getParents: function (child) {
@@ -304,7 +302,7 @@ define(["dojo/_base/declare",
 				var parentKeys = this._getParentArray(child);
 				var parents    = [];
 
-				parentKeys.forEach( function (key) {
+				parentKeys.forEach(function (key) {
 					var parent = this.get(key);
 					if (parent) {
 						parents.push(parent);
@@ -312,21 +310,21 @@ define(["dojo/_base/declare",
 				}, this);
 				return parents;
 			}
-			throw new StoreError( "DataError", "getParents");
+			throw new StoreError("DataError", "getParents");
 		},
 
 		hasChildren: function (parent) {
 			// summary:
-			//		Test if a parent object has known children.	
+			//		Test if a parent object has known children.
 			// parent: Object
 			// returns: Boolean
 			//		 true if the parent object has known children otherwise false.
 
 			if (isObject(parent)) {
 				var index = this.index(C_INDEXNAME);
-				return Boolean( index.get(this.getIdentity(parent)) );
+				return Boolean(index.get(this.getIdentity(parent)));
 			}
-			throw new StoreError( "DataError", "hasChildren");
+			throw new StoreError("DataError", "hasChildren");
 		},
 
 		query: function (query, options /*, data */) {
@@ -346,18 +344,19 @@ define(["dojo/_base/declare",
 			// If the reserved argument data is specified the query is performed on
 			// the data argument only. (INTERNAL USE ONLY)
 
-			var data  = (arguments.length > 2 ?	arguments[2] : null);
+			var vargs = arguments;
+			var data  = (vargs.length > 2 ?	vargs[2] : null);
 			var defer = this.waiting || this.loader.loading;
 			var store = this;
 
 			// NOTE: defer is either boolean false or a dojo/promise/Promise.
 			if (defer == false || data) {
 				var objects = store.queryEngine(query, options)(data || store._records);
-				return QueryResults( store._clone ? clone(objects) : objects );
+				return QueryResults(store._clone ? clone(objects) : objects);
 			}
 			// Store is not ready or a load request is in progress.
-			var results = QueryResults( 
-				when (defer, function () {
+			var results = QueryResults(
+				when(defer, function () {
 					var objects = store.queryEngine(query, options)(store._records);
 					return store._clone ? clone(objects) : objects;
 				})
@@ -377,29 +376,27 @@ define(["dojo/_base/declare",
 			//		true if the parent key(s) were successfully removed otherwise false.
 
 			if (isObject(child)) {
-				var remKeys = this._getParentKeys( this.getIdentity(child), parents );
+				var remKeys = this._getParentKeys(this.getIdentity(child), parents);
 				if (remKeys.length) {
-					var oldKeys = this._getParentArray(child);
-					var newKeys = oldKeys.slice();
-					var child   = clone(child);
+					var oldKeys  = this._getParentArray(child);
+					var newKeys  = oldKeys.slice();
+					var oldChild = clone(child);
 					var options = {};
-					newKeys = newKeys.filter( function (key) {
+					newKeys = newKeys.filter(function (key) {
 						// key can be an array therefore use Keys.indexOf().
 						return (Keys.indexOf(remKeys, key) == -1);
 					});
 					// If the parents changed go update the store.
 					if (Keys.cmp(oldKeys, newKeys)) {
 						options[this.parentProperty] = newKeys;
-						this.put(child, options);
+						this.put(oldChild, options);
 						return true;
 					}
 				}
 				return false;
 			}
-			throw new StoreError( "DataError", "addParent");
+			throw new StoreError("DataError", "addParent");
 		}
-	};	/* end Hierarch {} */
-	
-	return declare( null, Hierarchy );
-
+	});	/* end declare() */
+	return Hierarchy;
 });	/* end define() */

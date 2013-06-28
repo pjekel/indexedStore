@@ -4,29 +4,30 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["dojo/_base/lang", 
-        "dojo/request",
-        "../shim/Array"      // ECMA-262 Array shim
-       ], function(lang, request){
+define(["dojo/request",
+		"../_base/library"
+	], function (request, lib) {
 	"use strict";
+
+	var mixin = lib.mixin;
 
 	// module:
 	//		indexedStore/error/createError
 	// summary:
 	//		The createError module returns a function which enables the definition
-	//		of a custom Error type that uses pre-defined 'named' error messages.
-	//		This module is implementaed as a dojo plugin to allow for loading error
+	//		of a custom Error type that uses predefined 'named' error messages.
+	//		This module is implemented as a dojo plug-in to allow for loading error
 	//		message definitions using external resource files.
 	// example:
 	//		The first example define the 'myError' type using a locally defined set
 	//		of error messages whereas the second example load the error messages
 	//		using an external, JSON encoded, resource file.
 	//
-	//	|	require(["module", 
+	//	|	require(["module",
 	//	|          "indexedStore/error/createError"
 	//	|         ], function (module, createError) {
 	//	|
@@ -35,25 +36,25 @@ define(["dojo/_base/lang",
 	//	|	                        ...
 	//	|	  ];
 	//	|
-	//	|	  var myError = createError( module.id, errDefs );
+	//	|	  var myError = createError(module.id, errDefs);
 	//	|
-	//	|	  function someFunction ( ... ) {
+	//	|	  function someFunction (...) {
 	//	|	    throw new myError("NotFoundError", "someFunction");
 	//	|	  }
 	//	|	});
 	//
-	//	|	require(["module", 
+	//	|	require(["module",
 	//	|          "indexedStore/error/createError!indexedStore/error/DOMErrors.json"
 	//	|         ], function (module, createError) {
 	//	|
-	//	|	  var myError = createError( module.id );
+	//	|	  var myError = createError(module.id);
 	//	|
-	//	|	  function someFunction ( ... ) {
+	//	|	  function someFunction (...) {
 	//	|	    throw new myError("NotFoundError", "someFunction");
 	//	|	  }
 	//	|	});
 	//
-	
+
 	var C_UNKNOWN = {text: "Undefined error", code: 0};
 
 	// cacheURL: Object
@@ -79,15 +80,15 @@ define(["dojo/_base/lang",
 	//
 	var errorNames = {};
 
-	function addMessage (messages) {
+	function addMessage(messages) {
 		// summary:
-		//		Add message defintions to the internal message table. Each message
+		//		Add message definitions to the internal message table. Each message
 		//		is defined by a key (e.g. the message type) and a value. The value
 		//		is an object with the following properties: 'text' and optionally
 		//		'code' and 'type'. If the type property is specified it is used
 		//		as the alias for message type.
 		//		Please note that the code property has been deprecated in the DOM
-		//		specification and is provided for backward compatability only.
+		//		specification and is provided for backward compatibility only.
 		// messages: Object
 		//		A single JavaScript key:value pairs object where each key:value pair
 		//		defines a message. Alternatively an array of key:value pair objects
@@ -97,35 +98,35 @@ define(["dojo/_base/lang",
 		//		{"NotFoundError":{"text":"The object can not be found here","code":18}}
 		// tag:
 		//		private
-		function validMsg( msgObj ) {
+		var type = Object.prototype.toString.call(messages);
+
+		function validMsg(msgObj) {
 			var key, value;
-			for(key in msgObj) {
-				if (/\W/.test(key) || !(value = msgObj[key]) || !value.text) {
+			for (key in msgObj) {
+				value = msgObj[key];
+				if (!value || !value.text || /\W/.test(key)) {
 					return false;
 				}
 			}
 			return true;
 		}
 
-		switch( Object.prototype.toString.call(messages) ) {
-			case "[object Array]":
-				messages.forEach( addMessage );
-				break;
-			case "[object Object]":
-				if (validMsg(messages)) {
-					errorNames = lang.mixin( errorNames, messages );
-				}
-				break;
+		if (type == "[object Array]") {
+			messages.forEach(addMessage);
+		} else if (type == "[object Object]") {
+			if (validMsg(messages)) {
+				errorNames = mixin(errorNames, messages);
+			}
 		}
 	}
 
-	function getMessage (type, text) {
+	function getMessage(type, text) {
 		// summary:
 		//		Create and return a message object base of the specified type and
 		//		optional message text.
 		// type: String
-		//		The message type with or without the 'Error' suffix, for example: 
-		//		'NotFoundError' or 'NotFound', both types are equivalent and are 
+		//		The message type with or without the 'Error' suffix, for example:
+		//		'NotFoundError' or 'NotFound', both types are equivalent and are
 		//		referred to as the long and abbreviated version. Please note that
 		//		The message object returned will always have the long version as
 		//		the value of the type property unless the pre-defined message has
@@ -133,7 +134,7 @@ define(["dojo/_base/lang",
 		//		instead.
 		// text: String?
 		//		Optional message text. If specified overrides the text associated
-		//		with the message type. 
+		//		with the message type.
 		// returns:
 		//		A JavaScript key:value pairs object with the properties	'type', 'code'
 		//		and 'text'. For example:
@@ -143,29 +144,32 @@ define(["dojo/_base/lang",
 		var abbr = (type || "").replace(/Error$/, "");
 		var base = abbr + "Error";
 		var msg  = {type: base, text: "", code: 0};
-		
+
 		if (abbr) {
-			msg = lang.mixin( msg, (errorNames[base] || errorNames[abbr] || C_UNKNOWN))
+			msg = mixin(msg, (errorNames[base] || errorNames[abbr] || C_UNKNOWN));
 		}
 		msg.text = text || msg.text;
 		return msg;
 	}
 
-	function createError (module, errors) {
+	function createError(module, errors) {
 		// summary:
 		//		Initialize and return the custom error type function/object.
 		// module: String?
-		//		Optional module name string. If specified it is used as the first part
-		//		of the prefix applied to every message.
+		//		Optional module name string. If specified it is used as the first
+		//		part of the prefix applied to every message.
 		// errors: Object?
-		//		Optional, A JavaScript key:value pairs object where each key:value pair
-		//		defines a message. Alternatively an array of key:value pair objects
-		//		where each object defines a message.
+		//		Optional, A JavaScript key:value pairs object where each key:value
+		//		pair defines a message. Alternatively an array of key:value pair
+		//		objects where each object defines a message.
 		// returns: Function
 		// tag:
 		//		Public
 
-		function StoreError (type, method, message) {
+		var prefix = module ? "::" : "";
+		module = module || "";
+
+		function StoreError(type, method, message) {
 			// summary:
 			//		Constructor, create a new instance of the custom error type.
 			// type: String|Error
@@ -181,12 +185,12 @@ define(["dojo/_base/lang",
 			// tag:
 			//		private
 			var path = module + (method ? (prefix + method + "()") : "");
-			var msgObj;
+			var prop, msgObj;
 
 			// If 'type' is an instance of 'Error' copy its properties
 			if (type instanceof Error) {
-				for(var prop in type){
-					if(type.hasOwnProperty(prop)){
+				for (prop in type) {
+					if (type.hasOwnProperty(prop)) {
 						this[prop] = type[prop];
 					}
 				}
@@ -202,65 +206,61 @@ define(["dojo/_base/lang",
 
 			if (arguments.length > 2) {
 				var args = Array.prototype.slice.call(arguments, 3);
-				msgObj.text = msgObj.text.replace( /\%\{(\d+)\}/g, function ( token, argIdx ) {
+				msgObj.text = msgObj.text.replace(/\%\{(\d+)\}/g, function (token, argIdx) {
 					return (args[argIdx] != undefined ? args[argIdx] : token);
 				});
 			}
 
-			this.message = (path.length ? path + ": " : "") + msgObj.text;;
-			this.code    = msgObj.code;				// deprecated but provided for backward compatability.
+			this.message = (path.length ? path + ": " : "") + msgObj.text;
+			this.code    = msgObj.code;		// deprecated but provided for backward compatibility.
 			this.name    = msgObj.type;
 
 			return this;
 		}
 
-		var prefix = module ? "::" : "";
-		var module = module || "";
-
-		addMessage( errors || {});
+		addMessage(errors || {});
 
 		StoreError.prototype = new Error();
 		StoreError.prototype.constructor = StoreError;
 
 		return StoreError;
-	};
+	}
 
 	createError.load = function (resource, require, loaded) {
 		// summary:
 		//		dojo loader plugin portion. Called by the dojo loader whenever the
 		//		module identifier, "indexedStore/error/createError", is followed by
-		//		an exclamation mark (!) and a resource string. 
+		//		an exclamation mark (!) and a resource string.
 		// resource: String
 		//		The resource string is a list of one or more module ids separated by
 		//		exclamation marks: '/path0/file0!/path1/file1!/path2/file2'
 		// require: Function
 		//		AMD require function.
 		// loaded: Function
-		//		dojo loader callback function. Called by this plugin loader when all
+		//		dojo loader callback function. Called by this plug-in loader when all
 		//		resources have been processed.
 		// tag:
 		//		public
-		
+
+		// Split the resource string into individual module ids.
+		var resources = resource.split("!");
+		var rscCount = resources.length;
+
 		function resourceDone() {
 			// Notify the dojo loader when all resources have been processed.
-			if( --rscCount == 0) {
+			if (--rscCount == 0) {
 				loaded(createError);
 			}
 		}
-
-		// Split the resource string into individual module ids.
-		var resources = resource.split("!"),
-				rscCount = resources.length;
-
 		// Try loading each resource if we haven't done so already.
-		resources.forEach( function( url ) {
+		resources.forEach(function (url) {
 			url = require.toUrl(url);
-			if ( !(url in cacheURL) ) { 
-				request( url, {handleAs: "json" } ).then ( 
+			if (!cacheURL.hasOwnProperty(url)) {
+				request(url, {handleAs: "json" }).then(
 					function (response) {
-						addMessage( response );
+						addMessage(response);
 						resourceDone();
-					}, 
+					},
 					function (err) {
 						// Known issue: http://bugs.dojotoolkit.org/ticket/16223
 						console.log(err);
@@ -283,5 +283,4 @@ define(["dojo/_base/lang",
 	};
 
 	return createError;
-
 });

@@ -4,16 +4,16 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["../../_base/Library",
-				"../../listener/ListenerList",
-				"../../error/createError!../../error/StoreErrors.json",
-				"./EventDefaults",
-				"./Event"
-			], function (Lib, ListenerList, createError, EventDefaults, Event) {
+define(["../../_base/library",
+		"../../listener/ListenerList",
+		"../../error/createError!../../error/StoreErrors.json",
+		"./EventDefaults",
+		"./Event"
+		], function (lib, ListenerList, createError, EventDefaults, Event) {
 	"use strict";
 
 	// module:
@@ -24,40 +24,11 @@ define(["../../_base/Library",
 	//	http://www.w3.org/TR/dom/		(DOM4)
 	//	http://www.w3.org/TR/DOM-Level-3-Events/
 
-	var StoreError = createError("EventTarget");		// Create the StoreError type.
-	var isString   = Lib.isString;
-	var mixin      = Lib.mixin;
-	
-	var nativeEvent = window.Event;
+	var StoreError  = createError("EventTarget");		// Create the StoreError type.
+	var NativeEvent = window.Event;
 	var PROPERTY = "parent";
 
-	function copyEvent( nativeEvent ) {
-		// summary:
-		//		Copy a native event object converting it to an Event object. Copying
-		//		the native event it will unlock all read-only properties.
-		// nativeEvent: native Event
-		// returns: Event
-		//		Instance of an Event object.
-		// tag:
-		//		Private
-		var key, newEvt, orgEvt = nativeEvent;
-		try {
-			newEvt = new Event();
-			for (key in orgEvt) {
-				// copy all properties excluding all functions.
-				if (typeof orgEvt[key] != "function") {
-					newEvt[key] = orgEvt[key];
-				}
-			}
-			Lib.writable( newEvt, "isTrusted, timeStamp", false );
-		} catch (err) {
-			// Oops, too bad, go fish...
-			return null;
-		}
-		return newEvt;
-	}
-
-	function propagate (path, phase, event) {
+	function propagate(path, phase, event) {
 		// summary:
 		//		Iterate the propagation path for the event.
 		// path: EventTarget[]
@@ -67,43 +38,43 @@ define(["../../_base/Library",
 		//		BUBBLING_PHASE
 		// event: Event
 		//		Event to be dispatched.
+		// returns: Boolean
+		//		True if further event propagation is to be stopped otherwise false.
 		// tag:
 		//		Private
-		var ct, i = 0, evt = event;
+		var curTarget, i = 0, j, lstn, listeners, evt = event;
+		curTarget = path[i++];
+		while (curTarget && !evt.stopPropagate) {
+			if (curTarget instanceof EventTarget) {
+				listeners = curTarget.getEventListeners(evt.type, phase);
+				j = 0;
+				if (listeners && listeners.length) {
+					evt.currentTarget = curTarget;
+					evt.eventPhase    = phase;
+					lstn = listeners[j++];
 
-		while( (ct = path[i++]) && !evt.stopPropagate) {
-			if (ct instanceof EventTarget) {
-				try {
-					var lstn = ct.getEventListeners(evt.type, phase);
-					if (lstn && lstn.length) {
-						var l, j = 0;
-						evt.currentTarget = ct;
-						evt.eventPhase    = phase;
-
-						while ( (l = lstn[j++]) && !evt.stopImmediate) {
-							// Make sure the event propagation is not interrupted and that any
-							// exception thrown by the handler is caught here.
-							try {
-								var cb = l.listener || (l.scope || window)[l.bindName];
-								if (cb) {
-									cb.call( ct, evt );
-								}
-							} catch (err) {
-//								console.error( "EventHandler (",event.type,"): ",err );
-								event.error = err;
+					while (lstn && !evt.stopImmediate) {
+						// Make sure the event propagation is not interrupted and that any
+						// exception thrown by the lstn is caught here.
+						try {
+							var cb = lstn.listener || (lstn.scope || window)[lstn.bindName];
+							if (cb) {
+								cb.call(curTarget, evt);
 							}
+						} catch (err) {
+//								console.error("EventHandler (",event.type,"): ", err);
+							event.error = err;
 						}
+						lstn = listeners[j++];
 					}
-				} catch (err) {
-					// Probably not an instance of EventTarget
-					console.error( err );
-				} 
+				}
 			}
+			curTarget = path[i++];
 		}
 		return !evt.stopPropagate;
 	}
 
-	function validatePath (path, target) {
+	function validatePath(path, target) {
 		// summary:
 		//		Validate the propagation path. This function is called whenever a specific
 		//		path is specified when dispatching an event. Each target in the path must
@@ -115,11 +86,10 @@ define(["../../_base/Library",
 		//		The Event target.
 		// tag:
 		//		private
-		var path = (path instanceof Array) ? path : [path];
-		var validPath = path.filter( function(evtTarget) {
-			return ( evtTarget instanceof EventTarget && evtTarget != target);
+		path = (path instanceof Array) ? path : [path];
+		return path.filter(function (evtTarget) {
+			return (evtTarget instanceof EventTarget && evtTarget != target);
 		});
-		return validPath;
 	}
 
 	function EventTarget(parent) {
@@ -135,9 +105,7 @@ define(["../../_base/Library",
 		var lists = {
 			bubbling: new ListenerList(),
 			capture: new ListenerList()
-		}
-		
-		Lib.defProp( this, PROPERTY, {value:parent,	enumerable: true, writable: true });
+		};
 
 		this.getEventListeners = function (type, phase) {
 			// summary:
@@ -152,8 +120,8 @@ define(["../../_base/Library",
 			// tag:
 			//		Public
 			var list = (phase == Event.CAPTURING_PHASE) ? lists.capture : lists.bubbling;
-			return list.getByType(type); 
-		}
+			return list.getByType(type);
+		};
 
 		this.addEventListener = function (type, callback, useCapture) {
 			// summary:
@@ -179,10 +147,10 @@ define(["../../_base/Library",
 			//		Public
 
 			var eventList = !!useCapture ? lists.capture : lists.bubbling;
-			return eventList.addListener( type, callback );
+			return eventList.addListener(type, callback);
 		};
 
-		this.on = function (/*String*/ type, /*EventListener*/ callback) {
+		this.on = function (type, callback) {
 			// summary:
 			//		Registers an event listener. This method is to provide support for
 			//		dojo/on but can also be use as an alias for addEventListener.
@@ -197,7 +165,7 @@ define(["../../_base/Library",
 			//		EventListener interface, or a function.
 			// tag:
 			//		Public
-			return this.addEventListener (type, callback, false);
+			return this.addEventListener(type, callback, false);
 		};
 
 		this.removeEventListener = function (type, callback, useCapture) {
@@ -221,7 +189,7 @@ define(["../../_base/Library",
 			//		Public
 
 			var eventList = !!useCapture ? lists.capture : lists.bubbling;
-			eventList.removeListener( type, callback );
+			eventList.removeListener(type, callback);
 		};
 
 		this.dispatchEvent = function (event, propagationPath) {
@@ -240,12 +208,12 @@ define(["../../_base/Library",
 			//		Public
 
 			if (event instanceof Event && event.type) {
-				if (!event.dispatch && event.eventPhase == Event.NONE) {		
+				if (!event.dispatch && event.eventPhase == Event.NONE) {
 					var parent = this[PROPERTY];
 					var path   = [];
 
 					if (propagationPath) {
-						path = validatePath( propagationPath, this );
+						path = validatePath(propagationPath, this);
 					} else {
 						while (parent) {
 							path.unshift(parent);
@@ -256,10 +224,10 @@ define(["../../_base/Library",
 					event.target   = this;
 
 					// Trigger any default actions required BEFORE dispatching
-					if (!event.canceled) {
+					if (!event.defaultPrevented) {
 						try {
 							EventDefaults.trigger(event.type, "before", event);
-						} catch (err) {}
+						} catch (err0) {}
 					}
 					if (!event.stopPropagate) {
 						// If there is no propagation path simply fire the event at the
@@ -275,27 +243,32 @@ define(["../../_base/Library",
 						}
 					}
 					// Trigger any default actions required AFTER dispatching
-					if (!event.canceled) {
+					if (!event.defaultPrevented) {
 						try {
 							EventDefaults.trigger(event.type, "after", event);
-						} catch (err) {}
+						} catch (err1) {}
 					}
-					// Reset the event allowing it to be re-dispatched.
+					// Reset the event.
 					event.currentTarget = null;
 					event.eventPhase    = Event.NONE;
 					event.dispatch      = false;
-					return !event.canceled;			
+
+					return !event.defaultPrevented;
 				}
-				throw new StoreError( "InvalidStateError", "dispatchEvent" );
+				throw new StoreError("InvalidStateError", "dispatchEvent");
 			} else {
-				if (event instanceof nativeEvent) {
-					if (event = copyEvent(event)) {
-						return this.dispatchEvent( event, propagationPath);
+				if (event instanceof NativeEvent) {
+					event = new Event(event);
+					if (event) {
+						return this.dispatchEvent(event, propagationPath);
 					}
 				}
 			}
-			throw new StoreError( "TypeError", "dispatchEvent", "invalid event");
-		};
+			throw new StoreError("TypeError", "dispatchEvent", "invalid event");
+		};	/* end dispatchEvent() */
+
+		// Add the 'parent' property to the EvenTarget
+		lib.defProp(this, PROPERTY, {value: parent,	enumerable: true, writable: true });
 
 	} /* end EventTarget() */
 

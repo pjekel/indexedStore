@@ -4,14 +4,13 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["dojo/_base/lang",
-				"dojo/date/stamp",
-				"dojo/json"
-			 ], function(lang, dateStamp, JSON) {
+define(["dojo/date/stamp",
+		"dojo/json"
+	   ], function (dateStamp, JSON) {
 	"use strict";
 
 	// module:
@@ -20,8 +19,8 @@ define(["dojo/_base/lang",
 	//		Sample ItemFileReadStore data handler.
 	// description:
 	//		This handler takes an dojo/data/ItemFileReadStore (IFRS) formatted data
-	//		response and converts it to a cbtree/store format. If the response data
-	//		is organized in a hiererchical structure the structure is flattened and
+	//		response and converts it to a indexedStore format. If the response data
+	//		is organized in a hierarchical structure the structure is flattened and
 	//		all object references are resolved.
 	//
 	// NOTE:
@@ -32,32 +31,32 @@ define(["dojo/_base/lang",
 	//
 	// example:
 	//	| require(["cbtree/store/Hierarchy",
-	//	|					"cbtree/store/handlers/ifrsHandler"
-	//	|				 ], function (ObjectStore, ifrsHandler) {
+	//	|		   "cbtree/store/handlers/ifrsHandler"
+	//	|		  ], function (ObjectStore, ifrsHandler) {
 	//	|
 	//	|	 var store = new ObjectStore(
-	//	|									{ url: "/some/data/location/myFile.json",
-	//	|										handleAs:"ifrs",
-	//	|										dataHandler: ifrsHandler
-	//	|									});
+	//	|		{ url: "/some/data/location/myFile.json",
+	//	|		  handleAs:"ifrs",
+	//	|		  dataHandler: ifrsHandler
+	//	|		});
 	//	|
-	//	|							 or
+	//	|					 or
 	//	|
 	//	|	 var store = new ObjectStore(
-	//	|									{ url: "/some/data/location/myFile.json",
-	//	|										handleAs:"ifrs",
-	//	|										dataHandler: {
-	//	|													handler: ifrsHandler,
-	//	|													options: {
-	//	|															childProperty: ["children"]
-	//	|																			...
-	//	|													}
-	//	|										}
-	//	|									});
+	//	|		{ url: "/some/data/location/myFile.json",
+	//	|		  handleAs:"ifrs",
+	//	|		  dataHandler: {
+	//	|			handler: ifrsHandler,
+	//	|			options: {
+	//	|				childProperty: ["children"]
+	//	|						...
+	//	|			}
+	//	|		  }
+	//	|		});
 	//	| });
-	var moduleName = "cbtree/store/handlers/ifrsHandler";
+	var moduleName = "indexedStore/handler/ifrsHandler";
 
-	function isObject( object ) {
+	function isObject(object) {
 		// summary:
 		//		Returns true if an object is a key:value pairs object.
 		return (Object.prototype.toString.call(object) == "[object Object]");
@@ -69,30 +68,32 @@ define(["dojo/_base/lang",
 		return (Object.prototype.toString.call(object) == "[object Function]");
 	}
 
-	function ifrsHandler(/*Object?*/ options) {
+	function ifrsHandler(options) {
 		// summary:
 		//		Closure for the actual data handler (e.g this.handler());
-		// options:
+		// options: Object?
 		//		JavaScript key:value pairs object.
 		// tag:
 		//		Public
 
-		this.childProperty  = ["children"];		// Default children property name
-		this.parentProperty = "parent";				// Default parent property name
-		this.idProperty     = "id";						// Default id property name/
-		this.referenceToId  = true;
-		this.typeMap        = {};							// Custom datatype map
-
 		var self = this;
 
-		this.handler = function (/*Object*/ response) {
+		this.name           = "ifrs";
+		this.childProperty  = ["children"];		// Default children property name
+		this.parentProperty = "parent";			// Default parent property name
+		this.idProperty     = "id";				// Default id property name/
+		this.referenceToId  = true;
+		this.typeMap        = {};				// Custom data type map
+
+
+		this.handler = function (response) {
 			// summary:
 			//		The data handler. The handler is registered with dojo/request/handlers
 			//		The response data is converted into an array of JavaScript key:value
 			//		pairs objects ready for the consumption by any cbtree/store.
 			//		On successful completion of a dojo/request this method is called with
 			//		the request response.
-			// response:
+			// response: Object
 
 			var parentProp = self.parentProperty;
 			var childProps = self.childProperty;
@@ -106,14 +107,12 @@ define(["dojo/_base/lang",
 			var index     = {};
 			var ifrsData;
 			var maxRef    = 0;
-			
-			function addParent(/*String|Number*/ reference,/*String|Number*/ parentId ) {
+
+			function addParent(reference, parentId) {
 				// summary:
 				//		Add a parent id to the reference object
-				// reference:
-				// parentId:
-				var child;
-
+				// reference: String|Number
+				// parentId: Id
 				if (reference) {
 					var child = getReference(reference, false);
 					if (child) {
@@ -130,11 +129,11 @@ define(["dojo/_base/lang",
 				}
 			} /* end addParent() */
 
-			function flattenHierarchy(/*Object*/ parent) {
+			function flattenHierarchy(parent) {
 				// summary:
 				//		Search the parent object for children properties and add any child
-				//		that is not a reference as a seperate object to the store.
-				// parent:
+				//		that is not a reference as a separate object to the store.
+				// parent: Object
 				//		The parent object to be flattened.
 
 				var parentId = parent[identProp];
@@ -143,22 +142,22 @@ define(["dojo/_base/lang",
 				// Make sure we have an id for the object.
 				if (parentId) {
 					if (typeof parentId == "number" && parentId > autoIndex) {
-						autoIndex = Math.floor(parentId+1);
+						autoIndex = Math.floor(parentId + 1);
 					}
-				} else{
+				} else {
 					parentId = autoIndex++;
 				}
 
 				parent[identProp] = parentId;
 				index[parentId]   = parent;
 
-				allItems.push(parent)
+				allItems.push(parent);
 
 				for (property in parent) {
 					if (childProps.indexOf(property) != -1) {
 						var children = parent[property];
 						if (children && children instanceof Array) {
-							children.forEach( function (child) {
+							children.forEach(function (child) {
 								if (isObject(child) && !child._reference) {
 									// Add the parent property to the child.
 									child[parentProp] = parentId;
@@ -170,29 +169,32 @@ define(["dojo/_base/lang",
 				}
 			}	/* end flattenHierarchy() */
 
-			function getReference (/*Stirng|Number|Object*/ reference, /*Boolean*/ idOnly) {
+			function getReference(reference, idOnly) {
 				// summary:
 				//		Locate and return the object associated with the reference.
-				// reference:
+				// reference: String|Number|Object
 				//		If reference is an object the first store item that matches all
 				//		of its property values is returned, otherwise reference is used
 				//		as an identifier and the index is search to locate the item.
-				// idOnly:
+				// idOnly: Boolean?
 				//		Indicates if only the reference id is to be returned.
 				var item;
-				
+
 				if (isObject(reference)) {
-					item = allItems.filter( function (item) {
-						for (var prop in reference) {
-							if (item[prop] != reference[prop]) {
-								return false;
+					item = allItems.filter(
+						function (item) {
+							var prop;
+							for (prop in reference) {
+								if (item[prop] != reference[prop]) {
+									return false;
+								}
 							}
+							return true;
 						}
-						return true;
-					})[0];
+					)[0];
 				} else {
 					// Keep track of any undefined references.
-					if (!(item =index[reference])) {
+					if (!(item = index[reference])) {
 						if (undefRef.indexOf(reference) == -1) {
 							undefRef.push(reference);
 						}
@@ -201,13 +203,13 @@ define(["dojo/_base/lang",
 				return (item && idOnly) ? item[identProp] : item;
 			}
 
-			function mapType(/*String*/ type,/*any*/ value) {
+			function mapType(type, value) {
 				// summary:
 				//		Instantiate a custom data type.
-				// type:
-				//		Cutsom type name
-				// value:
-				//		Value to be assigned to the custom datatype.
+				// type: String
+				//		Custom type name
+				// value: any
+				//		Value to be assigned to the custom data type.
 				if (typeMap) {
 					var mapObj = typeMap[type];
 					if (mapObj) {
@@ -221,7 +223,7 @@ define(["dojo/_base/lang",
 							var dszf = mapObj.deserialize;
 							var ctor = mapObj.type;
 
-							if (isFunction(dszf))	{
+							if (isFunction(dszf)) {
 								return dszf(value);
 							}
 							if (isFunction(ctor)) {
@@ -229,27 +231,27 @@ define(["dojo/_base/lang",
 							}
 						}
 					}
-					throw new TypeError(moduleName+"::handler::mapType(): constructor missing for datatype: ["+type+"]");
+					throw new TypeError(moduleName+"::handler::mapType(): constructor missing for datatype: [" + type + "]");
 				}
-				throw new TypeError(moduleName+"::handler::mapType(): custom type detected but no mapping table available");
+				throw new TypeError(moduleName + "::handler::mapType(): custom type detected but no mapping table available");
 			} /* end customTypes() */
 
-			function resolveRefAndType(/*Object*/ object) {
+			function resolveRefAndType(object) {
 				// summary:
-				//		Resolve references and instantiate custom datatypes, if any.
-				// object:
+				//		Resolve references and instantiate custom data types, if any.
+				// object: Object
 				var objectId = object[identProp];
 				var property;
 
-				for(property in object) {
+				for (property in object) {
 					var values = object[property];
 					if (values) {
 						// Check if the values are considered children...
 						if (parentProp && childProps.indexOf(property) != -1) {
 							if (values instanceof Array) {
-								values.forEach( function (child) {
+								values.forEach(function (child) {
 									if (child._reference) {
-										addParent( child._reference, objectId );
+										addParent(child._reference, objectId);
 									}
 								});
 							}
@@ -257,24 +259,24 @@ define(["dojo/_base/lang",
 							continue;
 						}
 						if (values instanceof Array) {
-							values = values.map( function (value) {
+							values = values.map(function (value) {
 								if (isObject(value)) {
 									if (value._reference) {
-										return getReference( value._reference, refToId );
+										value = getReference(value._reference, refToId);
 									} else if (value._type) {
-										return mapType(value._type, value._value)
+										value = mapType(value._type, value._value);
 									}
 								}
 								return value;
 							});
 							// remove any undefined references.
-							object[property] = values.filter( function (item) {return !!item;});
+							object[property] = values.filter(function (item) { return !!item; });
 						} else {
 							if (isObject(values)) {
 								if (values._reference) {
-									object[property] = getReference( values._reference, refToId );
+									object[property] = getReference(values._reference, refToId);
 								} else if (values._type) {
-									object[property] = mapType( values._type, values._value );
+									object[property] = mapType(values._type, values._value);
 								}
 							}
 						}
@@ -286,15 +288,14 @@ define(["dojo/_base/lang",
 			ifrsData = JSON.parse(response.text || response.data);
 
 			if (ifrsData && ifrsData.items) {
-				var identProp	= ifrsData.identifier || identProp;
-
-				ifrsData.items.forEach( flattenHierarchy );
-				allItems.forEach( resolveRefAndType );
+				identProp = ifrsData.identifier || identProp;
+				ifrsData.items.forEach(flattenHierarchy);
+				allItems.forEach(resolveRefAndType);
 
 				// If this is a single parent reference hierarchy convert the parent
 				// property to a single value.
 				if (maxRef == 1) {
-					allItems.forEach( function (item) {
+					allItems.forEach(function (item) {
 						item[parentProp] = item[parentProp] ? item[parentProp][0] : undefined;
 					});
 				}
@@ -305,23 +306,24 @@ define(["dojo/_base/lang",
 
 			} else {
 				// Don't try to be smart and guess the file format...
-				throw new TypeError(moduleName+"::handler(): invalid IFRS file format");
+				throw new TypeError(moduleName + "::handler(): invalid IFRS file format");
 			}
 			return allItems;
 		};
 
-		this.set = function (/*String|Object*/ property, /*any?*/ value) {
+		this.set = function (property, value) {
 			// summary:
 			//		 Set a handler property value
-			// property:
+			// property: String|Object
 			//		Property name or a JavaScript key:value pairs object.
-			// value:
+			// value: any?
 			//		The property value.
 			// tag:
 			//		Public
+			var key;
 			if (property) {
 				if (isObject(property)) {
-					for (var key in property) {
+					for (key in property) {
 						this.set(key, property[key]);
 					}
 				}
@@ -330,21 +332,19 @@ define(["dojo/_base/lang",
 			this.childProperty = this.childProperty instanceof Array ? this.childProperty : [this.childProperty];
 			// Set default Date type mapping if non was provided.
 			this.typeMap = this.typeMap || {};
-			if (!this.typeMap["Date"]) {
-				this.typeMap["Date"] = {
+			if (!this.typeMap.Date) {
+				this.typeMap.Date = {
 					type: Date,
 					deserialize: function (value) {
-												 return dateStamp.fromISOString(value);
-											 }
-				}
+						return dateStamp.fromISOString(value);
+					}
+				};
 			}
 		};
 
 		if (options) {
-			this.set(options);
+			self.set(options);
 		}
 	}	/* end ifrsHandler() */
-
 	return ifrsHandler;
-
 });

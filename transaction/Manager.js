@@ -4,15 +4,15 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["../_base/Library",
-				"../dom/event/EventTarget",
-				"./_opcodes",
-				"./_Transaction"
-			 ], function (Lib, EventTarget, _opcodes, Transaction) {
+define(["../_base/library",
+		"../dom/event/EventTarget",
+		"./_opcodes",
+		"./_Transaction"
+	], function (lib, EventTarget, _opcodes, Transaction) {
 	"use strict";
 
 	// module:
@@ -35,16 +35,15 @@ define(["../_base/Library",
 
 	var transactions = [];			// List of all transactions.
 	var activeTrans  = [];			// List of active transactions.
-	
-	function TransactionManager () {
+
+	function TransactionManager() {
 		// summary:
 		//		This function implements the Transaction Manager. Please see the note
 		//		above for additional information.
 		// tag:
 		//		Public
-		"use strict";
-		
-		function cleanup (event) {
+
+		function cleanup(event) {
 			// summary:
 			//		Cleanup all remnants of a transaction. Cleanup() is called for
 			//		every transaction regardless if the transaction was successful,
@@ -53,30 +52,30 @@ define(["../_base/Library",
 			//		DOM style event. (see indexedStore/dom/event)
 			// tag:
 			//		private
-			
-			function removeFromList( list, transaction ) {
-				var idx = list.indexOf(transaction);
-				if (idx != -1) {
-					list.splice(idx,1);
-				}
-			}
 			var trans = event.target;
 
-			if (debug) { 
-				var msg = "Trans: "+trans.tid+" "+event.type;
-				if (trans.error) {
-					msg += " (reason: "+trans.error.name+")";
+			function removeFromList(list, transaction) {
+				var idx = list.indexOf(transaction);
+				if (idx != -1) {
+					list.splice(idx, 1);
 				}
-				Lib.debug( msg);
+			}
+
+			if (debug) {
+				var msg = "Trans: " + trans.tid + " " + event.type;
+				if (trans.error) {
+					msg += " (reason: " + trans.error.name + ")";
+				}
+				lib.debug(msg);
 			}
 
 			removeFromList(activeTrans, trans);
 			removeFromList(transactions, trans);
-			
-			startTransactions( transactions.slice() );
+
+			startTransactions(transactions.slice());
 		}
 
-		function execute ( transaction ) {
+		function execute(transaction) {
 			// summary:
 			//		Initiate the execution of a transaction. Calling this method does
 			//		not quarentee the transaction is actually started, it may be queued
@@ -85,19 +84,18 @@ define(["../_base/Library",
 			//		Transaction to execute.
 			// tag:
 			//		private
-			if (transaction instanceof Transaction) {
-				if ( transaction._state == _opcodes.IDLE ) {
-					transaction._state = _opcodes.PENDING;
-					transactions.push(transaction);
-					startTransactions( [transaction] );
-				}
-				return transaction;
-			} else {
+			if (!(transaction instanceof Transaction)) {
 				throw new TypeError("Invalid transaction");
 			}
-		};
-		
-		function startTransactions (transList) {
+			if (transaction._state == _opcodes.IDLE) {
+				transaction._state = _opcodes.PENDING;
+				transactions.push(transaction);
+				startTransactions([transaction]);
+			}
+			return transaction;
+		}
+
+		function startTransactions(transList) {
 			// summary:
 			//		Start transaction(s). The list of transactions is searched for all
 			//		pending transactions, of those pending transactions the one's that
@@ -110,19 +108,19 @@ define(["../_base/Library",
 			// TODO: Make sure we give ample time to read-write transactions even if
 			//       we are flooded with read-only transactions...
 
-			transList.forEach( function (trans) {
+			transList.forEach(function (trans) {
 				if (trans._state == _opcodes.PENDING) {
-					if( !violateConstraint( trans )) {
+					if (!violateConstraint(trans)) {
 						trans._state = _opcodes.ACTIVE;
 						activeTrans.push(trans);
-						setTimeout( function () {
+						setTimeout(function () {
 							trans._start();
 						}, 0);
 					} else {
 						// Transaction violates constraints, start the timer if specified.
-						if (!trans._handle == null && trans._timeout > 0) {
-							trans._handle = setTimeout( function () {
-								trans.abort.call(trans, "Timeout");
+						if (!trans._handle && trans._timeout > 0) {
+							trans._handle = setTimeout(function () {
+								trans.abort("Timeout");
 							}, trans._timeout);
 						}
 					}
@@ -131,7 +129,7 @@ define(["../_base/Library",
 			});
 		}
 
-		function violateConstraint (transaction) {
+		function violateConstraint(transaction) {
 			// summary:
 			//		Test if a transaction would violate any of the lifetime transaction
 			//		constraints given the currently active transactions.
@@ -142,7 +140,7 @@ define(["../_base/Library",
 			// tag:
 			//		private
 
-			function overlap (tranList, transaction) {
+			function overlap(tranList, transaction) {
 				// summary:
 				//		Test if the scope of a transaction overlaps with any of the
 				//		transactions in the given transaction list.
@@ -154,9 +152,10 @@ define(["../_base/Library",
 				//		True is the transaction scope overlap otherwise false.
 				// tag:
 				//		private
-				return tranList.some( function(trans) {
-					for (var storeName in transaction._scope) {
-						if (storeName in trans._scope) {
+				return tranList.some(function (trans) {
+					var storeName;
+					for (storeName in transaction._scope) {
+						if (trans._scope[storeName]) {
 							return true;
 						}
 					}
@@ -167,7 +166,7 @@ define(["../_base/Library",
 				switch (transaction.mode) {
 					case "readonly":
 						// Read-only transactions can run concurrent
-						var rwTrans = activeTrans.filter( function(trans) {
+						var rwTrans = activeTrans.filter(function (trans) {
 														 return (trans.mode != "readonly");
 													 });
 						return overlap(rwTrans, transaction);
@@ -186,7 +185,7 @@ define(["../_base/Library",
 			//		and immediately tries to start the transaction. This method replaces
 			//		the IDBDatabase.transaction interface.
 			// stores: Store|Store[]
-			// 		The object stores in the scope of the new transaction.
+			//		The object stores in the scope of the new transaction.
 			// callback: Function
 			//		A callback which will be called with the newly created transaction.
 			//		When the callback returns, the transaction is committed.
@@ -207,29 +206,30 @@ define(["../_base/Library",
 			//	|         ], function (declare, _Store, _Indexed, Manager) {
 			//	|	  var myStore = declare([_Store, _Indexed]);
 			//	|		var store = new myStore({name:"TheStore", keyPath:"id"});
-			//	|	  var trans = Manager.transaction( store, function (transaction) {
+			//	|	  var trans = Manager.transaction(store, function (transaction) {
 			//	|	    var store = transaction.objectStore("TheStore");
-			//	|			store.add( {id:"Bart", lastname:"Simpson"} );
-			//	|			store.add( {id:"Lisa", lastname:"Simpson"} );
+			//	|			store.add({id:"Bart", lastname:"Simpson"});
+			//	|			store.add({id:"Lisa", lastname:"Simpson"});
 			//	|	                      ...
-			//	|	  }, "readwrite" );
+			//	|	  }, "readwrite");
 			//	|	  trans.oncomplete = function (event) {
 			//	|	    console.log("Transaction successful");
 			//	|	  };
 			// tag:
 			//		Public
 
-			if (arguments.length > 2) {
-				if (typeof arguments[2] == "number") {
-					timeout = arguments[2];
-					mode    = "readonly";
+			var args = arguments, timer = timeout, tmode = mode;
+			if (args.length > 2) {
+				if (typeof args[2] == "number") {
+					timer = args[2];
+					tmode = "readonly";
 				}
 			}
-			var transaction = new Transaction( stores, callback, mode, timeout);
-			execute( transaction );
+			var transaction = new Transaction(stores, callback, tmode, timer);
+			execute(transaction);
 			return transaction;
 		};
-		
+
 		this.uniqueId = function () {
 			// summary:
 			//		Get a unique transaction id.
@@ -246,7 +246,7 @@ define(["../_base/Library",
 		// complete event is trapped in the capture phase as it doesn't bubble.
 		// We don't listen for errors as transaction errors are always followed
 		// by an abort event.
-		
+
 		this.addEventListener("complete", cleanup, true);
 		this.addEventListener("abort", cleanup, false);
 
@@ -256,11 +256,9 @@ define(["../_base/Library",
 	TransactionManager.prototype.constructor = TransactionManager;
 
 	// Make sure we have only one instance of TransactionManager
-	var manager = Lib.getProp( TRANSACTION_MANAGER, window);
+	var manager = lib.getProp(TRANSACTION_MANAGER, window);
 	if (!manager) {
-		manager = Lib.setProp( TRANSACTION_MANAGER, new TransactionManager(), window);
+		manager = lib.setProp(TRANSACTION_MANAGER, new TransactionManager(), window);
 	}
-
 	return manager;
-	
-})	/* end define() */
+});	/* end define() */

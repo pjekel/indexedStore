@@ -4,17 +4,17 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
 define(["./Listener",
-				"./ListenerList",
-				"../_base/Library",
-				"../error/createError!../error/StoreErrors.json"
-			 ], function (Listener, ListenerList, Lib, createError) {
+		"./ListenerList",
+		"../_base/library",
+		"../error/createError!../error/StoreErrors.json"
+	], function (Listener, ListenerList, lib, createError) {
 	"use strict";
-	
+
 	// module:
 	//		indexedStore/listener/Actions
 	// summary:
@@ -23,23 +23,22 @@ define(["./Listener",
 	//		and as such manage default actions for those list.
 	// example:
 	//	|	var myActions = new Actions();
-	//	|	var myList    = new ListenerList( myActions );
-	//	|	myList.addListener( "bingo", callback );
-	//	| myList.actions.before( "bingo", beforeBingo );
-	//	| myList.actions.after( "bingo", afterBingo );
+	//	|	var myList    = new ListenerList(myActions);
+	//	|	myList.addListener("bingo", callback);
+	//	|	myList.actions.before("bingo", beforeBingo);
+	//	|	myList.actions.after("bingo", afterBingo);
 	//	|                ...
-	//	|	myList.trigger( "bingo" );
-	
-	
+	//	|	myList.trigger("bingo");
+
 	var StoreError = createError("Actions");	// Create the StoreError type.
 	var C_DEFAULTS = ["after", "before"];			// default aspects
-	var isString   = Lib.isString;
-	
-	function Actions ( aspects ) {
+	var isString   = lib.isString;
+
+	function Actions(aspects) {
 		// summary:
 		//		Create a new instance of Actions.
 		// aspects: String?
-		//		Optional aspect types. If specified, a method is addded to the actions
+		//		Optional aspect types. If specified, a method is added to the actions
 		//		object for each aspect. User specified aspects are in addition to the
 		//		default aspects 'before' and 'after'.
 		// returns:
@@ -48,8 +47,12 @@ define(["./Listener",
 		//		following methods: addToList, after, before, removeAction and trigger.
 		// tag:
 		//		Public
-		
-		function addAction (aspect, type, action, scope) {
+
+		var actionList = {};
+		var reserved   = Object.keys(this);
+		var self       = this;
+
+		function addAction(aspect, type, action, scope) {
 			// summary:
 			//		Associate a action with a type and aspect.
 			// aspect: String
@@ -59,7 +62,7 @@ define(["./Listener",
 			//		The function called as the action for the type and aspect.
 			//		The action is called as:
 			//
-			//				action( type [, arg1[, arg2, ..., argN]]);
+			//				action(type [, arg1[, arg2, ..., argN]]);
 			//
 			//		the optional arguments is the variable list of arguments following
 			//		the scope parameter.
@@ -72,13 +75,12 @@ define(["./Listener",
 			// tag:
 			//		Private
 
-			if (isString(type)) {
-				var args   = Array.prototype.slice.call(arguments,2);
-				var action = Listener.apply(new Listener(), args);
-				return actionList[aspect].addListener( type, action );
-			} else {
-				throw new StoreError( "Parameter", "addAction", "type is missing or not a string" );
+			if (!isString(type)) {
+				throw new StoreError("Parameter", "addAction", "type is missing or not a string");
 			}
+			var args = Array.prototype.slice.call(arguments, 2);
+			var cb   = Listener.apply(new Listener(), args);
+			return actionList[aspect].addListener(type, cb);
 		}
 
 		this.removeAction = function (type, aspect) {
@@ -94,12 +96,12 @@ define(["./Listener",
 			//		Public
 			if (aspect) {
 				if (aspect instanceof Array) {
-					aspect.forEach( function (aspect) {
+					aspect.forEach(function (aspect) {
 						self.removeAction(type, aspect);
 					});
 				} else if (isString(aspect)) {
 					if (/,/.test(aspect)) {
-						self.removeAction(type, aspect.split(/\s*,\s*/) );
+						self.removeAction(type, aspect.split(/\s*,\s*/));
 					} else {
 						var list = isString(aspect) && actionList[aspect.toLowerCase()];
 						if (list && list.length) {
@@ -110,7 +112,7 @@ define(["./Listener",
 					throw new StoreError("Parameter", "clear", "invalid aspect argument");
 				}
 			} else {
-				self.removeAction( type, Object.keys(actionList) );
+				self.removeAction(type, Object.keys(actionList));
 			}
 		};
 
@@ -125,41 +127,35 @@ define(["./Listener",
 			//		Public
 			var list = actionList[aspect];
 			if (list && list.length) {
-				var args = Array.prototype.slice.call(arguments,2);
+				var args = Array.prototype.slice.call(arguments, 2);
 				args.unshift(type);
 				list.trigger.apply(list, args);
 			}
 		};
 
-		var actionList = {};
-		var reserved   = Object.keys(this);
-		var self       = this;
-
 		if (aspects) {
 			if (isString(aspects)) {
-				aspects = /,/.test(aspects) ? aspects.split( /\s*,\s*/ ) : [aspects];
+				aspects = /,/.test(aspects) ? aspects.split(/\s*,\s*/) : [aspects];
 			} else {
-				throw new StoreError( "Parameter", "constructor", "aspects argument must be a string" );
+				throw new StoreError("Parameter", "constructor", "aspects argument must be a string");
 			}
 		}
 		// Merge custom aspects with the defaults and create the appropriate methods
 		// and ListenerLists...
-		aspects = aspects ? C_DEFAULTS.concat( aspects ) : C_DEFAULTS;
-		aspects.forEach( function (aspect) {
+		aspects = aspects ? C_DEFAULTS.concat(aspects) : C_DEFAULTS;
+		aspects.forEach(function (aspect) {
 			if (reserved.indexOf(aspect) == -1) {
 				actionList[aspect] = new ListenerList();
 				// Create a method for the aspect
-				this[aspect] = function (type, action, scope) {
+				this[aspect] = function (/* type, action, scope */) {
 					var args = Array.prototype.slice.call(arguments);
 					args.unshift(aspect);
-					return addAction.apply( this, args );
+					return addAction.apply(this, args);
 				};
 			} else {
-				throw new StoreError( "Parameter", "constructor", "[%{0}] is a reserved keyword", aspect );
+				throw new StoreError("Parameter", "constructor", "[%{0}] is a reserved keyword", aspect);
 			}
 		}, this);
-
 	}
-	
 	return Actions;
 });

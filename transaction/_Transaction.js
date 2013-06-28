@@ -4,26 +4,25 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
 define(["dojo/when",
-				"dojo/promise/all",
-				"../_base/Eventer",
-				"../_base/Library",
-				"../dom/event/Event",
-				"../dom/event/EventTarget",
-				"../listener/ListenerList",
-				"../error/createError!../error/StoreErrors.json",
-				"./_Transactional",
-				"./_opcodes"
-			 ], function (when, all, Eventer, Lib, Event, EventTarget, ListenerList,
-			               createError, _Transactional, _opcodes) {
+		"dojo/promise/all",
+		"../_base/Eventer",
+		"../_base/library",
+		"../dom/event/Event",
+		"../dom/event/EventTarget",
+		"../error/createError!../error/StoreErrors.json",
+		"./_Transactional",
+		"./_opcodes"
+	], function (when, all, Eventer, lib, Event, EventTarget, createError,
+				 _Transactional, _opcodes) {
 	"use strict";
-	
+
 	// module:
-	//		IndexedStore/transaction/_Transaction
+	//		indexedStore/transaction/_Transaction
 	// summary:
 	//		This module implements the relevant parts of the IDBTransaction interface
 	//		See http://www.w3.org/TR/IndexedDB/#transaction
@@ -40,31 +39,28 @@ define(["dojo/when",
 	//		MODULE FOR ADDITIONAL INFORMATION.
 	//
 	// interface:
-	//		[Constructor((Store or sequence<Store>) stores, function callback, 
+	//		[Constructor((Store or sequence<Store>) stores, function callback,
 	//		              optional string mode, optional number timeout,
 	//		              optional boolean smart)]
 	//		interface Transaction : EventTarget {
-	//			readonly	attribute	string 	mode;
-	//			readonly	attribute	Error		error;
+	//			readonly	attribute	string	mode;
+	//			readonly	attribute	Error	error;
 	//			readonly	attribute	boolean active;
 	//			readonly	attribute	number	tid;
 	//
 	//			void abort ();
-	//		  Store objectStore (string name);
+	//			Store objectStore (string name);
 	//			attribute EventHandler	onabort;
 	//			attribute EventHandler	onerror;
 	//			attribute EventHandler	oncomplete;
 	//		};
 
 	var	TRANSACTION_MANAGER = "indexedStore.TransactionMgr";
-	var StoreError = createError( "Transaction" );		// Create the StoreError type.
+	var StoreError = createError("Transaction");		// Create the StoreError type.
 	var debug = dojo.config.isDebug || false;
-	var defProp    = Lib.defProp;
-	var getProp    = Lib.getProp;
-	
-	var undef;
-	
-	function Transaction (stores, callback, mode, timeout, smart) {
+	var getProp = lib.getProp;
+
+	function Transaction(stores, callback, mode, timeout, smart) {
 		// summary:
 		//		Implements the IDBTransaction interface
 		// stores: Store|Stores[]
@@ -87,7 +83,14 @@ define(["dojo/when",
 		// tag:
 		//		Public
 
-		function abort (error) {
+		var manager  = getProp(TRANSACTION_MANAGER, window);
+		var eventer  = new Eventer(this, "abort, complete, error");
+		var defReqs  = 0;
+		var self     = this;
+
+		smart = smart != null ? !!smart : true;
+
+		function abort(error) {
 			// summary:
 			//		Abort the transaction. Called as the result of an exception. To abort
 			//		transactions programmatically call the Transaction.abort() function
@@ -102,80 +105,78 @@ define(["dojo/when",
 				if (error) {
 					self.error = error instanceof Error ? error : new StoreError(error);
 				}
-				self.dispatchEvent( new Event("abort", {bubbles:true}));
+				self.dispatchEvent(new Event("abort", {bubbles: true}));
 			}
 		}
 
-		function commit (result) {
+		function fireError(err) {
 			// summary:
-			//		Commit the transaction.
-			// result: any
-			// tag:
-			//		Private
-			
-			if (!self._done) {
-				if (result !== false) {
-
-					// If any deferred requests have been submitted we need to wait for
-					// all of them to resolve.  If any pending request is rejected the
-					// transaction will be aborted.
-
-					if (defReqs) {
-						all(self._promLst).then( 
-							function () {
-								defReqs = 0;
-								commit();
-							}, 
-							fireError
-						);
-						return;
-					}
-					
-					var pStore, tStore, oper = self._oper.slice();
-
-					// Merge the cloned store(s) back into their parent store(s)
-					_Transactional.commit(self);
-					_Transactional.done(self);
-					
-					// The complete event does not bubble and is not cancelable....
-					var event = new Event("complete");
-					self.dispatchEvent(event);
-
-					// Finally, notify the parent store of all updates. Please note that
-					// the parent store notifications are not part of the transaction.
-
-					oper.forEach( function (vargs) {
-						tStore = vargs[0];						// Transactional store
-						pStore = tStore.parentStore;	// Parent store.
-						pStore._notify.apply( pStore, vargs[1]  );
-					});
-				} else {
-					// Execute a silent abort.
-					_Transactional.done(self);
-					self.dispatchEvent( new Event("complete") );
-				}
-			}
-		}
-
-		function fireError (err) {
-			// summary:
-			//		Fire an error event. An error occured during the processing of the 
+			//		Fire an error event. An error occurred during the processing of the
 			//		transaction, fire the error event and abort the transaction.
 			// err: Error
 			//		Error condition, typically an instance of Error.
 			// tag:
 			//		private
 			if (!self._done) {
-				var event = new Event("error", {error:err, bubbles:true, cancelable:true});
-				if (self.dispatchEvent( event )) {
+				var event = new Event("error", {error: err, bubbles: true, cancelable: true});
+				if (self.dispatchEvent(event)) {
 					abort(err);
+				}
+			}
+		}
+
+		function commit(result) {
+			// summary:
+			//		Commit the transaction.
+			// result: any
+			// tag:
+			//		Private
+			var pStore, tStore, oper;
+
+			if (!self._done) {
+				if (result !== false) {
+					// If any deferred requests have been submitted we need to wait for
+					// all of them to resolve.  If any pending request is rejected the
+					// transaction will be aborted.
+					if (defReqs) {
+						all(self._promLst).then(
+							function () {
+								defReqs = 0;
+								commit();
+							},
+							fireError
+						);
+						return;
+					}
+
+					oper = self._oper.slice();
+
+					// Merge the cloned store(s) back into their parent store(s)
+					_Transactional.commit(self);
+					_Transactional.done(self);
+
+					// The complete event does not bubble and is not cancelable....
+					var event = new Event("complete");
+					self.dispatchEvent(event);
+
+					// Finally, notify the parent store of all updates. Please note that
+					// the parent store notifications are not part of the transaction.
+					oper.forEach(function (vargs) {
+						tStore = vargs[0];				// Transactional store
+						pStore = tStore.parentStore;	// Parent store.
+						pStore._notify.apply(pStore, vargs[1]);
+					});
+				} else {
+					// Execute a silent abort.
+					_Transactional.done(self);
+					self.dispatchEvent(new Event("complete"));
 				}
 			}
 		}
 
 		//=========================================================================
 		// Protected function
-		
+
 		this._journal = function (store, vargs) {
 			// summary:
 			//		Append store mutation info to the journaling stack. Journal entries
@@ -194,12 +195,12 @@ define(["dojo/when",
 				if (append) {
 					if (smart && vargs[0] == _opcodes.DELETE) {
 						// Search for all previous operations in the same store and key.
-						var ops = this._oper.filter( function (op) {
-							return (op[0] == store && op[1][1] == vargs[1])
+						var ops = this._oper.filter(function (op) {
+							return (op[0] == store && op[1][1] == vargs[1]);
 						});
 						if (ops.length) {
-							ops.forEach( function (op) {
-								this._oper.splice( this._oper.indexOf(op), 1);
+							ops.forEach(function (op) {
+								this._oper.splice(this._oper.indexOf(op), 1);
 								if (op[1][0] == _opcodes.NEW) {
 									append = false;
 								}
@@ -209,18 +210,18 @@ define(["dojo/when",
 					}
 				}
 				if (append) {
-					this._oper.push( arguments );
+					this._oper.push(arguments);
 					store._updates++;
 				}
 			} else {
-				throw new StoreError( "TransactionInactive", "_journal");
+				throw new StoreError("TransactionInactive", "_journal");
 			}
 		};
 
 		this._start = function () {
 			// summary:
 			//		Start the transaction (e.g call the user specified callback). If
-			//		the callback throws an exception the transaction is aborted and 
+			//		the callback throws an exception the transaction is aborted and
 			//		the exception is re-thrown. If the callback returns boolean false
 			//		the transaction will complete successful but all operations are
 			//		dismissed and no changes are made to the parent nor is there an
@@ -229,13 +230,13 @@ define(["dojo/when",
 			//		protected
 
 			if (!this._done) {
-				if (debug) { Lib.debug( "Trans: "+this.tid+" started");	}
-				// Clone all stores part of the transaction 
+				if (debug) { lib.debug("Trans: " + this.tid + " started");	}
+				// Clone all stores part of the transaction
 				_Transactional.setup(this);
-				try  {
-					when( callback(this), commit, fireError );
+				try {
+					when(callback(this), commit, fireError);
 				} catch (err) {
-					fireError(err );
+					fireError(err);
 				}
 			}
 		};
@@ -254,13 +255,13 @@ define(["dojo/when",
 
 		//=========================================================================
 		// Public methods
-		
+
 		this.abort = function () {
 			// summary:
 			//		Abort the transaction programmatically.
 			// tag:
 			//		public
-			if ( !this._done ) {
+			if (!this._done) {
 				abort(null);
 			} else {
 				throw new StoreError("InvalidStateError", "abort", "Transaction already committed or aborted.");
@@ -287,12 +288,6 @@ define(["dojo/when",
 
 		//=========================================================================
 
-		var manager   = getProp( TRANSACTION_MANAGER, window);
-		var eventer   = new Eventer( this, "abort, complete, error" );
-		var smart     = smart != undef ? !!smart : true;
-		var defReqs   = 0;
-		var self      = this;
-		
 		this._done    = false;
 		this._handle  = null;
 		this._promLst = [];
@@ -300,11 +295,11 @@ define(["dojo/when",
 		this._scope   = {};
 		this._state   = _opcodes.IDLE;
 		this._timeout = timeout || 0;
-		
+
 		this.tid      = manager.uniqueId();		// For debug only
 		this.active   = true;
 		this.mode     = "readonly";
-		
+
 		EventTarget.call(this, manager);
 
 		if (!(typeof callback == "function")) {
@@ -312,13 +307,10 @@ define(["dojo/when",
 		}
 		// Validate the transaction mode, default is "readonly".
 		if (mode) {
-			switch( mode ) {
-				case "readwrite":
-				case "readonly":
-					this.mode = mode;
-					break;
-				default:
-					throw new StoreError("TypeError", "constructor", "invalid mode specified");
+			if (mode === "readonly" || mode === "readwrite") {
+				this.mode = mode;
+			} else {
+				throw new StoreError("TypeError", "constructor", "invalid mode specified");
 			}
 		}
 		if (typeof this._timeout != "number" || this._timeout < 0) {
@@ -334,34 +326,33 @@ define(["dojo/when",
 			// isn't set until the transaction is actually started, this because the
 			// store may still change while the transaction is pending.
 
-			stores.forEach( function (store) {
+			stores.forEach(function (store) {
 				if (store.type == "store" && store.name) {
-					this._scope[store.name] = {parent: store, clone: undef};
+					this._scope[store.name] = {parent: store, clone: undefined};
 				} else {
-					throw new StoreError( "TypeError", "constructor", "invalid store");
+					throw new StoreError("TypeError", "constructor", "invalid store");
 				}
-			}, this );
+			}, this);
 		} else {
-			throw new StoreError( "DataError", "constructor", "store argument required");
+			throw new StoreError("DataError", "constructor", "store argument required");
 		}
 
 		// Listen for errors from a store or its index. The default propagation path
 		// of an error is: Index -> Store ->Transaction -> Manager
-		
+
 		this.addEventListener("error", function (event) {
 			if (event.eventPhase != Event.AT_TARGET) {
 				abort(event.error);
 			}
 		});
 
-		Lib.writable(this, "tid, mode, parent", false);
+		lib.writable(this, "tid, mode, parent", false);
 		// Hide protected properties.
-		Lib.protect(this);
+		lib.protect(this);
 	}	/* end Transaction() */
 
 	Transaction.prototype = new EventTarget();
 	Transaction.prototype.constructor = Transaction;
 
 	return Transaction;
-	
-})	/* end define() */
+});	/* end define() */

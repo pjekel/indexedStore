@@ -4,135 +4,133 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["../error/createError!../error/StoreErrors.json", 
-				"../shim/shims"
-			 ], function (createError) {
+define(["../shim/shims"], function () {
+	"use strict";
 
 	// module:
-	//		indexedStore/_base/Library
+	//		indexedStore/_base/library
 	// summary:
 	//		The Library module provides a set of common functions shared by many
 	//		other modules.
-	
-	var StoreError = createError( "Library" );
-	var _toString  = Object.prototype.toString;
-  var undef;
-  
-	var Lib = {
 
-		clone: function clone (object, strict) {
+	var _toString  = Object.prototype.toString;
+
+	var lib = {
+
+		clone: function clone(object, strict) {
 			// summary:
-			// 		html5 structured cloning algorithm. (no type map support)
+			//		html5 structured cloning algorithm. (no type map support)
 			// object: any
 			//		Object to clone.
 			// strict: Boolean?
 			// tag:
 			//		Public
 
-			function inMemory(memory, object) {
-				var obj;
-				memory.some( function(e) {
-					if (e.inObj === object) {
-						obj = e.outObj;
-						return true;
+			function cloneObj(o, m, s) {
+				// summary:
+				//		Clone an object
+				// o: any
+				// m: Object[]
+				// s: Boolean?
+				// returns: any
+				// tag:
+				//		protected
+				if (o === null || !(o instanceof Object)) {
+					return o;
+				}
+				// Check if we already have a copy
+				var i, l = m.length;
+				for (i = 0; i < l; i++) {
+					if (m[i].o === o) {
+						return m[i].c;
 					}
-				});
-				return obj;
-			}
-
-			function cloneObj( object, memory ) {
-				if (object === null || !(object instanceof Object)) {
-					return object;
 				}
-				if ( (obj = inMemory(memory,object)) ) {
-					return obj;
-				}
-				var type = _toString.call(object).slice(8,-1);
-				switch (type) {
+				var t = lib.getClass(o);
+				switch (t) {
 					case "Object":
 					case "Array":
-						var val, key, obj = new object.constructor();
-						for (key in object) {
-							val = object[key];
-							// try to minimize recursion
-							if (val !== null && (val instanceof Object)) {
-								obj[key] = cloneObj(val, memory);
-							} else {
-								obj[key] = val;
-							}
+						var k, c = new o.constructor();
+						for (k in o) {
+							c[k] = cloneObj(o[k], m, s);
 						}
-						memory.push( {inObj:object, outObj:obj} );
-						return obj;
+						m.push({o: o, c: c});
+						return c;
 					case "Date":
-						return new Date( object.valueOf() );
+						return new Date(o.valueOf());
 					case "RegExp":
-						return new RegExp(object);
+						return new RegExp(o);
 					case "Blob":
 					case "File":
-						return object.slice(0, object.size, object.type);
+						return o.slice(0, o.size, o.t);
 					default:
-						if (!strict) {
-							return object;
+						s = s !== undefined ? !!s : true;
+						if (!s) {
+							return o;
 						}
-						break;
 				}
-				throw new StoreError("DataCloneError", "clone", "objects of type [%{0}] can not be cloned", type);
+				var e = new Error("objects of type " + t + " can not be cloned");
+				e.name = "DataCloneError";
+				throw e;
 			}
-
-			var strict = strict != undef ? !!strict : true;
 			var memory = [];
-
-			return cloneObj( object, memory );
+			return cloneObj(object, memory, strict);
 		},
 
-		copy: function (object) {
-			// summary:
-			//		create a shallow copy
-			// object: Object
-			//		A JavaScript object of class [object Object]
-			// tag:
-			//		Public
-			if (object === null || !(object instanceof Object)) {
-				return object;
-			}
-			return this.mixin(object.constructor(), object);
-		},
-
-		debug: function ( text )	{
+		debug: function (text) {
 			// summary:
 			// text: String
 			// tag:
 			//		Public
 			var msg = new Date() + (text ? " " + text : "");
-			console.info( msg );
+			console.info(msg);
 		},
 
 		defProp: function (object, prop, desc) {
-			Object.defineProperty( object, prop, desc );
+			Object.defineProperty(object, prop, desc);
 		},
 
-		enumerate: function (/*Object*/ object,/*String|String[]*/ property,/*Boolean*/ value ) {
+		delegate: function (obj, props) {
 			// summary:
-			// object:
-			// property:
-			// value:
+			// obj: Object
+			// props: Object?
+			// tag:
+			//		public
+			return props ? lib.mixin(Object.create(obj), props) : Object.create(props);
+		},
+
+		enumerate: function (object, property, value) {
+			// summary:
+			// object: Object
+			// property: String|String[]
+			// value: Boolean
 			if (object && property) {
 				if (property instanceof Array) {
-					property.forEach( function (prop) {
-						this.enumerate( object, prop, value );
+					property.forEach(function (prop) {
+						this.enumerate(object, prop, value);
 					}, this);
 				} else if (/,/.test(property)) {
-					this.enumerate( object, property.split(/\s*,\s*/), value );
+					this.enumerate(object, property.split(/\s*,\s*/), value);
 				} else if (typeof object[property] == "function") {
-					Object.defineProperty( object, property, {value: object[property], enumerable:false});
+					Object.defineProperty(object, property, {value: object[property], enumerable: false});
 				} else {
-					Object.defineProperty( object, property, {enumerable:!!value});
+					Object.defineProperty(object, property, {enumerable: !!value});
 				}
 			}
+		},
+
+		getClass: function (obj) {
+			// summary:
+			//		Get the [[Class]] property of  an object.
+			// obj: Object
+			// returns: String
+			//		the [[Class]] property of  an object.
+			// tag:
+			//		public
+			return _toString.call(obj).slice(8, -1);
 		},
 
 		getProp: function (propPath, object) {
@@ -143,45 +141,45 @@ define(["../error/createError!../error/StoreErrors.json",
 			// object: (Object|Array)?
 			//		JavaScript object
 			// tag:
-			//		Private
-			object = object || window;
-			if (Lib.isObject(object) || object instanceof Array || object === window) {
-				var segm = propPath.split(".");
-				var p, i = 0;
+			//		public
+			var key, segm, i = 0, obj = object || window;
+			if (lib.isObject(obj) || obj instanceof Array || obj === window) {
+				segm = propPath.split(".");
+				key  = segm[i++];
 
-				while(object && (p = segm[i++])) {
-					object = object[p];
+				while (obj && key) {
+					obj = obj[key];
+					key = segm[i++];
 				}
-				return object;
+				return obj;
 			}
-			throw new StoreError("TypeError", "getProp", "paramter 'object' must be an object or array");
+			throw new TypeError("parameter 'obj' must be an obj or array");
 		},
 
-		isDirection: function ( direction ) {
+		isDirection: function (direction) {
 			// summary:
 			// direction: String
 			// tag:
 			//		Public
-			switch (direction) {
-				case "next": case "nextunique":
-				case "prev": case "prevunique":
-					return true;
-			}
-			return false;
+			var d = direction;
+			return (d == "next" || d == "prev" || d == "nextunique" || d == "prevunique");
 		},
-	
+
 		isEmpty: function (o) {
 			// summary:
-			//		Return true if object is empty otherwise false.
+			//		Return true if object is empty, that is, has no enumerable
+			//		properties of its own, otherwise false.
 			// o: Object
 			// tag:
 			//		Public
-			for(var prop in o) {
-				if(o.hasOwnProperty(prop)) {
-					return false;
-				}
-			}
-			return true;
+			return (o ? !Object.keys(o).length : true);
+		},
+
+		isFunction: function (obj) {
+			// summary:
+			// tag:
+			//		Public
+			return (obj && _toString.call(obj).slice(8, -1) == "Function");
 		},
 
 		isObject: function (obj) {
@@ -190,13 +188,13 @@ define(["../error/createError!../error/StoreErrors.json",
 			//		pairs object
 			// tag:
 			//		Public
-			return (obj && _toString.call(obj).slice(8,-1) == "Object");
+			return (obj && _toString.call(obj).slice(8, -1) == "Object");
 		},
 
-		isString: function(obj) {
+		isString: function (obj) {
 			// tag:
 			//		Public
-			return (_toString.call(obj).slice(8,-1) == "String");
+			return (obj !== undefined && _toString.call(obj).slice(8, -1) == "String");
 		},
 
 		move: function (objAry, from, to, value) {
@@ -218,7 +216,8 @@ define(["../error/createError!../error/StoreErrors.json",
 			var org, val = value;
 			if (val || from != to) {
 				if (from > -1) {
-					if ((org = objAry.splice(from,1)[0]) && !val) {
+					org = objAry.splice(from, 1)[0];
+					if (org && !val) {
 						val = org;
 					}
 				}
@@ -227,85 +226,90 @@ define(["../error/createError!../error/StoreErrors.json",
 					objAry.splice(to, 0, val);	// Insert new or updated value.
 				}
 			} else {
-				val = from > -1 ? objAry[from] : undef;
+				val = from > -1 ? objAry[from] : undefined;
 			}
 			return val;
 		},
 
-		mixin: function (dest, objects) {
+		mixin: function (dest /* *[,obj] */) {
+			// summary:
+			// dest: Object?
+			// obj: Object*
+			//		A list of comma separated objects
 			// tag:
 			//		Public
-			var k, o, s, i=1, empty = {};
-			var d = dest || {};
+			var i = 1, emp = {};
+			var obj = arguments[i++];
+			var dst = dest || {};
 
-			while (o = arguments[i++]) {
-				for (k in o) {
-					s = o[k];
-					if(!(k in d) || (d[k] !== s && (!(k in empty) || empty[k] !== s))){
-						d[k] = s
+			while (obj) {
+				var key, val;
+				for (key in obj) {
+					val = obj[key];
+					if (!(key in dst) || (dst[key] !== val && (!(key in emp) || emp[key] !== val))) {
+						dst[key] = val;
 					}
 				}
+				obj = arguments[i++];
 			}
-			return d;
+			return dst;
 		},
 
 		protect: function (object) {
+			// summary:
+			// object: Object
 			// tag:
 			//		Public
-			var props = Object.keys(object).filter( function(prop) {	return /^_/.test(prop);} );
-//			this.enumerate( object, props, false );
+			var props = Object.keys(object).filter(function (prop) { return (/^_/).test(prop); });
+//			this.enumerate(object, props, false);
 		},
-		
-		setProp: function (propPath,/*any*/ value, object) {
+
+		setProp: function (propPath, value, object) {
 			// summary:
 			//		Set the property value
 			// propPath: String
 			//		A dot (.) separated property name like: feature.attribute.type
+			// value: any
 			// object: (Object|Array)?
-			// value:
+			// returns: any
+			//		The new property value.
 			// tag:
 			//		Private
-			object = object || window;
-			if (this.isObject(object) || object instanceof Array || object === window) {
+			var i = 0, obj = object || window;
+			if (lib.isObject(obj) || obj instanceof Array || obj === window) {
 				var segm = propPath.split(".");
 				var prop = segm.pop();
+				var key  = segm[i++];
 
-				if (segm.length) {
-					var p, i = 0;
-
-					while(object && (p = segm[i++])) {
-						object = (p in object) ? object[p] : object[p] = {};
-					}
+				while (obj && key) {
+					obj = (key in obj) ? obj[key] : obj[key] = {};
+					key = segm[i++];
 				}
-				object[prop] = value;
+				obj[prop] = value;
 				return value;
 			}
-			throw new StoreError("TypeError", "setProp", "parameter 'object' must be an object or array");
+			throw new TypeError("parameter 'obj' must be an obj or array");
 		},
 
-		writable: function (object, property, value ) {
+		writable: function (object, property, value) {
 			// summary:
 			// object: Object
 			// property: String|String[]
 			// value: Boolean
 			// tag:
 			//		Public
-
 			if (object && property) {
 				if (property instanceof Array) {
-					property.forEach( function (prop) {
-						this.writable( object, prop, value );
+					property.forEach(function (prop) {
+						this.writable(object, prop, value);
 					}, this);
 				} else if (/,/.test(property)) {
-					this.writable( object, property.split(/\s*,\s*/), value );
+					this.writable(object, property.split(/\s*,\s*/), value);
 				} else {
-					this.defProp( object, property, {writable:value});
+					this.defProp(object, property, {writable: value});
 				}
 			}
 		}
-
-	};
-
-	return Lib;
-	
+	};	/* end lib */
+	return lib;
 });

@@ -4,33 +4,26 @@
 //
 //	The IndexedStore is released under to following two licenses:
 //
-//	1 - The "New" BSD License				(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
-//	2 - The Academic Free License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
+//	1 - The "New" BSD License		(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L13)
+//	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["dojo/_base/lang",
-				"./Listener",
-				"../_base/Library",
-				"../error/createError!../error/StoreErrors.json"
-			 ], function (lang, Listener, Lib, createError) {
+define(["./Listener",
+		"../_base/library",
+		"../error/createError!../error/StoreErrors.json"
+	], function (Listener, lib, createError) {
 	"use strict";
 	// module:
 	//		indexedStore/listener/ListenerList
 	// summary:
 	//		This module implements the ListenerList object. A ListenerList object
 	//		is a container of Listener instances arranged by type.
-	
-	var StoreError = createError( "ListenerList" );		// Create the StoreError type.
-	var isString   = Lib.isString;
-	var defProp    = Lib.defProp;
-	
-	function assert( object, method ) {
-		if (!object || !(object instanceof ListenerList)) {
-			throw new StoreError("TypeError", method, "object does not implement the ListenerList interface");	
-		}
-	}
 
-	function ListenerList (actions) {
+	var StoreError = createError("ListenerList");		// Create the StoreError type.
+	var isString   = lib.isString;
+	var defProp    = lib.defProp;
+
+	function ListenerList(actions) {
 		// summary:
 		//		Create a new instance of ListenerList
 		// actions: Actions?
@@ -38,7 +31,12 @@ define(["dojo/_base/lang",
 		//		will be associated with the ListenerList (see also setActions())
 		// tag:
 		//		public
-		
+
+		var destroyed = false;
+		var listeners = {};
+		var count     = 0;
+		var self      = this;
+
 		function removeAll(type) {
 			// summary:
 			//		Remove all registered listeners for a given type. If type is omitted
@@ -49,13 +47,11 @@ define(["dojo/_base/lang",
 			//		public
 			if (type) {
 				if (type instanceof Array) {
-					type.forEach(  function (type) {
-						removeAll(type);
-					}, this);
+					type.forEach(removeAll);
 				} else if (isString(type)) {
 					if (/,/.test(type)) {
-						removeAll(type.split(/\s*,\s*/) );
-					}	else {
+						removeAll(type.split(/\s*,\s*/));
+					} else {
 						var lsByType = listeners[type];
 						if (lsByType) {
 							delete listeners[type];
@@ -88,35 +84,33 @@ define(["dojo/_base/lang",
 
 			if (destroyed) {
 				throw new StoreError("InvalidState", "addListener", "ListenerList was destroyed");
-			}
-			if (listener) {
-				if (type instanceof Array) {
-					type.forEach( function(type) {
-						self.addListener(type, listener, scope);
-					});
-				} else if (isString(type)) {
-					if (/,/.test(type)) {
-						return self.addListener( type.split(/\s*,\s*/), listener, scope );
-					}
-					self.removeListener( type, listener );
-					var lsByType = listeners[type] || [];
-
-					listener = new Listener( listener, scope );
-
-					lsByType.push(listener);
-					listeners[type] = lsByType;
-					count++;
-				} else {
-					throw new StoreError("Parameter", "addListener", "invalid type argument");
-				}
-				return {
-					remove: function () {
-						self.removeListener( type, listener, scope );
-					}
-				}
-			} else {
+			} else if (!listener) {
 				throw new StoreError("Parameter", "addListener", "listener argument required");
 			}
+			if (type instanceof Array) {
+				type.forEach(function (type) {
+					self.addListener(type, listener, scope);
+				});
+			} else if (isString(type)) {
+				if (/,/.test(type)) {
+					return self.addListener(type.split(/\s*,\s*/), listener, scope);
+				}
+				self.removeListener(type, listener);
+				var lsByType = listeners[type] || [];
+
+				listener = new Listener(listener, scope);
+
+				lsByType.push(listener);
+				listeners[type] = lsByType;
+				count++;
+			} else {
+				throw new StoreError("Parameter", "addListener", "invalid type argument");
+			}
+			return {
+				remove: function () {
+					self.removeListener(type, listener, scope);
+				}
+			};
 		};
 
 		this.destroy = function () {
@@ -145,8 +139,9 @@ define(["dojo/_base/lang",
 			if (type) {
 				list = (listeners[type] || []).slice();
 			} else {
-				for (type in listeners) {
-					list[type] = listeners[type].slice();
+				var key;
+				for (key in listeners) {
+					list[key] = listeners[key].slice();
 				}
 			}
 			return list;
@@ -158,13 +153,13 @@ define(["dojo/_base/lang",
 			// callback: Function
 			// tag:
 			//		Public
-			
+
 			if (typeof callback == "function") {
 				var lsByType = listeners[type];
 				var listener;
-				
+
 				if (lsByType) {
-					lsByType.some( function (l, i) {
+					lsByType.some(function (l, i) {
 						if (l.listener == callback) {
 							listener = lsByType[i];
 							return true;
@@ -174,12 +169,12 @@ define(["dojo/_base/lang",
 				return listener;
 			}
 			throw new StoreError("Parameter", "getByCallback", "callback is not a callable object");
-		}
+		};
 
 		this.getListeners = function () {
 			return this.getByType();
-		}
-		
+		};
+
 		this.removeListener = function (type, listener, scope) {
 			// summary:
 			//		Remove a listener from the list
@@ -198,10 +193,10 @@ define(["dojo/_base/lang",
 
 			if (listener) {
 				if (!(listener instanceof Listener)) {
-					listener = new Listener( listener, scope );
+					listener = new Listener(listener, scope);
 				}
 				if (type instanceof Array) {
-					type.forEach( function(type) {
+					type.forEach(function (type) {
 						self.removeListener(type, listener, scope);
 					});
 				} else if (isString(type)) {
@@ -210,7 +205,7 @@ define(["dojo/_base/lang",
 					} else {
 						var lsByType = listeners[type];
 						if (lsByType) {
-							lsByType.some( function (l, i) {
+							lsByType.some(function (l, i) {
 								if ((l.bindName && (l.bindName == listener.bindName && l.scope == listener.scope)) ||
 										(l.listener == listener.listener)) {
 									lsByType.splice(i, 1);
@@ -254,7 +249,7 @@ define(["dojo/_base/lang",
 			//		type is passed to the callback as the first argument. The callback
 			//		signature is as follows:
 			//
-			//				callback(type [,arg0 [,arg1, ... ,argN]] )
+			//				callback(type [,arg0 [,arg1, ... ,argN]])
 			//
 			// type: String
 			//		Listener type.
@@ -263,37 +258,31 @@ define(["dojo/_base/lang",
 
 			if (isString(type)) {
 				var lst = listeners[type];
-				var act = self.actions && self.actions.trigger(type,"before");
+				var act = self.actions && self.actions.trigger(type, "before");
 				if (lst) {
 					var a, c, i, T, l;
-					for (i=0; i<lst.length;i++) {
-						l = lst[i], T = l.scope;
-						c = l.listener || (T || window)[l.bindName];						
+					for (i = 0; i < lst.length; i++) {
+						l = lst[i];
+						T = l.scope;
+						c = l.listener || (T || window)[l.bindName];
 						a = l.args ? [].concat(type, l.args, Array.prototype.slice.call(arguments, 1))
 											 : arguments;
 						if (c instanceof Function) {
-							c.apply( T, a );
+							c.apply(T, a);
 						}
 					}
 				}
-				act = self.actions && self.actions.trigger(type,"after");
+				act = self.actions && self.actions.trigger(type, "after");
 			} else {
 				throw new StoreError("Parameter", "trigger", "invalid type argument");
 			}
 		};
 
-		var destroyed = false;
-		var listeners = {};
-		var count     = 0;
-		var self = this;
-
-		defProp( this, "length", {get: function () {return count;}, enumerable:true});
+		defProp(this, "length", {get: function () { return count; }, enumerable: true});
 
 		if (actions) {
 			this.setActions(actions);
 		}
-
 	}
 	return ListenerList;
-	
 });	/* end define() */

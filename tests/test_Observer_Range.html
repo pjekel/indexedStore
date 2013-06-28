@@ -11,15 +11,15 @@
 
     <script type="text/javascript">
       var dojoConfig = {
-            async: true,
-            parseOnLoad: true,
-            isDebug: true,
-            baseUrl: "../../",
-            packages: [
-              { name: "dojo", location: "dojo" },
-              { name: "doh",  location: "util/doh" },
-              { name: "store",location: "indexedStore" }
-            ]
+		async: true,
+		parseOnLoad: true,
+		isDebug: true,
+		baseUrl: "../../",
+		packages: [
+		  { name: "dojo", location: "dojo" },
+		  { name: "doh",  location: "util/doh" },
+		  { name: "store",location: "indexedStore" }
+		]
       };
     </script>
 
@@ -28,936 +28,935 @@
       require([
         "doh/runner",
         "dojo/_base/declare",
-				"dojo/promise/Promise",
+		"dojo/promise/Promise",
         "dojo/ready",
         "dojo/when",
         "store/_base/_Store",
         "store/_base/_Indexed",
         "store/_base/KeyRange",
-        "store/_base/Observer"
+        "store/_base/Observer",
+		"store/loader/basic"
         ], function( doh, declare, Promise, ready, when,
-											_Store, _Indexed, KeyRange, Observer ) {
-					"use strict";
-					
+					_Store, _Indexed, KeyRange, Observer, Loader) {
+			"use strict";
+
+			// IMPORTANT:
+			//		DON'T CHANGE THE NUMBER OF RECORDS ARE ANY PROPERTIES WITHOUT UPDATING
+			//		ANY OF THE RANGE AND COUNT TESTS.
+			var data = [
+				{ "name":"Root", "age":Infinity, "parent":[], "hair":"none" },
+				{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
+				{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
+				{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
+				{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
+				{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blue" },
+				{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
+				{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
+				{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
+				{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"blond" },
+				{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blue" },
+				{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blue" },
+				{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
+				{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
+				{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
+				{ "name":"Manjula", "age":40, "parent":["Apu"], "hair":"brown"}
+			];
+			var max = data.length;
+			var undef;
+
+			var count = {};
+
+			function action (from, to) {
+				var type = from < 0 ? (to < 0 ? "none" : "add") : (to < 0 ? "deleted" : "change");
+				return type;
+			}
+
+			function listener0(obj, from, to) {
+				var type = action(from,to);
+				count[type] = count[type] ? count[type] + 1 : 1;
+			};
+			function listener1(obj, from, to) {
+				var type = action(from,to);
+				count[type] = count[type] ? count[type] + 1 : 1;
+			};
+			function listener2(obj, from, to) {
+				var type = action(from,to);
+				count[type] = count[type] ? count[type] + 1 : 1;
+			};
+			function listener99(obj, from, to) {
+				var type = action(from,to);
+				count[type] = count[type] ? count[type] + 1 : 1;
+			};
+
+			doh.register("Observer Ranges", [
+			{
+				name: "Observe Range, no listener, empty store",
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ({autoLoad:true, keyPath:"name"});
+					var defer = new doh.Deferred();
+
+					var observer = new Observer( store, null, "next" );
+
+					// There is NO Observer listener so fetch the results
+					// directly from the observer.
+					var obsRes = observer.data;
+					t.is( 0, obsRes.total );
+
+					// Marge does match range
+					store.put( {name:"Marge", hair:"blue"});
+					t.is( 1, obsRes.length );
+					t.is( 1, obsRes.total );
+
+					store.put( {name:"Bart", hair:"blond"});
+					t.is( 2, obsRes.length );
+					t.is( 2, obsRes.total );
+
+					// Updating Bart has no effect on the range
+					var bart = store.get("Bart");
+					bart.hair = "brown";
+					store.put( bart );
+					t.is( 2, obsRes.length );
+					t.is( 2, obsRes.total );
+
+					store.remove("Bart");
+					t.is( 1, obsRes.length );
+					t.is( 1, obsRes.total );
+
+					observer.destroy();
+				}
+			},
+
+			{
+				name: "Observe Range, no listener, empty store, deferred load",
+				timeout: 2000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Loader]);
+					var store = new Store ({autoLoad: false, keyPath:"name"});
+					var defer = new doh.Deferred();
+
+					var keyRange = KeyRange.bound("A", "Z");
+					var observer = new Observer( store, keyRange );
+
+					// Because store load is deferred results should be a Promise.
+					t.t (observer.data instanceof Promise);
+
+					// Deferred load (to get the store ready and resolve results)
+					store.load();
+
+					store.ready(
+						defer.getTestCallback(
+							function (store) {
+								// There is NO Observer listener so fetch the results
+								// directly from the observer.
+								t.t (observer.data instanceof Array);
+
+								when( observer.data, function (dataset) {
+									t.is (0, dataset.length);
+									t.is (0, dataset.total);
+								});
+								store.put( {name:"Bart", hair:"blond"});
+								when( observer.data, function (dataset) {
+									t.is (1, dataset.length);
+									t.is (1, dataset.total);
+								});
+								observer.destroy();
+							}
+						),
+						function (err) {
+							defer.errback(err);
+						}
+					);
+					return defer;
+				}
+			},
+
+			{
+				name: "Observe Range, with listener, empty store",
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Loader]);
+					var store = new Store ({autoLoad:true, keyPath:"name"});
+
+					count = {add:0, deleted:0, change:0};		// reset counters
+
+					var keyRange = KeyRange.bound("Bart", "Lisa");
+					var observer = new Observer( store, keyRange );
+					observer.addListener( listener0, true );
+
+					var res = observer.data;
+					t.is( 0, res.total );
+
+					store.put( {name:"Marge", hair:"blue"});	// No match
+					store.put( {name:"Lisa", hair:"blond"});	// Match -> add
+					store.put( {name:"Bart", hair:"blond"});	// Match -> add
+					store.put( {name:"Bart", hair:"blond"});	// Match -> update
+					store.put( {name:"Bart", hair:"brown"});	// match -> update
+
+					// Only Lisa should be left
+					t.is( "Bart", res[0].name );
+					t.is( 2, res.length );
+					t.is( 2, res.total );
+
+					t.is( 2, count.add );
+					t.is( 2, count.change );
+					t.is( 0, count.deleted );
+
+					observer.destroy();
+				}
+			},
+
+			{
+				name: "Observe Range, with listener, store loaded",
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Loader]);
+					var store = new Store ({data: data, keyPath:"name"});
+
+					count = {add:0, deleted:0, change:0};		// reset counters
+
+					var keyRange = KeyRange.bound("Bart","Marge");
+					var observer = new Observer( store, keyRange );
+
+					observer.addListener( listener0, true );		// Include updates
+					observer.addListener( listener1, false );		// exclude updates
+
+					// There is NO Observer listener so fetch the results
+					// directly from the observer.
+					var res = observer.data;
+					t.is( 7, res.length );
+					t.is( 7, res.total );
+
+
+					// Xandra does NOT match range
+					store.put( {name:"Xandra", hair:"blond"});
+					t.is( 7, res.length );
+					t.is( 7, res.total );
+
+					t.is( 0, count.add );
+					t.is( 0, count.deleted );
+					t.is( 0, count.change );
+
+					// Updating Bart has no effect on the range
+					var bart = store.get("Bart");
+					bart.hair = "brown";
+					store.put( bart );
+					t.is( 7, res.length );
+					t.is( 7, res.total );
+
+					t.is( 0, count.add );
+					t.is( 0, count.deleted );
+					t.is( 1, count.change );		// Only one listener for updates
+
+					store.remove("Bart");
+					t.is( 6, res.length );
+					t.is( 6, res.total );
+
+					t.is( 0, count.add );
+					t.is( 2, count.deleted );		// Number of deletes * 2
+					t.is( 1, count.change );
+
+					observer.destroy();
+				}
+			},
+
+			{
+				name: "Observe Range, with listener, clear store",
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Loader]);
+					var store = new Store ({data:data, keyPath:"name"});
+
+					count = {add:0, deleted:0, change:0};		// reset counters
+
+					var keyRange = KeyRange.bound("Bart","Marge");
+					var observer = new Observer( store, keyRange );
+
+					observer.addListener( listener0, true );
+
+					var res = observer.data;
+					t.is( 7, res.total );
+
+					store.clear();
+
+					t.is( 0, count.add );
+					t.is( 7, count.deleted );
+					t.is( 0, count.change );
+
+					t.is( 0, res.total );
+
+					observer.destroy();
+				}
+			},
+
+			{
+				name: "Observe Range, with listener, add object, ascending",
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Loader]);
+					var store = new Store ({data:data, keyPath:"name"});
+
+					count = {add:0, deleted:0, change:0};		// reset counters
+
+					var keyRange = KeyRange.bound("Bart","Marge");
+					var observer = new Observer( store, keyRange );
+
+					observer.addListener( listener0, true );
+
+					var res = observer.data;
+					t.is( 7, res.length );
+					t.is( 7, res.total );
+
+					// insert new object matching the range.
+					var obj  = {name:"Charles", "age":30, "parent":["Apu"], "hair":"brown"};
+					store.put( obj );
+
+					t.is( 1, count.add );
+					t.is( 0, count.deleted );
+					t.is( 0, count.change );
+
+					t.is( 8, res.length );
+					t.is( 8, res.total );
+
+					// Based on its name Charles should be #1
+					t.is("Charles",res[1].name);
+
+					// insert new object not matching the range.
+					var obj  = {name:"Xandra", "age":30, "parent":["Apu"], "hair":"brown"};
+					store.put( obj );
+
+					// There should be no changes
+					t.is( 1, count.add );
+					t.is( 0, count.deleted );
+					t.is( 0, count.change );
+
+					observer.destroy();
+				}
+			},
+
+			{
+				name: "Observe Range, with listener, add object, decending",
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Loader]);
+					var store = new Store ({data:data, keyPath:"name"});
+
+					count = {add:0, deleted:0, change:0};		// reset counters
+
+					var keyRange = KeyRange.bound("Bart","Marge");
+					var observer = new Observer( store, keyRange, "prev" );
+
+					observer.addListener( listener0, true );
+
+					var temp = store.getRange(keyRange);
+					var max  = temp.length;
+
+					var res = observer.data;
+					t.is( max, res.length );
+					t.is( max, res.total );
+
+					// insert new object matching the range.
+					var obj  = {name:"Charles", "age":30, "parent":["Apu"], "hair":"brown"};
+					store.put( obj );
+
+					t.is( 1, count.add );
+					t.is( 0, count.deleted );
+					t.is( 0, count.change );
+
+					t.is( max+1, res.length );
+					t.is( max+1, res.total );
+
+					// Based on its name Charles should be #6
+					t.is("Charles",res[6].name);
+
+					// insert new object not matching the range.
+					var obj  = {name:"Xandra", "age":30, "parent":["Apu"], "hair":"brown"};
+					store.put( obj );
+
+					// There should be no changes
+					t.is( 1, count.add );
+					t.is( 0, count.deleted );
+					t.is( 0, count.change );
+
+					observer.destroy();
+				}
+			},
+
+			{
+				name: "Observe Query, with listener, paginate (start)",
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Loader]);
+					var store = new Store ({data:data, keyPath:"name"});
+					var start = 3;
+
+					count = {add:0, deleted:0, change:0};		// reset counters
+
+					var observer = new Observer( store, null, {direction:"next", start: start} );
+					observer.addListener( listener0, true );
+
+					var temp = store.getRange();
+					var res  = observer.data;
+
+					t.is( max, res.total );
+					t.is( max-start, res.length );
+
+					// First in the view should be Homer.
+					t.is( "Homer", res[0].name );
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[i+start].name);
+					}
+					// insert new object at the end.
+					var obj  = {name:"Xandra", "age":80, "parent":["Apu"], "hair":"brown"};
+					store.put( obj );
+
+					// Total number of objects matching the query should have increased
+					// but the results data length not....
+
+					t.is( 1, count.add );
+					t.is( max+1, res.total );
+					t.is( max-start+1, res.length );
+
+					// Insert a record at store index 0
+					var obj  = {name:"AAA", "age":80, "parent":["Apu"], "hair":"brown"};
+					store.put( obj );
+
+					// View shifted left by 1, notice that not AAA but Bart was added to
+					// the resutls (view).
+					t.is( 2, count.add );
+					t.is( max+2, res.total );
+					t.is( max-start+2, res.length );
+
+					t.is( "Bart", res[0].name );
+
+					observer.destroy();
+				}
+			},
+
+			{
+				name: "Observe Range, with listener, paginate (count)",
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Loader]);
+					var store = new Store ({data:data, keyPath:"name"});
+					var limit = 5;
+
+					count = {add:0, deleted:0, change:0};		// reset counters
+
+					var observer = new Observer( store, null, {direction:"next", count: limit} );
+					observer.addListener( listener0, true );
+
+					var temp = store.getRange();
+					var res  = observer.data;
+
+					t.is( max, res.total );
+					t.is( limit, res.length );
+
+					res.forEach( function (obj, idx) {
+						t.is(obj.name, temp[idx].name);
+					});
+					// insert new object immediately following the last object in
+					// the result set.
+					var name = res[res.length-1].name + "0";
+					var obj  = {name:name, "age":80, "parent":["Apu"], "hair":"brown"};
+					store.put( obj );
+
+					// Total number of objects matching the range should have increased
+					// but the results data length not....
+
+					t.is( 0, count.add );
+					t.is( 0, count.deleted );
+					t.is( 0, count.change );
+
+					t.is( max+1, res.total );
+					t.is( limit, res.length );
+
+					// Insert a record at index 0. The view will shift left by 1.
+					var obj  = {name:"AAA", "age":80, "parent":["Apu"], "hair":"brown"};
+					store.put( obj );
+
+					t.is( 1, count.add );
+					t.is( 1, count.deleted );
+					t.is( 0, count.change );
+
+					t.is( max+2, res.total );
+					t.is( limit, res.length );
+
+					t.is( "AAA", res[0].name );
+
+					observer.destroy();
+				}
+			},
+
+			{
+				name: "Observe Range, with listener, paginate (start & count)",
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Loader]);
+					var store = new Store ({data:data, keyPath:"name"});
+					var start = 3;
+					var limit = 5;
+
+					count = {add:0, deleted:0, change:0};		// reset counters
+
+					var options  = {direction:"next", start: start, count:limit};
+					var observer = new Observer( store, null, options );
+					observer.addListener( listener0, true );
+
+					var temp = store.getRange();
+					var res  = observer.data;
+
+					t.is( max, res.total );
+					t.is( limit, res.length );
+
+					// Test boundaries.
+					t.is( "Homer", res[0].name );
+					t.is( "Manjula", res[limit-1].name );
+
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[i+start].name);
+					}
+					// insert new object at the end of the store. (beyond the view)
+					var obj  = {name:"Xandra", "age":80, "parent":["Apu"], "hair":"brown"};
+					store.put( obj );
+
+					// Total number of objects matching the query should have increased
+					// but not the results data length.
+
+					t.is( 0, count.add );
+					t.is( 0, count.deleted );
+					t.is( 0, count.change );
+
+					t.is( max+1, res.total );
+					t.is( limit, res.length );
+
+					// Insert a record at index 0
+					var obj  = {name:"AAA", "age":80, "parent":["Apu"], "hair":"brown"};
+					store.put( obj );
+
+					// View shifted left by 1, notice that not AAA but Bart was added to
+					// the resutls and Manjula was dropped.
+					t.is( 1, count.add );
+					t.is( 1, count.deleted );
+					t.is( 0, count.change );
+
+					t.is( max+2, res.total );
+					t.is( limit, res.length );
+
+					// Test boundaries.
+					t.is( "Bart", res[0].name );
+					t.is( "Maggie", res[limit-1].name );
+
+					observer.destroy();
+				}
+			},
+
+			{
+				name: "Observe Range, with listener, sort by age",
+				runTest: function (t) {
 					// IMPORTANT:
-					//		DON'T CHANGE THE NUMBER OF RECORDS ARE ANY PROPERTIES WITHOUT UPDATING
-					//		ANY OF THE RANGE AND COUNT TESTS.
-					var data = [
-						{ "name":"Root", "age":Infinity, "parent":[], "hair":"none" },
-						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
-						{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
-						{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
-						{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
-						{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blue" },
-						{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
-						{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
-						{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
-						{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"blond" },
-						{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blue" },
-						{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blue" },
-						{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
-						{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
-						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
-						{ "name":"Manjula", "age":40, "parent":["Apu"], "hair":"brown"}
-					];
-					var max = data.length;
-					var undef;
+					//		FOR THIS TEST WE EXPLICITLY REMOVE 'ROOT' FROM THE DATASET
+					var aged = data.slice(1);
+					var max  = aged.length;
+					var sort = [{property:"age"}, {property:"name"}];
 
-					var count = {};
+					var Store = declare( [_Store, _Indexed, Loader]);
+					var store = new Store ({data: aged, keyPath:"name"});
 
-					function action (from, to) {
-						var type = from < 0 ? (to < 0 ? "none" : "add") : (to < 0 ? "deleted" : "change");
-						return type;
+					count = {add:0, deleted:0, change:0};		// reset counters
+
+					var observer = new Observer( store, null, {sort: sort} );
+					observer.addListener( listener0, true );
+
+					var temp = store.getRange(null, {sort: sort});
+					var res  = observer.data;
+
+					t.is( max, res.total );
+
+					// Test boundaries.
+					t.is( "Maggie", res[0].name );
+					t.is( "Mona", res[max-1].name );
+
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[i].name);
+					}
+					// insert new object at the end of the store. (based on name)
+					var obj  = {name:"Xandra", "age":20, "parent":["Apu"], "hair":"brown"};
+					store.put( obj );
+
+					t.is( 1, count.add );
+					t.is( 0, count.deleted );
+					t.is( 0, count.change );
+
+					t.is( max+1, res.total );
+					t.is( max+1, res.length );
+
+					// Xandra should endup as #5 in the query results.
+					t.is( "Xandra", res[5].name );
+
+					// insert new object at the beginning of the store. (based on name)
+					var obj  = {name:"AAA", "age":21, "parent":["Apu"], "hair":"brown"};
+					store.put( obj );
+
+					t.is( 2, count.add );
+					t.is( 0, count.deleted );
+					t.is( 0, count.change );
+
+					t.is( max+2, res.total );
+					t.is( max+2, res.length );
+
+					// AAA should endup as #6 in the query results.
+					t.is( "AAA", res[6].name );
+
+					// Update Xandra
+					var xandra = store.get("Xandra");
+					xandra.age = 1;
+					store.put(xandra);
+
+					// Totals should not have changed...
+					t.is( max+2, res.total );
+					t.is( max+2, res.length );
+
+					t.is( 2, count.add );
+					t.is( 0, count.deleted );
+					t.is( 1, count.change );
+
+					// Test boundaries.
+					t.is( "Xandra", res[0].name );
+					t.is( "Mona", res[max+2-1].name );
+
+					observer.destroy();
+				}
+			},
+
+			{
+				name: "Observe Range, with listener, with range, paginate",
+				runTest: function (t) {
+					// IMPORTANT:
+
+					var Store = declare( [_Store, _Indexed, Loader]);
+					var store = new Store ({data: data, keyPath:"name"});
+
+					count = {add:0, deleted:0, change:0};		// reset counters
+
+					var keyRange = KeyRange.bound("Bart", "Molly");
+					var start = 2;
+					var limit = 4;
+
+					var observer = new Observer( store, keyRange, {start:start, count:limit} );
+					observer.addListener( listener0, true );
+
+					var temp = store.getRange( keyRange );
+					var max  = temp.length;
+					var res  = observer.data;
+
+					// temp = [Bart, Homer, Jacqueline, Lisa, Maggie, Manjula, Marge]
+					// res  = [Jacqeline, Lisa, Maggie, Manjula]
+
+					t.is( max, res.total );
+					t.is( limit, res.length );
+
+					// Test boundaries.
+					t.is( "Jacqueline", res[0].name );
+					t.is( "Manjula", res[limit-1].name );
+
+					// Test if the range results still line-up with the store.
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[start+i].name);
+					}
+					//==========================================================
+					// insert new object. The object does match the range.
+
+					// Because we start at offset 2 it will not be included in the view but will
+					// cause the view to shift left by 1.
+
+					count = {add:0, deleted:0, change:0};		// reset counters
+					var obj  = {name:"Charles", "age":1, "parent":["Apu"], "hair":"blond"};
+					store.put( obj );
+
+					temp = store.getRange( keyRange );
+
+					// temp = [Bart, Charles, Homer, Jacqueline, Lisa, Maggie, Manjula, Marge]
+					// res  = [Homer, Jacqeline, Lisa, Maggie]
+
+					// Test if the range results still line-up with the store.
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[start+i].name);
 					}
 
-					function listener0(obj, from, to) {
-						var type = action(from,to);
-						count[type] = count[type] ? count[type] + 1 : 1;
-					};
-					function listener1(obj, from, to) {
-						var type = action(from,to);
-						count[type] = count[type] ? count[type] + 1 : 1;
-					};
-					function listener2(obj, from, to) {
-						var type = action(from,to);
-						count[type] = count[type] ? count[type] + 1 : 1;
-					};
-					function listener99(obj, from, to) {
-						var type = action(from,to);
-						count[type] = count[type] ? count[type] + 1 : 1;
-					};
-					
-					doh.register("Observer Ranges", [
-						{
-							name: "Observe Range, no listener, empty store",
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({autoLoad:true, keyPath:"name"});
-								var defer = new doh.Deferred();
-
-								var observer = new Observer( store, null, "next" );
-
-								// There is NO Observer listener so fetch the results 
-								// directly from the observer.
-								var obsRes = observer.data;
-								t.is( 0, obsRes.total );
-
-								// Marge does match range
-								store.put( {name:"Marge", hair:"blue"});
-								t.is( 1, obsRes.length );
-								t.is( 1, obsRes.total );
-
-								store.put( {name:"Bart", hair:"blond"});
-								t.is( 2, obsRes.length );
-								t.is( 2, obsRes.total );
-
-								// Updating Bart has no effect on the range
-								var bart = store.get("Bart");
-								bart.hair = "brown";
-								store.put( bart );
-								t.is( 2, obsRes.length );
-								t.is( 2, obsRes.total );
-
-								store.remove("Bart");
-								t.is( 1, obsRes.length );
-								t.is( 1, obsRes.total );
-								
-								observer.destroy();
-							}
-						},
-
-						{
-							name: "Observe Range, no listener, empty store, deferred load",
-							timeout: 2000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({autoLoad: false, keyPath:"name"});
-								var defer = new doh.Deferred();
-								
-								var keyRange = KeyRange.bound("A", "Z");
-								var observer = new Observer( store, keyRange );
-
-								// Because store load is deferred results should be a Promise.
-								t.t (observer.data instanceof Promise);
-
-								// Deferred load (to get the store ready and resolve results)
-								store.load();
-								
-								store.ready( 
-									defer.getTestCallback(
-										function (store) {
-											// There is NO Observer listener so fetch the results 
-											// directly from the observer.
-											t.t (observer.data instanceof Array);
-
-											when( observer.data, function (dataset) {
-												t.is (0, dataset.length);
-												t.is (0, dataset.total);
-											});
-											store.put( {name:"Bart", hair:"blond"});
-											when( observer.data, function (dataset) {
-												t.is (1, dataset.length);
-												t.is (1, dataset.total);
-											});
-											observer.destroy();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						},
-
-						{
-							name: "Observe Range, with listener, empty store",
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({autoLoad:true, keyPath:"name"});
-
-								count = {add:0, deleted:0, change:0};		// reset counters
-								
-								var keyRange = KeyRange.bound("Bart", "Lisa");
-								var observer = new Observer( store, keyRange );
-								observer.addListener( listener0, true );
-
-								var res = observer.data;
-								t.is( 0, res.total );
-
-								store.put( {name:"Marge", hair:"blue"});	// No match
-								store.put( {name:"Lisa", hair:"blond"});	// Match -> add
-								store.put( {name:"Bart", hair:"blond"});	// Match -> add
-								store.put( {name:"Bart", hair:"blond"});	// Match -> update
-								store.put( {name:"Bart", hair:"brown"});	// match -> update
-
-								// Only Lisa should be left
-								t.is( "Bart", res[0].name );
-								t.is( 2, res.length );
-								t.is( 2, res.total );
-
-								t.is( 2, count.add );
-								t.is( 2, count.change );
-								t.is( 0, count.deleted );
-
-								observer.destroy();
-							}
-						},
-
-						{
-							name: "Observe Range, with listener, store loaded",
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({data: data, keyPath:"name"});
-
-								count = {add:0, deleted:0, change:0};		// reset counters
-
-								var keyRange = KeyRange.bound("Bart","Marge");
-								var observer = new Observer( store, keyRange );
-
-								observer.addListener( listener0, true );		// Include updates
-								observer.addListener( listener1, false );		// exclude updates
-
-								// There is NO Observer listener so fetch the results 
-								// directly from the observer.
-								var res = observer.data;
-								t.is( 7, res.length );
-								t.is( 7, res.total );
-
-
-								// Xandra does NOT match range
-								store.put( {name:"Xandra", hair:"blond"});
-								t.is( 7, res.length );
-								t.is( 7, res.total );
-
-								t.is( 0, count.add );
-								t.is( 0, count.deleted );
-								t.is( 0, count.change );
-
-								// Updating Bart has no effect on the range
-								var bart = store.get("Bart");
-								bart.hair = "brown";
-								store.put( bart );
-								t.is( 7, res.length );
-								t.is( 7, res.total );
-
-								t.is( 0, count.add );
-								t.is( 0, count.deleted );
-								t.is( 1, count.change );		// Only one listener for updates
-
-								store.remove("Bart");
-								t.is( 6, res.length );
-								t.is( 6, res.total );
-								
-								t.is( 0, count.add );
-								t.is( 2, count.deleted );		// Number of deletes * 2
-								t.is( 1, count.change );
-
-								observer.destroy();
-							}
-						},
-						
-						{
-							name: "Observe Range, with listener, clear store",
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({data:data, keyPath:"name"});
-
-								count = {add:0, deleted:0, change:0};		// reset counters
-								
-								var keyRange = KeyRange.bound("Bart","Marge");
-								var observer = new Observer( store, keyRange );
-
-								observer.addListener( listener0, true );
-
-								var res = observer.data;
-								t.is( 7, res.total );
-
-								store.clear();
-
-								t.is( 0, count.add );
-								t.is( 7, count.deleted );
-								t.is( 0, count.change );
-
-								t.is( 0, res.total );
-
-								observer.destroy();
-							}
-						},
-
-						{
-							name: "Observe Range, with listener, add object, ascending",
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({data:data, keyPath:"name"});
-
-								count = {add:0, deleted:0, change:0};		// reset counters
-								
-								var keyRange = KeyRange.bound("Bart","Marge");
-								var observer = new Observer( store, keyRange );
-
-								observer.addListener( listener0, true );
-
-								var res = observer.data;
-								t.is( 7, res.length );
-								t.is( 7, res.total );
-
-								// insert new object matching the range.
-								var obj  = {name:"Charles", "age":30, "parent":["Apu"], "hair":"brown"};
-								store.put( obj );
-
-								t.is( 1, count.add );
-								t.is( 0, count.deleted );
-								t.is( 0, count.change );
-
-								t.is( 8, res.length );
-								t.is( 8, res.total );
-
-								// Based on its name Charles should be #1
-								t.is("Charles",res[1].name);
-
-								// insert new object not matching the range.
-								var obj  = {name:"Xandra", "age":30, "parent":["Apu"], "hair":"brown"};
-								store.put( obj );
-
-								// There should be no changes
-								t.is( 1, count.add );
-								t.is( 0, count.deleted );
-								t.is( 0, count.change );
-
-								observer.destroy();
-							}
-						},
-
-						{
-							name: "Observe Range, with listener, add object, decending",
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({data:data, keyPath:"name"});
-
-								count = {add:0, deleted:0, change:0};		// reset counters
-								
-								var keyRange = KeyRange.bound("Bart","Marge");
-								var observer = new Observer( store, keyRange, "prev" );
-
-								observer.addListener( listener0, true );
-
-								var temp = store.getRange(keyRange);
-								var max  = temp.length;
-
-								var res = observer.data;
-								t.is( max, res.length );
-								t.is( max, res.total );
-
-								// insert new object matching the range.
-								var obj  = {name:"Charles", "age":30, "parent":["Apu"], "hair":"brown"};
-								store.put( obj );
-
-								t.is( 1, count.add );
-								t.is( 0, count.deleted );
-								t.is( 0, count.change );
-
-								t.is( max+1, res.length );
-								t.is( max+1, res.total );
-
-								// Based on its name Charles should be #6
-								t.is("Charles",res[6].name);
-
-								// insert new object not matching the range.
-								var obj  = {name:"Xandra", "age":30, "parent":["Apu"], "hair":"brown"};
-								store.put( obj );
-
-								// There should be no changes
-								t.is( 1, count.add );
-								t.is( 0, count.deleted );
-								t.is( 0, count.change );
-
-								observer.destroy();
-							}
-						},
-
-						{
-							name: "Observe Query, with listener, paginate (start)",
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({data:data, keyPath:"name"});
-								var start = 3;
-
-								count = {add:0, deleted:0, change:0};		// reset counters
-								
-								var observer = new Observer( store, null, {direction:"next", start: start} );
-								observer.addListener( listener0, true );
-
-								var temp = store.getRange();
-								var res  = observer.data;
-								
-								t.is( max, res.total );
-								t.is( max-start, res.length );
-								
-								// First in the view should be Homer.
-								t.is( "Homer", res[0].name );
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[i+start].name);
-								}
-								// insert new object at the end.
-								var obj  = {name:"Xandra", "age":80, "parent":["Apu"], "hair":"brown"};
-								store.put( obj );
-								
-								// Total number of objects matching the query should have increased
-								// but the results data length not....
-								
-								t.is( 1, count.add );
-								t.is( max+1, res.total );
-								t.is( max-start+1, res.length );
-
-								// Insert a record at store index 0
-								var obj  = {name:"AAA", "age":80, "parent":["Apu"], "hair":"brown"};
-								store.put( obj );
-
-								// View shifted left by 1, notice that not AAA but Bart was added to
-								// the resutls (view).
-								t.is( 2, count.add );
-								t.is( max+2, res.total );
-								t.is( max-start+2, res.length );
-
-								t.is( "Bart", res[0].name );
-
-								observer.destroy();
-							}
-						},
-
-						{
-							name: "Observe Range, with listener, paginate (count)",
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({data:data, keyPath:"name"});
-								var limit = 5;
-								
-								count = {add:0, deleted:0, change:0};		// reset counters
-								
-								var observer = new Observer( store, null, {direction:"next", count: limit} );
-								observer.addListener( listener0, true );
-
-								var temp = store.getRange();
-								var res  = observer.data;
-								
-								t.is( max, res.total );
-								t.is( limit, res.length );
-								
-								res.forEach( function (obj, idx) {
-									t.is(obj.name, temp[idx].name);
-								});
-								// insert new object immediately following the last object in
-								// the result set.
-								var name = res[res.length-1].name + "0";
-								var obj  = {name:name, "age":80, "parent":["Apu"], "hair":"brown"};
-								store.put( obj );
-								
-								// Total number of objects matching the range should have increased
-								// but the results data length not....
-								
-								t.is( 0, count.add );
-								t.is( 0, count.deleted );
-								t.is( 0, count.change );
-
-								t.is( max+1, res.total );
-								t.is( limit, res.length );
-
-								// Insert a record at index 0. The view will shift left by 1.
-								var obj  = {name:"AAA", "age":80, "parent":["Apu"], "hair":"brown"};
-								store.put( obj );
-
-								t.is( 1, count.add );
-								t.is( 1, count.deleted );
-								t.is( 0, count.change );
-
-								t.is( max+2, res.total );
-								t.is( limit, res.length );
-
-								t.is( "AAA", res[0].name );
-
-								observer.destroy();
-							}
-						},
-
-						{
-							name: "Observe Range, with listener, paginate (start & count)",
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({data:data, keyPath:"name"});
-								var start = 3;
-								var limit = 5;
-
-								count = {add:0, deleted:0, change:0};		// reset counters
-
-								var options  = {direction:"next", start: start, count:limit};
-								var observer = new Observer( store, null, options );
-								observer.addListener( listener0, true );
-
-								var temp = store.getRange();
-								var res  = observer.data;
-								
-								t.is( max, res.total );
-								t.is( limit, res.length );
-								
-								// Test boundaries.
-								t.is( "Homer", res[0].name );
-								t.is( "Manjula", res[limit-1].name );
-								
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[i+start].name);
-								}
-								// insert new object at the end of the store. (beyond the view)
-								var obj  = {name:"Xandra", "age":80, "parent":["Apu"], "hair":"brown"};
-								store.put( obj );
-								
-								// Total number of objects matching the query should have increased
-								// but not the results data length.
-								
-								t.is( 0, count.add );
-								t.is( 0, count.deleted );
-								t.is( 0, count.change );
-
-								t.is( max+1, res.total );
-								t.is( limit, res.length );
-
-								// Insert a record at index 0
-								var obj  = {name:"AAA", "age":80, "parent":["Apu"], "hair":"brown"};
-								store.put( obj );
-
-								// View shifted left by 1, notice that not AAA but Bart was added to
-								// the resutls and Manjula was dropped.
-								t.is( 1, count.add );
-								t.is( 1, count.deleted );
-								t.is( 0, count.change );
-
-								t.is( max+2, res.total );
-								t.is( limit, res.length );
-
-								// Test boundaries.
-								t.is( "Bart", res[0].name );
-								t.is( "Maggie", res[limit-1].name );
-
-								observer.destroy();
-							}
-						},
-
-						{
-							name: "Observe Range, with listener, sort by age",
-							runTest: function (t) {
-								// IMPORTANT: 
-								//		FOR THIS TEST WE EXPLICITLY REMOVE 'ROOT' FROM THE DATASET
-								var aged = data.slice(1);
-								var max  = aged.length;
-								var sort = [{property:"age"}, {property:"name"}];
-								 
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({data: aged, keyPath:"name"});
-								
-								count = {add:0, deleted:0, change:0};		// reset counters
-								
-								var observer = new Observer( store, null, {sort: sort} );
-								observer.addListener( listener0, true );
-
-								var temp = store.getRange(null, {sort: sort});
-								var res  = observer.data;
-								
-								t.is( max, res.total );
-								
-								// Test boundaries.
-								t.is( "Maggie", res[0].name );
-								t.is( "Mona", res[max-1].name );
-
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[i].name);
-								}
-								// insert new object at the end of the store. (based on name)
-								var obj  = {name:"Xandra", "age":20, "parent":["Apu"], "hair":"brown"};
-								store.put( obj );
-								
-								t.is( 1, count.add );
-								t.is( 0, count.deleted );
-								t.is( 0, count.change );
-
-								t.is( max+1, res.total );
-								t.is( max+1, res.length );
-
-								// Xandra should endup as #5 in the query results.
-								t.is( "Xandra", res[5].name );
-
-								// insert new object at the begining of the store. (based on name)
-								var obj  = {name:"AAA", "age":21, "parent":["Apu"], "hair":"brown"};
-								store.put( obj );
-
-								t.is( 2, count.add );
-								t.is( 0, count.deleted );
-								t.is( 0, count.change );
-
-								t.is( max+2, res.total );
-								t.is( max+2, res.length );
-
-								// AAA should endup as #6 in the query results.
-								t.is( "AAA", res[6].name );
-
-								// Update Xandra 
-								var xandra = store.get("Xandra");
-								xandra.age = 1;
-								store.put(xandra);
-								
-								// Totals should not have changed...
-								t.is( max+2, res.total );
-								t.is( max+2, res.length );
-
-								t.is( 2, count.add );
-								t.is( 0, count.deleted );
-								t.is( 1, count.change );
-
-								// Test boundaries.
-								t.is( "Xandra", res[0].name );
-								t.is( "Mona", res[max+2-1].name );
-
-								observer.destroy();
-							}
-						},
-
-						{
-							name: "Observe Range, with listener, with range, paginate",
-							runTest: function (t) {
-								// IMPORTANT: 
-								 
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({data: data, keyPath:"name"});
-								
-								count = {add:0, deleted:0, change:0};		// reset counters
-								
-								var keyRange = KeyRange.bound("Bart", "Molly");
-								var start = 2;
-								var limit = 4;
-								
-								var observer = new Observer( store, keyRange, {start:start, count:limit} );
-								observer.addListener( listener0, true );
-
-								var temp = store.getRange( keyRange );
-								var max  = temp.length;
-								var res  = observer.data;
-								
-								// temp = [Bart, Homer, Jacqueline, Lisa, Maggie, Manjula, Marge]
-								// res  = [Jacqeline, Lisa, Maggie, Manjula]
-
-								t.is( max, res.total );
-								t.is( limit, res.length );
-								
-								// Test boundaries.
-								t.is( "Jacqueline", res[0].name );
-								t.is( "Manjula", res[limit-1].name );
-
-								// Test if the range results still line-up with the store.
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[start+i].name);
-								}
-								//==========================================================
-								// insert new object. The object does match the range.
-
-								// Because we start at offset 2 it will not be included in the view but will
-								// cause the view to shift left by 1.
-
-								count = {add:0, deleted:0, change:0};		// reset counters
-								var obj  = {name:"Charles", "age":1, "parent":["Apu"], "hair":"blond"};
-								store.put( obj );
-								
-								temp = store.getRange( keyRange );
-
-								// temp = [Bart, Charles, Homer, Jacqueline, Lisa, Maggie, Manjula, Marge]
-								// res  = [Homer, Jacqeline, Lisa, Maggie]
-
-								// Test if the range results still line-up with the store.
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[start+i].name);
-								}
-
-								t.is( 1, count.deleted );		// Manjula
-								t.is( 1, count.add );				// Homer
-								t.is( 0, count.change );
-
-								t.is( max+1, res.total );		// increased 1
-								t.is( limit, res.length );	// same as before (limit)
-
-								//==========================================================
-								// Add a new object to the store that matches the query but is outside
-								// the view.
-								count = {add:0, deleted:0, change:0};		// reset counters
-								var obj = {name:"Molly", "age":80, "parent":["Apu"], "hair":"blond"};
-								store.put( obj );
-
-								temp = store.getRange( keyRange );
-
-								// temp = [Bart, Charles, Homer, Jacqueline, Lisa, Maggie, Manjula, Marge, Molly]
-								// res  = [Homer, Jacqeline, Lisa, Maggie]
-
-								// Test if the range results still line-up with the store.
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[start+i].name);
-								}
-								// There should be NO changes to the view....
-								t.is( 0, count.deleted );
-								t.is( 0, count.add );
-								t.is( 0, count.change );
-
-								t.is( max+2, res.total );		// increased by 1
-								t.is( limit, res.length );	// same as before (limit)
-
-								//==========================================================
-								// Remove object from inside the view
-								count = {add:0, deleted:0, change:0};		// reset counters
-								store.remove("Lisa");
-								
-								temp = store.getRange( keyRange );
-
-								// temp = [Bart, Charles, Homer, Jacqueline, Maggie, Manjula, Marge, Molly]
-								// res  = [Homer, Jacqeline, Maggie, Manjula]
-
-								// Test if the query results still line-up with the store.
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[start+i].name);
-								}
-								t.is( 1, count.deleted );		// Lisa
-								t.is( 1, count.add );				// Manjula
-								t.is( 0, count.change );
-
-								t.is( max+1, res.total );		// decreased by 1
-								t.is( limit, res.length );	// same as before (limit)
-
-								//==========================================================
-								// Simply update an object inside the view
-								count = {add:0, deleted:0, change:0};		// reset counters
-								var maggie = store.get("Maggie");
-								maggie.age++;
-								store.put(maggie);
-								
-								// Test if the query results still line-up with the store.
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[start+i].name);
-								}
-								t.is( 0, count.deleted );		// unchanged
-								t.is( 0, count.add );				// unchanged
-								t.is( 1, count.change );		// Marge
-
-								t.is( max+1, res.total );				// unchanged
-								t.is( limit, res.length );	// same as before (limit)
-
-								observer.destroy();
-							}
-						},
-
-						{
-							name: "Observe Range, with listener, sort by age, paginate",
-							runTest: function (t) {
-								// IMPORTANT: 
-								 
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({data: data, keyPath:"name"});
-								
-								count = {add:0, deleted:0, change:0};		// reset counters
-								
-								var keyRange = KeyRange.bound("Bart", "Marge");
-								var sort  = [{property:"age"}, {property:"name"}];
-								var start = 2;
-								var limit = 4;
-								
-								var observer = new Observer( store, keyRange, {sort: sort, start:start, count:limit} );
-								observer.addListener( listener0, true );
-
-								var temp = store.getRange( keyRange, {sort:sort} );
-								var max  = temp.length;
-								var res  = observer.data;
-								
-								// temp = [Maggie, Bart, Lisa, Marge, Manjula, Homer, Jacqeline] (sorted by age).
-								// res  = [Lisa, Marge, Manjula, Homer]
-
-								t.is( max, res.total );
-								t.is( limit, res.length );
-								
-								// Test boundaries.
-								t.is( "Lisa", res[0].name );
-								t.is( "Homer", res[limit-1].name );
-
-								// Test if the range results still line-up with the store.
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[start+i].name);
-								}
-								//==========================================================
-								// insert new object. The object does match the range and based on age it
-								// will be the first object in the query results. 
-								// Because we start at offset 2 it will not be included in the view but will
-								// cause the view to shift left by 1.
-
-								count = {add:0, deleted:0, change:0};		// reset counters
-								var obj  = {name:"Charles", "age":1, "parent":["Apu"], "hair":"blond"};
-								store.put( obj );
-								
-								temp = store.getRange( keyRange, {sort:sort} );
-
-								// temp = [Charles, Maggie, Bart, Lisa, Marge, Manjula, Homer, Jacqeline] (sorted by age).
-								// res  = [Bart, Lisa, Marge, Manjula]
-
-								// Test if the range results still line-up with the store.
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[start+i].name);
-								}
-
-								t.is( 1, count.deleted );		// Homer
-								t.is( 1, count.add );				// Bart
-								t.is( 0, count.change );
-
-								t.is( max+1, res.total );				// increased 1
-								t.is( limit, res.length );	// same as before (limit)
-
-								//==========================================================
-								// By changing the age of Charles we move the object into the last spot
-								// of the query results. This will shift the view right by 1.
-
-								count = {add:0, deleted:0, change:0};		// reset counters
-								var charles = store.get("Charles");
-								charles.age = 100;
-								store.put(charles);
-
-								temp = store.getRange( keyRange, {sort:sort} );
-
-								// temp = [Maggie, Bart, Lisa, Marge, Manjula, Homer, Jacqeline, Charles] (sorted by age).
-								// res  = [Lisa, Marge, Manjula, Homer]
-
-								// Test if the range results still line-up with the store.
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[start+i].name);
-								}
-								t.is( 1, count.deleted );		// Bart
-								t.is( 1, count.add );				// Homer
-								t.is( 0, count.change );		// Although an update it was outside the view.
-
-								t.is( max+1, res.total );		// unchanged
-								t.is( limit, res.length );	// same as before (limit)
-
-								//==========================================================
-								// Add a new object to the store that matches the query but based on its
-								// age it will located AFTER the current view 
-								// 
-								count = {add:0, deleted:0, change:0};		// reset counters
-								var obj  = {name:"Lucky", "age":80, "parent":["Apu"], "hair":"blond"};
-								store.put( obj );
-
-								temp = store.getRange( keyRange, {sort:sort} );
-
-								// temp = [Maggie, Bart, Lisa, Marge, Manjula, Homer, Jacqeline, Lucky, Charles] (sorted by age).
-								// res  = [Lisa, Marge, Manjula, Homer]
-
-								// Test if the range results still line-up with the store.
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[start+i].name);
-								}
-								// There should be NO changes to the view....
-								t.is( 0, count.deleted );
-								t.is( 0, count.add );
-								t.is( 0, count.change );
-
-								t.is( max+2, res.total );				// increased by 1
-								t.is( limit, res.length );	// same as before (limit)
-
-								//==========================================================
-								// Changing Charles's age will move the object inside the view...
-
-								count = {add:0, deleted:0, change:0};		// reset counters
-								charles.age = 20;
-								store.put(charles);
-
-								temp = store.getRange( keyRange, {sort:sort} );
-
-								// temp = [Maggie, Bart, Lisa, Charles, Marge, Manjula, Homer, Jacqeline, Lucky] (sorted by age).
-								// res  = [Lisa, Charles, Marge, Manjula]
-
-								// Test if the query results still line-up with the store.
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[start+i].name);
-								}
-								t.is( 1, count.deleted );		// Homer
-								t.is( 1, count.add );				// Charles
-								t.is( 0, count.change );
-
-								t.is( max+2, res.total );				// unchanged
-								t.is( limit, res.length );	// same as before (limit)
-
-								//==========================================================
-								// Changing Charles's age to 1 will move the object in front of the view...
-								count = {add:0, deleted:0, change:0};		// reset counters
-								charles.age = 1;
-								store.put(charles);
-
-								temp = store.getRange( keyRange, {sort:sort} );
-
-								// temp = [Charles, Maggie, Bart, Lisa, Marge, Manjula, Homer, Jacqeline, Lucky] (sorted by age).
-								// res  = [Bart, Lisa, Marge, Manjula]
-
-								// Test if the query results still line-up with the store.
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[start+i].name);
-								}
-								t.is( 1, count.deleted );		// Charles
-								t.is( 1, count.add );				// Bart
-								t.is( 0, count.change );
-
-								t.is( max+2, res.total );				// unchanged
-								t.is( limit, res.length );	// same as before (limit)
-
-								//==========================================================
-								// Remove object from inside the view
-								count = {add:0, deleted:0, change:0};		// reset counters
-								store.remove("Lisa");
-								
-								temp = store.getRange( keyRange, {sort:sort} );
-
-								// temp = [Charles, Maggie, Bart, Marge, Manjula, Homer, Jacqeline, Lucky] (sorted by age).
-								// res  = [Bart, Marge, Manjula, Homer]
-
-								// Test if the query results still line-up with the store.
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[start+i].name);
-								}
-								t.is( 1, count.deleted );		// Lisa
-								t.is( 1, count.add );				// Homer
-								t.is( 0, count.change );
-
-								t.is( max+1, res.total );		// decreased by 1
-								t.is( limit, res.length );	// same as before (limit)
-
-								//==========================================================
-								// Simply update an object inside the view
-								count = {add:0, deleted:0, change:0};		// reset counters
-								var marge = store.get("Marge");
-								marge.age++;
-								store.put(marge);
-								
-								// Test if the query results still line-up with the store.
-								for (var i=0; i<res.length; i++) {
-									t.is( res[i].name, temp[start+i].name);
-								}
-								t.is( 0, count.deleted );		// unchanged
-								t.is( 0, count.add );				// unchanged
-								t.is( 1, count.change );		// Marge
-
-								t.is( max+1, res.total );				// unchanged
-								t.is( limit, res.length );	// same as before (limit)
-
-								observer.destroy();
-							}
-						}
-
-					]);
-
-					ready( function () {
-						doh.run();
-					});
-
+					t.is( 1, count.deleted );		// Manjula
+					t.is( 1, count.add );				// Homer
+					t.is( 0, count.change );
+
+					t.is( max+1, res.total );		// increased 1
+					t.is( limit, res.length );	// same as before (limit)
+
+					//==========================================================
+					// Add a new object to the store that matches the query but is outside
+					// the view.
+					count = {add:0, deleted:0, change:0};		// reset counters
+					var obj = {name:"Molly", "age":80, "parent":["Apu"], "hair":"blond"};
+					store.put( obj );
+
+					temp = store.getRange( keyRange );
+
+					// temp = [Bart, Charles, Homer, Jacqueline, Lisa, Maggie, Manjula, Marge, Molly]
+					// res  = [Homer, Jacqeline, Lisa, Maggie]
+
+					// Test if the range results still line-up with the store.
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[start+i].name);
+					}
+					// There should be NO changes to the view....
+					t.is( 0, count.deleted );
+					t.is( 0, count.add );
+					t.is( 0, count.change );
+
+					t.is( max+2, res.total );		// increased by 1
+					t.is( limit, res.length );	// same as before (limit)
+
+					//==========================================================
+					// Remove object from inside the view
+					count = {add:0, deleted:0, change:0};		// reset counters
+					store.remove("Lisa");
+
+					temp = store.getRange( keyRange );
+
+					// temp = [Bart, Charles, Homer, Jacqueline, Maggie, Manjula, Marge, Molly]
+					// res  = [Homer, Jacqeline, Maggie, Manjula]
+
+					// Test if the query results still line-up with the store.
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[start+i].name);
+					}
+					t.is( 1, count.deleted );		// Lisa
+					t.is( 1, count.add );				// Manjula
+					t.is( 0, count.change );
+
+					t.is( max+1, res.total );		// decreased by 1
+					t.is( limit, res.length );	// same as before (limit)
+
+					//==========================================================
+					// Simply update an object inside the view
+					count = {add:0, deleted:0, change:0};		// reset counters
+					var maggie = store.get("Maggie");
+					maggie.age++;
+					store.put(maggie);
+
+					// Test if the query results still line-up with the store.
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[start+i].name);
+					}
+					t.is( 0, count.deleted );		// unchanged
+					t.is( 0, count.add );				// unchanged
+					t.is( 1, count.change );		// Marge
+
+					t.is( max+1, res.total );				// unchanged
+					t.is( limit, res.length );	// same as before (limit)
+
+					observer.destroy();
 				}
-      );
+			},
+
+			{
+				name: "Observe Range, with listener, sort by age, paginate",
+				runTest: function (t) {
+					// IMPORTANT:
+
+					var Store = declare( [_Store, _Indexed, Loader]);
+					var store = new Store ({data: data, keyPath:"name"});
+
+					count = {add:0, deleted:0, change:0};		// reset counters
+
+					var keyRange = KeyRange.bound("Bart", "Marge");
+					var sort  = [{property:"age"}, {property:"name"}];
+					var start = 2;
+					var limit = 4;
+
+					var observer = new Observer( store, keyRange, {sort: sort, start:start, count:limit} );
+					observer.addListener( listener0, true );
+
+					var temp = store.getRange( keyRange, {sort:sort} );
+					var max  = temp.length;
+					var res  = observer.data;
+
+					// temp = [Maggie, Bart, Lisa, Marge, Manjula, Homer, Jacqeline] (sorted by age).
+					// res  = [Lisa, Marge, Manjula, Homer]
+
+					t.is( max, res.total );
+					t.is( limit, res.length );
+
+					// Test boundaries.
+					t.is( "Lisa", res[0].name );
+					t.is( "Homer", res[limit-1].name );
+
+					// Test if the range results still line-up with the store.
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[start+i].name);
+					}
+					//==========================================================
+					// insert new object. The object does match the range and based on age it
+					// will be the first object in the query results.
+					// Because we start at offset 2 it will not be included in the view but will
+					// cause the view to shift left by 1.
+
+					count = {add:0, deleted:0, change:0};		// reset counters
+					var obj  = {name:"Charles", "age":1, "parent":["Apu"], "hair":"blond"};
+					store.put( obj );
+
+					temp = store.getRange( keyRange, {sort:sort} );
+
+					// temp = [Charles, Maggie, Bart, Lisa, Marge, Manjula, Homer, Jacqeline] (sorted by age).
+					// res  = [Bart, Lisa, Marge, Manjula]
+
+					// Test if the range results still line-up with the store.
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[start+i].name);
+					}
+
+					t.is( 1, count.deleted );		// Homer
+					t.is( 1, count.add );				// Bart
+					t.is( 0, count.change );
+
+					t.is( max+1, res.total );				// increased 1
+					t.is( limit, res.length );	// same as before (limit)
+
+					//==========================================================
+					// By changing the age of Charles we move the object into the last spot
+					// of the query results. This will shift the view right by 1.
+
+					count = {add:0, deleted:0, change:0};		// reset counters
+					var charles = store.get("Charles");
+					charles.age = 100;
+					store.put(charles);
+
+					temp = store.getRange( keyRange, {sort:sort} );
+
+					// temp = [Maggie, Bart, Lisa, Marge, Manjula, Homer, Jacqeline, Charles] (sorted by age).
+					// res  = [Lisa, Marge, Manjula, Homer]
+
+					// Test if the range results still line-up with the store.
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[start+i].name);
+					}
+					t.is( 1, count.deleted );		// Bart
+					t.is( 1, count.add );				// Homer
+					t.is( 0, count.change );		// Although an update it was outside the view.
+
+					t.is( max+1, res.total );		// unchanged
+					t.is( limit, res.length );	// same as before (limit)
+
+					//==========================================================
+					// Add a new object to the store that matches the query but based on its
+					// age it will located AFTER the current view
+					//
+					count = {add:0, deleted:0, change:0};		// reset counters
+					var obj  = {name:"Lucky", "age":80, "parent":["Apu"], "hair":"blond"};
+					store.put( obj );
+
+					temp = store.getRange( keyRange, {sort:sort} );
+
+					// temp = [Maggie, Bart, Lisa, Marge, Manjula, Homer, Jacqeline, Lucky, Charles] (sorted by age).
+					// res  = [Lisa, Marge, Manjula, Homer]
+
+					// Test if the range results still line-up with the store.
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[start+i].name);
+					}
+					// There should be NO changes to the view....
+					t.is( 0, count.deleted );
+					t.is( 0, count.add );
+					t.is( 0, count.change );
+
+					t.is( max+2, res.total );				// increased by 1
+					t.is( limit, res.length );	// same as before (limit)
+
+					//==========================================================
+					// Changing Charles's age will move the object inside the view...
+
+					count = {add:0, deleted:0, change:0};		// reset counters
+					charles.age = 20;
+					store.put(charles);
+
+					temp = store.getRange( keyRange, {sort:sort} );
+
+					// temp = [Maggie, Bart, Lisa, Charles, Marge, Manjula, Homer, Jacqeline, Lucky] (sorted by age).
+					// res  = [Lisa, Charles, Marge, Manjula]
+
+					// Test if the query results still line-up with the store.
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[start+i].name);
+					}
+					t.is( 1, count.deleted );		// Homer
+					t.is( 1, count.add );				// Charles
+					t.is( 0, count.change );
+
+					t.is( max+2, res.total );				// unchanged
+					t.is( limit, res.length );	// same as before (limit)
+
+					//==========================================================
+					// Changing Charles's age to 1 will move the object in front of the view...
+					count = {add:0, deleted:0, change:0};		// reset counters
+					charles.age = 1;
+					store.put(charles);
+
+					temp = store.getRange( keyRange, {sort:sort} );
+
+					// temp = [Charles, Maggie, Bart, Lisa, Marge, Manjula, Homer, Jacqeline, Lucky] (sorted by age).
+					// res  = [Bart, Lisa, Marge, Manjula]
+
+					// Test if the query results still line-up with the store.
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[start+i].name);
+					}
+					t.is( 1, count.deleted );		// Charles
+					t.is( 1, count.add );				// Bart
+					t.is( 0, count.change );
+
+					t.is( max+2, res.total );				// unchanged
+					t.is( limit, res.length );	// same as before (limit)
+
+					//==========================================================
+					// Remove object from inside the view
+					count = {add:0, deleted:0, change:0};		// reset counters
+					store.remove("Lisa");
+
+					temp = store.getRange( keyRange, {sort:sort} );
+
+					// temp = [Charles, Maggie, Bart, Marge, Manjula, Homer, Jacqeline, Lucky] (sorted by age).
+					// res  = [Bart, Marge, Manjula, Homer]
+
+					// Test if the query results still line-up with the store.
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[start+i].name);
+					}
+					t.is( 1, count.deleted );		// Lisa
+					t.is( 1, count.add );				// Homer
+					t.is( 0, count.change );
+
+					t.is( max+1, res.total );		// decreased by 1
+					t.is( limit, res.length );	// same as before (limit)
+
+					//==========================================================
+					// Simply update an object inside the view
+					count = {add:0, deleted:0, change:0};		// reset counters
+					var marge = store.get("Marge");
+					marge.age++;
+					store.put(marge);
+
+					// Test if the query results still line-up with the store.
+					for (var i=0; i<res.length; i++) {
+						t.is( res[i].name, temp[start+i].name);
+					}
+					t.is( 0, count.deleted );		// unchanged
+					t.is( 0, count.add );				// unchanged
+					t.is( 1, count.change );		// Marge
+
+					t.is( max+1, res.total );				// unchanged
+					t.is( limit, res.length );	// same as before (limit)
+
+					observer.destroy();
+				}
+			}]);
+
+			ready( function () {
+				doh.run();
+			});
+
+		}
+    );
     </script>
 
   </head>

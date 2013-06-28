@@ -11,15 +11,15 @@
 
     <script type="text/javascript">
       var dojoConfig = {
-            async: true,
-            parseOnLoad: true,
-            isDebug: true,
-            baseUrl: "../../",
-            packages: [
-              { name: "dojo", location: "dojo" },
-              { name: "doh",  location: "util/doh" },
-              { name: "store",location: "indexedStore" }
-            ]
+		async: true,
+		parseOnLoad: true,
+		isDebug: true,
+		baseUrl: "../../",
+		packages: [
+		  { name: "dojo", location: "dojo" },
+		  { name: "doh",  location: "util/doh" },
+		  { name: "store",location: "indexedStore" }
+		]
       };
     </script>
 
@@ -33,183 +33,178 @@
         "dojo/when",
         "store/_base/_Store",
         "store/_base/_Indexed",
-        "store/_base/_Loader",
+        "store/loader/basic",
         "store/_base/KeyRange",
         "store/_base/Observer",
-				"store/listener/Listener",
-				"store/extension/Hierarchy",
-				"store/extension/Observable",
-				"store/extension/Watch",
-				"store/util/QueryEngine",
-				"store/util/Sorter"
+		"store/listener/Listener",
+		"store/extension/Hierarchy",
+		"store/extension/Observable",
+		"store/extension/Watch",
+		"store/util/QueryEngine"
         ], function( doh, declare, Promise, ready, when,
-											_Store, _Indexed, _Loader, KeyRange, Observer, Listener, Hierarchy,
-											Observable, Watch, QueryEngine, Sorter ) {
-					"use strict";
-					
-					// IMPORTANT:
-					//		DON'T CHANGE THE NUMBER OF RECORDS ARE ANY PROPERTIES WITHOUT UPDATING
-					//		ANY OF THE RANGE AND COUNT TESTS.
-					var data = [
-						{ "name":"Root", "age":Infinity, "parent":[], "hair":"none" },
-						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
-						{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
-						{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
-						{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
-						{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blue" },
-						{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
-						{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
-						{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
-						{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"blond" },
-						{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blue" },
-						{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blue" },
-						{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
-						{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
-						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
-						{ "name":"Manjula", "age":40, "parent":["Apu"], "hair":"brown"}
-					];
-					var max = data.length;
-					var undef;
+					_Store, _Indexed, Loader, KeyRange, Observer, Listener, Hierarchy,
+					Observable, Watch, QueryEngine) {
+			"use strict";
 
-					var count = {};
+			// IMPORTANT:
+			//		DON'T CHANGE THE NUMBER OF RECORDS ARE ANY PROPERTIES WITHOUT UPDATING
+			//		ANY OF THE RANGE AND COUNT TESTS.
+			var data = [
+				{ "name":"Root", "age":Infinity, "parent":[], "hair":"none" },
+				{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
+				{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
+				{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
+				{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
+				{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blue" },
+				{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
+				{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
+				{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
+				{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"blond" },
+				{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blue" },
+				{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blue" },
+				{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
+				{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
+				{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
+				{ "name":"Manjula", "age":40, "parent":["Apu"], "hair":"brown"}
+			];
+			var max = data.length;
+			var undef;
 
-					function action (from, to) {
-						var type = from < 0 ? (to < 0 ? "none" : "add") : (to < 0 ? "deleted" : "change");
-						return type;
-					}
+			var count = {};
 
-					function listener0(obj, from, to) {
-						var type = action(from,to);
-						count[type] = count[type] ? count[type] + 1 : 1;
-					};
-					function listener1(obj, from, to) {
-						var type = action(from,to);
-						count[type] = count[type] ? count[type] + 1 : 1;
-					};
-					function listener2(obj, from, to) {
-						var type = action(from,to);
-						count[type] = count[type] ? count[type] + 1 : 1;
-					};
-					function listener99(obj, from, to) {
-						var type = action(from,to);
-						count[type] = count[type] ? count[type] + 1 : 1;
-					};
-					
-					doh.register("Observer & Observable Extension", [
+			function action (from, to) {
+				var type = from < 0 ? (to < 0 ? "none" : "add") : (to < 0 ? "deleted" : "change");
+				return type;
+			}
 
-						{
-							name: "Observable Extension, Query",
-							timeout: 2000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, Observable]);
-								var store = new Store ({data:data, keyPath:"name"});
-								var defer = new doh.Deferred();
+			function listener0(obj, from, to) {
+				var type = action(from,to);
+				count[type] = count[type] ? count[type] + 1 : 1;
+			};
+			function listener1(obj, from, to) {
+				var type = action(from,to);
+				count[type] = count[type] ? count[type] + 1 : 1;
+			};
+			function listener2(obj, from, to) {
+				var type = action(from,to);
+				count[type] = count[type] ? count[type] + 1 : 1;
+			};
+			function listener99(obj, from, to) {
+				var type = action(from,to);
+				count[type] = count[type] ? count[type] + 1 : 1;
+			};
 
-								count = {add:0, deleted:0, change:0};		// reset counters
-								
-								store.ready( 
-									defer.getTestCallback(
-										function (store) {
+			doh.register("Observer & Observable Extension", [
+			{
+				name: "Observable Extension, Query",
+				timeout: 2000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Loader, Observable]);
+					var store = new Store ({data:data, keyPath:"name"});
+					var defer = new doh.Deferred();
 
-											// Query using a property function
-											var query = {age: function (val, key, obj) {
-												return (val >= 40 && val <= 50);
-											}};
-											var results = store.query(query);
-											
-											t.t( results.observe instanceof Function);
-										
-											var handle = results.observe( listener0, true );
-											t.is( 0, count.add );
-											
-											results.forEach( function (obj) {
-												obj.age++;
-												store.put(obj);
-											});
-											// Test types of actions..
-											t.is( 0, count.add );
-											t.is( 0, count.deleted );
-											t.is( 4, count.change );		// Only listener0 should have been called.
+					count = {add:0, deleted:0, change:0};		// reset counters
 
-											// Update age again but this time all object will no longer
-											// match the query so all will be removed from results.
-											
-											results.slice().forEach( function (obj) {
-												obj.age = 66;
-												store.put(obj);
-											});
+					store.ready(
+						defer.getTestCallback(
+							function (store) {
 
-											t.is( 0, results.length );
-											t.is( 0, results.total );
+								// Query using a property function
+								var query = {age: function (val, key, obj) {
+									return (val >= 40 && val <= 50);
+								}};
+								var results = store.query(query);
 
-											// Test types of actions..
-											t.is( 0, count.add );
-											t.is( 4, count.deleted );
-											t.is( 4, count.change );
+								t.t( results.observe instanceof Function);
 
-											handle.remove();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
+								var handle = results.observe( listener0, true );
+								t.is( 0, count.add );
+
+								results.forEach( function (obj) {
+									obj.age++;
+									store.put(obj);
+								});
+								// Test types of actions..
+								t.is( 0, count.add );
+								t.is( 0, count.deleted );
+								t.is( 4, count.change );		// Only listener0 should have been called.
+
+								// Update age again but this time all object will no longer
+								// match the query so all will be removed from results.
+
+								results.slice().forEach( function (obj) {
+									obj.age = 66;
+									store.put(obj);
+								});
+
+								t.is( 0, results.length );
+								t.is( 0, results.total );
+
+								// Test types of actions..
+								t.is( 0, count.add );
+								t.is( 4, count.deleted );
+								t.is( 4, count.change );
+
+								handle.remove();
 							}
-						},
-
-						{
-							name: "Observable Extension, Range",
-							timeout: 2000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, Observable]);
-								var store = new Store ({data:data, keyPath:"name"});
-								var defer = new doh.Deferred();
-
-								count = {add:0, deleted:0, change:0};		// reset counters
-								
-								store.ready( 
-									defer.getTestCallback(
-										function (store) {
-
-											var keyRange = KeyRange.bound("Bart", "Marge");
-											var results  = store.getRange( keyRange );
-											
-											t.t( results.observe instanceof Function);
-										
-											var handle = results.observe( listener0, true );
-											t.is( 0, count.add );
-											
-											results.forEach( function (obj) {
-												obj.age++;
-												store.put(obj);
-											});
-											// Test types of actions..
-											t.is( 0, count.add );
-											t.is( 0, count.deleted );
-											t.is( 7, count.change );
-
-											handle.remove();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
+						),
+						function (err) {
+							defer.errback(err);
 						}
-
-					]);
-
-					ready( function () {
-						doh.run();
-
-					});
-
-
+					);
+					return defer;
 				}
-      );
+			},
+
+			{
+				name: "Observable Extension, Range",
+				timeout: 2000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Loader, Observable]);
+					var store = new Store ({data:data, keyPath:"name"});
+					var defer = new doh.Deferred();
+
+					count = {add:0, deleted:0, change:0};		// reset counters
+
+					store.ready(
+						defer.getTestCallback(
+							function (store) {
+
+								var keyRange = KeyRange.bound("Bart", "Marge");
+								var results  = store.getRange( keyRange );
+
+								t.t( results.observe instanceof Function);
+
+								var handle = results.observe( listener0, true );
+								t.is( 0, count.add );
+
+								results.forEach( function (obj) {
+									obj.age++;
+									store.put(obj);
+								});
+								// Test types of actions..
+								t.is( 0, count.add );
+								t.is( 0, count.deleted );
+								t.is( 7, count.change );
+
+								handle.remove();
+							}
+						),
+						function (err) {
+							defer.errback(err);
+						}
+					);
+					return defer;
+				}
+			}]);
+
+			ready( function () {
+				doh.run();
+
+			});
+
+		}
+	);
     </script>
 
   </head>

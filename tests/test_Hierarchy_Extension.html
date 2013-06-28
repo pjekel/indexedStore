@@ -11,21 +11,21 @@
 
     <script type="text/javascript">
       var dojoConfig = {
-            async: true,
-            parseOnLoad: true,
-            isDebug: true,
-            baseUrl: "../../",
-            packages: [
-              { name: "dojo", location: "dojo" },
-              { name: "doh",  location: "util/doh" },
-              { name: "store",location: "indexedStore" }
-            ]
+		async: true,
+		parseOnLoad: true,
+		isDebug: true,
+		baseUrl: "../../",
+		packages: [
+		  { name: "dojo", location: "dojo" },
+		  { name: "doh",  location: "util/doh" },
+		  { name: "store",location: "indexedStore" }
+		]
       };
     </script>
 
     <script type="text/javascript" src="../../dojo/dojo.js"></script>
     <script type="text/javascript">
-      require([
+	require([
         "doh/runner",
         "dojo/_base/declare",
         "dojo/_base/lang",
@@ -33,438 +33,436 @@
         "dojo/ready",
         "store/_base/_Store",
         "store/_base/_Indexed",
-        "store/_base/_Loader",
+        "store/loader/advanced",
         "store/_base/_Natural",
         "store/_base/Keys",
         "store/_base/KeyRange",
-        "store/_base/Range",
-				"store/extension/Hierarchy"
+        "store/_base/range",
+		"store/extension/Hierarchy"
         ], function( doh, declare, lang, QueryResults, ready,
-											_Store, _Indexed, _Loader, _Natural, Keys, KeyRange, 
-											Range, Hierarchy ) {
-					"use strict";
-					
-					// IMPORTANT:
-					//		Don't change the number of records without updating any of
-					//		the range and count tests.
-					// - there are 8 unique parents.
-					var data = [
-						{ "name":"Root", "parent":[], "hair":"none" },
-						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
-						{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
-						{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
-						{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
-						{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },
-						{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
-						{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
-						{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
-						{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },
-						{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },
-						{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },
-						{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
-						{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
-						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
-						{ "name":"Manjula", "age":40, "parent":["Apu"], "hair":"brown"}
-					];
-					var undef;
-					
-					doh.register("Hierarchy Extension", [
-						{
-							name: "Create Hierarchy Store, No Loader, No data",
-							timeout: 1000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, Hierarchy]);
-								var store = new Store ({autoIncrement:true});
+					_Store, _Indexed, _Loader, _Natural, Keys, KeyRange,
+					Range, Hierarchy ) {
+		"use strict";
 
-								t.t(store.features.has("hierarchy"));
-								
-								// Test for default values.
-								t.t(store.name != "" || store.name == null);
-								t.is(true, store.autoIncrement);
-								t.is(true, store.features.has("hierarchy"));
-								t.is("id", store.keyPath);
-								t.is("parent", store.parentProperty);
-								t.is("auto", store.multiParented);		// Must still be 'auto'
-								t.is(true, store.hierarchical);
-								t.is(0, store.total);
+			// IMPORTANT:
+			//		Don't change the number of records without updating any of
+			//		the range and count tests.
+			// - there are 8 unique parents.
+			var data = [
+				{ "name":"Root", "parent":[], "hair":"none" },
+				{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
+				{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
+				{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
+				{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
+				{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },
+				{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
+				{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
+				{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
+				{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },
+				{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },
+				{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },
+				{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
+				{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
+				{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
+				{ "name":"Manjula", "age":40, "parent":["Apu"], "hair":"brown"}
+			];
+			var undef;
 
-								// Test for 'parents' index
-								t.t( !!store.index("parents") );
+			doh.register("Hierarchy Extension", [
+			{
+				name: "Create Hierarchy Store, No Loader, No data",
+				timeout: 1000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Hierarchy]);
+					var store = new Store ({autoIncrement:true});
 
-								// Test multi parent detection based on first object.
-								store.add({ "name":"Bart", "parent":"Homer" });
-								t.is(false, store.multiParented);
-							}
-						},
+					t.t(store.features.has("hierarchy"));
 
-						{
-							name: "Create Hierarchy Store, with Loader, No data",
-							timeout: 1000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy]);
-								var store = new Store ({autoIncrement:true});
+					// Test for default values.
+					t.t(store.name != "" || store.name == null);
+					t.is(true, store.autoIncrement);
+					t.is(true, store.features.has("hierarchy"));
+					t.is("id", store.keyPath);
+					t.is("parent", store.parentProperty);
+					t.is("auto", store.multiParented);		// Must still be 'auto'
+					t.is(true, store.hierarchical);
+					t.is(0, store.total);
 
-								// Test for default values.
-								t.t(store.name != "" || store.name == null);
-								t.is(true, store.autoIncrement);
-								t.is(true, store.features.has("hierarchy"));
-								t.is("id", store.keyPath);
-								t.is("parent", store.parentProperty);
-								t.is("auto", store.multiParented);		// Must still be 'auto'
-								t.is(true, store.hierarchical);
-								t.is(0, store.total);
+					// Test for 'parents' index
+					t.t( !!store.index("parents") );
 
-								// Test multi parent detection based on first object.
-								store.add({ "name":"Bart", "parent":["Homer","Marge"] });
-								t.is(true, store.multiParented);
-							}
-						},
-
-						{
-							name: "Create Hierarchy Store, with Loader and data",
-							timeout: 1000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy]);
-								var store = new Store ({data:data, keyPath:"name"});
-								var defer = new doh.Deferred();
-								var max   = data.length;
-
-								store.ready(
-									defer.getTestCallback( 
-										function (store) {
-											// Test for default values.
-											t.t(store.name != "" || store.name == null);
-											t.is(false, store.autoIncrement);
-											t.is(true, store.features.has("hierarchy"));
-											t.is("name", store.keyPath);
-											t.is("parent", store.parentProperty);
-											t.is(true, store.multiParented);		// Must now be true
-											t.is(true, store.hierarchical);
-											t.is(max, store.total);
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						},
-
-						{
-							name: "Create Hierarchy Store, Convert parent property (1)",
-							timeout: 1000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, Hierarchy]);
-								var store = new Store ({autoIncrement:true, multiParented:true});
-
-								// Test for default values.
-								t.is(true, store.multiParented);		// Must be true
-								t.is(0, store.total);
-
-								// Add object with single parent....
-								var key = store.add({ "name":"Bart", "parent":"Homer" });
-								var obj = store.get( key );
-								// parent property must be an array.
-								t.t( obj.parent instanceof Array);
-							}
-						},
-
-						{
-							name: "Create Hierarchy Store, Convert parent property (2)",
-							timeout: 1000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, Hierarchy]);
-								var store = new Store ({autoIncrement:true, multiParented:false});
-
-								// Test for default values.
-								t.is(false, store.multiParented);		// Must be false
-								t.is(0, store.total);
-
-								// Add object with single parent....
-								var key = store.add({ "name":"Bart", "parent":["Homer","Marge"] });
-								var obj = store.get( key );
-								// parent property must NOT be an array.
-								t.f( obj.parent instanceof Array);
-								t.is( "Homer", obj.parent);
-							}
-						},
-						
-						{
-							name: "Validate parents index, Indexed store",
-							timeout: 1000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy]);
-								var store = new Store ({data:data, keyPath:"name"});
-								var defer = new doh.Deferred();
-								var max   = data.length;
-
-								store.ready(
-									defer.getTestCallback( 
-										function (store) {
-											var index = store.index("parents");
-											t.is( 19, index.count() );		// count all index entries.
-											t.is( 8, index.count(true) );	// count parents only
-
-											// This should yield the same result.
-											t.is( index.count(), index.getKeyRange().total );
-
-											// Get all reference keys, no duplicates.
-											var range = index.getKeyRange(null, {duplicates:false});
-											t.is( 15, range.total);
-
-											// count children using count()
-											t.is (5, index.count("Root"));
-											t.is (1, index.count("Mona"));
-											t.is (3, index.count("Homer"));
-											t.is (3, index.count("Marge"));
-											t.is (2, index.count("Ned"));
-											t.is (1, index.count("Apu"));
-
-											// count children using ranges
-											t.is (5, index.getKeyRange("Root").total);
-											t.is (1, index.getKeyRange("Mona").total);
-											t.is (3, index.getKeyRange("Homer").total);
-											t.is (3, index.getKeyRange("Marge").total);
-											t.is (2, index.getKeyRange("Ned").total);
-											t.is (1, index.getKeyRange("Apu").total);
-
-											// Test children of 'Root'
-											var parent = store.get("Root");
-											t.t( store.hasChildren(parent) );
-
-											// Get all children of 'Root'
-											var results = store.getChildren( parent );
-											t.is(5, results.total);
-
-											// Loop all children and get the grandchildren.
-											results.forEach( function (obj) {
-												t.t( store.hasChildren(obj) );
-												var identity = store.getIdentity( obj );
-												var children = store.getChildren( obj );
-												// Test if the parent id is in the child's parent property.
-												children.forEach( function (child) {
-													t.t (Keys.indexOf( child.parent, identity) != -1);
-												}, this);
-											});
-			
-											store.destroy();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						},
-
-						{
-							name: "Validate parents index, Natural store",
-							timeout: 1000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Natural, _Loader, Hierarchy]);
-								var store = new Store ({data:data, keyPath:"name"});
-								var defer = new doh.Deferred();
-								var max   = data.length;
-
-								store.ready(
-									defer.getTestCallback( 
-										function (store) {
-											var index = store.index("parents");
-											t.is( 19, index.count() );		// count all index entries.
-											t.is( 8, index.count(true) );	// count parents only
-
-											// This should yield the same result.
-											t.is( index.count(), index.getKeyRange().total );
-
-											// Get all reference keys, no duplicates.
-											var range = index.getKeyRange(null, {duplicates:false});
-											t.is( 15, range.total);
-
-											// count children using count()
-											t.is (5, index.count("Root"));
-											t.is (1, index.count("Mona"));
-											t.is (3, index.count("Homer"));
-											t.is (3, index.count("Marge"));
-											t.is (2, index.count("Ned"));
-											t.is (1, index.count("Apu"));
-
-											// count children using ranges
-											t.is (5, index.getKeyRange("Root").total);
-											t.is (1, index.getKeyRange("Mona").total);
-											t.is (3, index.getKeyRange("Homer").total);
-											t.is (3, index.getKeyRange("Marge").total);
-											t.is (2, index.getKeyRange("Ned").total);
-											t.is (1, index.getKeyRange("Apu").total);
-
-											// Test children of 'Root'
-											var parent = store.get("Root");
-											t.t( store.hasChildren(parent) );
-
-											// Get all children of 'Root'
-											var results = store.getChildren( parent );
-											t.is(5, results.total);
-
-											// Loop all children and get the grandchildren.
-											results.forEach( function (obj) {
-												t.t( store.hasChildren(obj) );
-												var identity = store.getIdentity( obj );
-												var children = store.getChildren( obj );
-												// Test if the parent id is in the child's parent property.
-												children.forEach( function (child) {
-													t.t (Keys.indexOf( child.parent, identity) != -1);
-												}, this);
-											});
-			
-											store.destroy();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						},
-
-						{
-							name: "Get Parents",
-							timeout: 1000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Natural, _Loader, Hierarchy]);
-								var store = new Store ({data:data, keyPath:"name"});
-								var defer = new doh.Deferred();
-								var max   = data.length;
-
-								store.ready(
-									defer.getTestCallback( 
-										function (store) {
-											var results = store.getRange();		// Get all records
-
-											results.forEach( function (obj) {
-												var parentsProp = obj["parent"];
-												var parents = store.getParents(obj);
-												t.is( parentsProp.length, parents.length );
-												parents.forEach( function (parent) {
-													var key = store.getIdentity(parent);
-													t.t( Keys.indexOf(parentsProp, key) !=  -1);
-												});
-											});
-
-											store.destroy();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						},
-
-						{
-							name: "Remove Parents, removeParent()",
-							timeout: 1000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy]);
-								var store = new Store ({data:data, keyPath:"name"});
-								var defer = new doh.Deferred();
-								var max   = data.length;
-
-								store.ready(
-									defer.getTestCallback( 
-										function (store) {
-											var results = store.getRange();		// Get all records
-											var index   = store.index("parents");
-
-											results.forEach( function (obj) {
-												var parentsProp = obj["parent"];
-												if (parentsProp.length > 1) {
-													var parent   = parentsProp[parentsProp.length-1];
-													var oldChild = index.getKeyRange(parent);
-													var objKey   = store.getIdentity(obj);
-													t.t( store.removeParent(obj, parent));
-
-													var curChild = index.getKeyRange(parent);
-													if (curChild.length) {
-														t.t( Keys.indexOf(oldChild,objKey) != -1);
-														t.t( Keys.indexOf(curChild,objKey) == -1);
-													}
-												}
-											});
-
-
-											store.destroy();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						},
-
-						{
-							name: "Change parent property directly",
-							timeout: 1000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader, Hierarchy]);
-								var store = new Store ({data:data, keyPath:"name"});
-								var defer = new doh.Deferred();
-
-								// Instead of using the Hierarchy methods addParent() and removeParent()
-								// we are going to change the parent property directly. The store should
-								// notice the change and rewrite the parent property using the correct
-								// format. In addition, the parent index should update correctly with
-								// the new parent property value(s).
-								
-								store.ready(
-									defer.getTestCallback( 
-										function (store) {
-											var index   = store.index("parents");
-											var homer   = store.get("Homer");
-											var parents = lang.clone( homer.parent );
-											
-											// Use single value eventhough the store is multi parented.
-											homer.parent = "Mammie";
-											store.put(homer);
-											
-											// Parent property should have been reformatted.
-											t.t( homer.parent instanceof Array);
-
-											// The old parents should no longer be part of the index.
-											parents.forEach( function(parent) {
-												t.t( index.get(parent) == undef );
-											},this);
-											
-											// Test if 'Mammie' has a child and if so if it is 'Homer'.
-											var child = index.get("Mammie");
-											t.t( child != undef );
-											t.is( store.getIdentity(homer), store.getIdentity(child));
-											
-											store.destroy();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						}
-
-					]);
-
-					ready( function () {
-						doh.run();
-
-					});
-
-
+					// Test multi parent detection based on first object.
+					store.add({ "name":"Bart", "parent":"Homer" });
+					t.is(false, store.multiParented);
 				}
-      );
+			},
+
+			{
+				name: "Create Hierarchy Store, with Loader, No data",
+				timeout: 1000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, _Loader, Hierarchy]);
+					var store = new Store ({autoIncrement:true});
+
+					// Test for default values.
+					t.t(store.name != "" || store.name == null);
+					t.is(true, store.autoIncrement);
+					t.is(true, store.features.has("hierarchy"));
+					t.is("id", store.keyPath);
+					t.is("parent", store.parentProperty);
+					t.is("auto", store.multiParented);		// Must still be 'auto'
+					t.is(true, store.hierarchical);
+					t.is(0, store.total);
+
+					// Test multi parent detection based on first object.
+					store.add({ "name":"Bart", "parent":["Homer","Marge"] });
+					t.is(true, store.multiParented);
+				}
+			},
+
+			{
+				name: "Create Hierarchy Store, with Loader and data",
+				timeout: 1000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, _Loader, Hierarchy]);
+					var store = new Store ({data:data, keyPath:"name"});
+					var defer = new doh.Deferred();
+					var max   = data.length;
+
+					store.ready(
+						defer.getTestCallback(
+							function (store) {
+								// Test for default values.
+								t.t(store.name != "" || store.name == null);
+								t.is(false, store.autoIncrement);
+								t.is(true, store.features.has("hierarchy"));
+								t.is("name", store.keyPath);
+								t.is("parent", store.parentProperty);
+								t.is(true, store.multiParented);		// Must now be true
+								t.is(true, store.hierarchical);
+								t.is(max, store.total);
+							}
+						),
+						function (err) {
+							defer.errback(err);
+						}
+					);
+					return defer;
+				}
+			},
+
+			{
+				name: "Create Hierarchy Store, Convert parent property (1)",
+				timeout: 1000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Hierarchy]);
+					var store = new Store ({autoIncrement:true, multiParented:true});
+
+					// Test for default values.
+					t.is(true, store.multiParented);		// Must be true
+					t.is(0, store.total);
+
+					// Add object with single parent....
+					var key = store.add({ "name":"Bart", "parent":"Homer" });
+					var obj = store.get( key );
+					// parent property must be an array.
+					t.t( obj.parent instanceof Array);
+				}
+			},
+
+			{
+				name: "Create Hierarchy Store, Convert parent property (2)",
+				timeout: 1000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Hierarchy]);
+					var store = new Store ({autoIncrement:true, multiParented:false});
+
+					// Test for default values.
+					t.is(false, store.multiParented);		// Must be false
+					t.is(0, store.total);
+
+					// Add object with single parent....
+					var key = store.add({ "name":"Bart", "parent":["Homer","Marge"] });
+					var obj = store.get( key );
+					// parent property must NOT be an array.
+					t.f( obj.parent instanceof Array);
+					t.is( "Homer", obj.parent);
+				}
+			},
+
+			{
+				name: "Validate parents index, Indexed store",
+				timeout: 1000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, _Loader, Hierarchy]);
+					var store = new Store ({data:data, keyPath:"name"});
+					var defer = new doh.Deferred();
+					var max   = data.length;
+
+					store.ready(
+						defer.getTestCallback(
+							function (store) {
+								var index = store.index("parents");
+								t.is( 19, index.count() );		// count all index entries.
+								t.is( 8, index.count(true) );	// count parents only
+
+								// This should yield the same result.
+								t.is( index.count(), index.getKeyRange().total );
+
+								// Get all reference keys, no duplicates.
+								var range = index.getKeyRange(null, {duplicates:false});
+								t.is( 15, range.total);
+
+								// count children using count()
+								t.is (5, index.count("Root"));
+								t.is (1, index.count("Mona"));
+								t.is (3, index.count("Homer"));
+								t.is (3, index.count("Marge"));
+								t.is (2, index.count("Ned"));
+								t.is (1, index.count("Apu"));
+
+								// count children using ranges
+								t.is (5, index.getKeyRange("Root").total);
+								t.is (1, index.getKeyRange("Mona").total);
+								t.is (3, index.getKeyRange("Homer").total);
+								t.is (3, index.getKeyRange("Marge").total);
+								t.is (2, index.getKeyRange("Ned").total);
+								t.is (1, index.getKeyRange("Apu").total);
+
+								// Test children of 'Root'
+								var parent = store.get("Root");
+								t.t( store.hasChildren(parent) );
+
+								// Get all children of 'Root'
+								var results = store.getChildren( parent );
+								t.is(5, results.total);
+
+								// Loop all children and get the grandchildren.
+								results.forEach( function (obj) {
+									t.t( store.hasChildren(obj) );
+									var identity = store.getIdentity( obj );
+									var children = store.getChildren( obj );
+									// Test if the parent id is in the child's parent property.
+									children.forEach( function (child) {
+										t.t (Keys.indexOf( child.parent, identity) != -1);
+									}, this);
+								});
+
+								store.destroy();
+							}
+						),
+						function (err) {
+							defer.errback(err);
+						}
+					);
+					return defer;
+				}
+			},
+
+			{
+				name: "Validate parents index, Natural store",
+				timeout: 1000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Natural, _Loader, Hierarchy]);
+					var store = new Store ({data:data, keyPath:"name"});
+					var defer = new doh.Deferred();
+					var max   = data.length;
+
+					store.ready(
+						defer.getTestCallback(
+							function (store) {
+								var index = store.index("parents");
+								t.is( 19, index.count() );		// count all index entries.
+								t.is( 8, index.count(true) );	// count parents only
+
+								// This should yield the same result.
+								t.is( index.count(), index.getKeyRange().total );
+
+								// Get all reference keys, no duplicates.
+								var range = index.getKeyRange(null, {duplicates:false});
+								t.is( 15, range.total);
+
+								// count children using count()
+								t.is (5, index.count("Root"));
+								t.is (1, index.count("Mona"));
+								t.is (3, index.count("Homer"));
+								t.is (3, index.count("Marge"));
+								t.is (2, index.count("Ned"));
+								t.is (1, index.count("Apu"));
+
+								// count children using ranges
+								t.is (5, index.getKeyRange("Root").total);
+								t.is (1, index.getKeyRange("Mona").total);
+								t.is (3, index.getKeyRange("Homer").total);
+								t.is (3, index.getKeyRange("Marge").total);
+								t.is (2, index.getKeyRange("Ned").total);
+								t.is (1, index.getKeyRange("Apu").total);
+
+								// Test children of 'Root'
+								var parent = store.get("Root");
+								t.t( store.hasChildren(parent) );
+
+								// Get all children of 'Root'
+								var results = store.getChildren( parent );
+								t.is(5, results.total);
+
+								// Loop all children and get the grandchildren.
+								results.forEach( function (obj) {
+									t.t( store.hasChildren(obj) );
+									var identity = store.getIdentity( obj );
+									var children = store.getChildren( obj );
+									// Test if the parent id is in the child's parent property.
+									children.forEach( function (child) {
+										t.t (Keys.indexOf( child.parent, identity) != -1);
+									}, this);
+								});
+
+								store.destroy();
+							}
+						),
+						function (err) {
+							defer.errback(err);
+						}
+					);
+					return defer;
+				}
+			},
+
+			{
+				name: "Get Parents",
+				timeout: 1000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Natural, _Loader, Hierarchy]);
+					var store = new Store ({data:data, keyPath:"name"});
+					var defer = new doh.Deferred();
+					var max   = data.length;
+
+					store.ready(
+						defer.getTestCallback(
+							function (store) {
+								var results = store.getRange();		// Get all records
+
+								results.forEach( function (obj) {
+									var parentsProp = obj["parent"];
+									var parents = store.getParents(obj);
+									t.is( parentsProp.length, parents.length );
+									parents.forEach( function (parent) {
+										var key = store.getIdentity(parent);
+										t.t( Keys.indexOf(parentsProp, key) !=  -1);
+									});
+								});
+
+								store.destroy();
+							}
+						),
+						function (err) {
+							defer.errback(err);
+						}
+					);
+					return defer;
+				}
+			},
+
+			{
+				name: "Remove Parents, removeParent()",
+				timeout: 1000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, _Loader, Hierarchy]);
+					var store = new Store ({data:data, keyPath:"name"});
+					var defer = new doh.Deferred();
+					var max   = data.length;
+
+					store.ready(
+						defer.getTestCallback(
+							function (store) {
+								var results = store.getRange();		// Get all records
+								var index   = store.index("parents");
+
+								results.forEach( function (obj) {
+									var parentsProp = obj["parent"];
+									if (parentsProp.length > 1) {
+										var parent   = parentsProp[parentsProp.length-1];
+										var oldChild = index.getKeyRange(parent);
+										var objKey   = store.getIdentity(obj);
+										t.t( store.removeParent(obj, parent));
+
+										var curChild = index.getKeyRange(parent);
+										if (curChild.length) {
+											t.t( Keys.indexOf(oldChild,objKey) != -1);
+											t.t( Keys.indexOf(curChild,objKey) == -1);
+										}
+									}
+								});
+
+
+								store.destroy();
+							}
+						),
+						function (err) {
+							defer.errback(err);
+						}
+					);
+					return defer;
+				}
+			},
+
+			{
+				name: "Change parent property directly",
+				timeout: 1000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, _Loader, Hierarchy]);
+					var store = new Store ({data:data, keyPath:"name"});
+					var defer = new doh.Deferred();
+
+					// Instead of using the Hierarchy methods addParent() and removeParent()
+					// we are going to change the parent property directly. The store should
+					// notice the change and rewrite the parent property using the correct
+					// format. In addition, the parent index should update correctly with
+					// the new parent property value(s).
+
+					store.ready(
+						defer.getTestCallback(
+							function (store) {
+								var index   = store.index("parents");
+								var homer   = store.get("Homer");
+								var parents = lang.clone( homer.parent );
+
+								// Use single value eventhough the store is multi parented.
+								homer.parent = "Mammie";
+								store.put(homer);
+
+								// Parent property should have been reformatted.
+								t.t( homer.parent instanceof Array);
+
+								// The old parents should no longer be part of the index.
+								parents.forEach( function(parent) {
+									t.t( index.get(parent) == undef );
+								},this);
+
+								// Test if 'Mammie' has a child and if so if it is 'Homer'.
+								var child = index.get("Mammie");
+								t.t( child != undef );
+								t.is( store.getIdentity(homer), store.getIdentity(child));
+
+								store.destroy();
+							}
+						),
+						function (err) {
+							defer.errback(err);
+						}
+					);
+					return defer;
+				}
+			}]);
+
+			ready( function () {
+				doh.run();
+
+			});
+
+
+		}
+	);
     </script>
 
   </head>

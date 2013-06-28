@@ -11,15 +11,15 @@
 
     <script type="text/javascript">
       var dojoConfig = {
-            async: true,
-            parseOnLoad: true,
-            isDebug: true,
-            baseUrl: "../../",
-            packages: [
-              { name: "dojo", location: "dojo" },
-              { name: "doh",  location: "util/doh" },
-              { name: "store",location: "indexedStore" }
-            ]
+		async: true,
+		parseOnLoad: true,
+		isDebug: true,
+		baseUrl: "../../",
+		packages: [
+		  { name: "dojo", location: "dojo" },
+		  { name: "doh",  location: "util/doh" },
+		  { name: "store",location: "indexedStore" }
+		]
       };
     </script>
 
@@ -34,144 +34,141 @@
         "store/_base/Observer",
 				"store/listener/Listener"
         ], function( doh, declare, ready, _Store, _Indexed, Observer, Listener ) {
-					"use strict";
-					
-					var count = {add:0, deleted:0, change:0};		// reset counters
+			"use strict";
 
-					function action (from, to) {
-						var type = from < 0 ? (to < 0 ? "none" : "add") : (to < 0 ? "deleted" : "change");
-						return type;
-					}
+			var count = {add:0, deleted:0, change:0};		// reset counters
 
-					function listener0(obj, from, to) {
-						var type = action(from,to);
-						count[type] = count[type] ? count[type] + 1 : 1;
-					};
-					function listener1(obj, from, to) {
-						var type = action(from,to);
-						count[type] = count[type] ? count[type] + 1 : 1;
-					};
-					function listener2(obj, from, to) {
-						var type = action(from,to);
-						count[type] = count[type] ? count[type] + 1 : 1;
-					};
-					function listener99(obj, from, to) {
-						var type = action(from,to);
-						count[type] = count[type] ? count[type] + 1 : 1;
-					};
-					
-					doh.register("Observer Queries", [
-						{
-							name: "Create Observer, add and remove listener",
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ();
+			function action (from, to) {
+				var type = from < 0 ? (to < 0 ? "none" : "add") : (to < 0 ? "deleted" : "change");
+				return type;
+			}
 
-								var destroyed = false;
-								
-								// Because the Observable extension is not loaded we must create
-								// the observer instance manually.
-								var observer = new Observer( store );
-								observer.done( function () {
-									destroyed = true;
-								});
+			function listener0(obj, from, to) {
+				var type = action(from,to);
+				count[type] = count[type] ? count[type] + 1 : 1;
+			};
+			function listener1(obj, from, to) {
+				var type = action(from,to);
+				count[type] = count[type] ? count[type] + 1 : 1;
+			};
+			function listener2(obj, from, to) {
+				var type = action(from,to);
+				count[type] = count[type] ? count[type] + 1 : 1;
+			};
+			function listener99(obj, from, to) {
+				var type = action(from,to);
+				count[type] = count[type] ? count[type] + 1 : 1;
+			};
 
-								t.t( observer.data instanceof Array );
+			doh.register("Observer Queries", [
+			{
+				name: "Create Observer, add and remove listener",
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ();
 
-								// Create listener manually
-								var lstn0  = new Listener( listener0 );
-								var handle = observer.addListener( lstn0 );
-								// Create listener automatically.
-								observer.addListener( listener1 );
-								observer.removeListener( listener1 );
+					var destroyed = false;
 
-								// remove first listener using the handle.
-								handle.remove();
-
-								// The observer should be 'destroyed'
-								t.is (null, observer.data)
-								t.e( Error, observer, "addListener", [listener0]);
-								t.t(destroyed);
-
-							}
-						},
-
-						{
-							name: "Create Observer, add and remove multiple listeners",
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ();
-
-								var destroyed = false;
-								var observer  = new Observer( store );
-								observer.done( function () {
-									destroyed = true;
-								});
-
-								t.t( observer.data instanceof Array );
-
-								// Create listener automatically.
-								observer.addListener( listener0 );
-								observer.addListener( listener1 );
-								observer.addListener( listener2 );
-
-								var listeners = observer.getListeners();
-								t.is (3, listeners.length);
-								
-								// Remove all listeners
-								observer.removeListener();
-
-								// The observer should be 'destroyed'
-								t.is (null, observer.data)
-								t.e( Error, observer, "addListener", [listener0]);
-								t.t(destroyed);
-
-							}
-						},
-
-						{
-							name: "Create Observer, add multiple, destroy Observer",
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ();
-
-								var destroyed = false;
-								var observer  = new Observer( store );
-								observer.done( function () {
-									destroyed = true;
-								});
-
-								// Create listener automatically.
-								observer.addListener( listener0 );
-								observer.addListener( listener1 );
-								observer.addListener( listener2 );
-
-								var listeners = observer.getListeners();
-								t.is (3, listeners.length);
-
-								// Destroy Observer
-								observer.destroy();
-								observer.destroy();		// this should be Ok.
-
-								listeners = observer.getListeners();
-								t.is (null, listeners);
-								// The observer should be 'destroyed'
-								t.is (null, observer.data)
-								t.e( Error, observer, "addListener", [listener0]);
-								t.t(destroyed);
-							}
-						}
-
-
-					]);
-
-					ready( function () {
-						doh.run();
-
+					// Because the Observable extension is not loaded we must create
+					// the observer instance manually.
+					var observer = new Observer( store );
+					observer.done( function () {
+						destroyed = true;
 					});
 
+					t.t( observer.data instanceof Array );
+
+					// Create listener manually
+					var lstn0  = new Listener( listener0 );
+					var handle = observer.addListener( lstn0 );
+					// Create listener automatically.
+					observer.addListener( listener1 );
+					observer.removeListener( listener1 );
+
+					// remove first listener using the handle.
+					handle.remove();
+
+					// The observer should be 'destroyed'
+					t.is (null, observer.data)
+					t.e( Error, observer, "addListener", [listener0]);
+					t.t(destroyed);
+
 				}
-      );
+			},
+
+			{
+				name: "Create Observer, add and remove multiple listeners",
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ();
+
+					var destroyed = false;
+					var observer  = new Observer( store );
+					observer.done( function () {
+						destroyed = true;
+					});
+
+					t.t( observer.data instanceof Array );
+
+					// Create listener automatically.
+					observer.addListener( listener0 );
+					observer.addListener( listener1 );
+					observer.addListener( listener2 );
+
+					var listeners = observer.getListeners();
+					t.is (3, listeners.length);
+
+					// Remove all listeners
+					observer.removeListener();
+
+					// The observer should be 'destroyed'
+					t.is (null, observer.data)
+					t.e( Error, observer, "addListener", [listener0]);
+					t.t(destroyed);
+
+				}
+			},
+
+			{
+				name: "Create Observer, add multiple, destroy Observer",
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ();
+
+					var destroyed = false;
+					var observer  = new Observer( store );
+					observer.done( function () {
+						destroyed = true;
+					});
+
+					// Create listener automatically.
+					observer.addListener( listener0 );
+					observer.addListener( listener1 );
+					observer.addListener( listener2 );
+
+					var listeners = observer.getListeners();
+					t.is (3, listeners.length);
+
+					// Destroy Observer
+					observer.destroy();
+					observer.destroy();		// this should be Ok.
+
+					listeners = observer.getListeners();
+					t.is (null, listeners);
+					// The observer should be 'destroyed'
+					t.is (null, observer.data)
+					t.e( Error, observer, "addListener", [listener0]);
+					t.t(destroyed);
+				}
+			}]);
+
+			ready( function () {
+				doh.run();
+
+			});
+
+		}
+	);
     </script>
 
   </head>

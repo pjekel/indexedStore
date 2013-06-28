@@ -11,560 +11,557 @@
 
     <script type="text/javascript">
       var dojoConfig = {
-            async: true,
-            parseOnLoad: true,
-            isDebug: true,
-            baseUrl: "../../",
-            packages: [
-              { name: "dojo", location: "dojo" },
-              { name: "doh",  location: "util/doh" },
-              { name: "store",location: "indexedStore" }
-            ]
+		async: true,
+		parseOnLoad: true,
+		isDebug: true,
+		baseUrl: "../../",
+		packages: [
+		  { name: "dojo", location: "dojo" },
+		  { name: "doh",  location: "util/doh" },
+		  { name: "store",location: "indexedStore" }
+		]
       };
     </script>
 
     <script type="text/javascript" src="../../dojo/dojo.js"></script>
     <script type="text/javascript">
-      require([
+    require([
         "doh/runner",
         "dojo/_base/declare",
         "dojo/_base/lang",
-				"dojo/promise/all",
+		"dojo/promise/all",
         "dojo/store/util/QueryResults",
         "dojo/ready",
         "store/_base/_Store",
         "store/_base/_Indexed",
-        "store/_base/_Loader",
+        "store/loader/advanced",
         "store/_base/Index",		// for instanceof only...
         "store/_base/Keys",
         "store/_base/KeyRange",
-				"store/util/QueryEngine",
-				"store/_base/Range"
+		"store/util/QueryEngine",
+		"store/_base/range"
         ], function( doh, declare, lang, promiseAll, QueryResults, ready,
-											_Store, _Indexed, _Loader, Index,
-											Keys, KeyRange, QueryEngine, Range ) {
-					"use strict";
-					
-					// IMPORTANT:
-					//		Don't change the number of records without updating any of
-					//		the range and count tests.
-					var data = [
-						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },							//  1
-						{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },						//  2
-						{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },			//  3
-						{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },			//  4
-						{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },		//  5
-						{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },							//  6
-						{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },	//  7
-						{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },		//  8
-						{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },	//  9
-						{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },		// 10
-						{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },		// 11
-						{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },							// 12
-						{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },							// 13
-						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },						// 14
-						{ "name":"Manjula", "age":40, "parent":["Apu"], "hair":"brown"}						// 15
-					];
-					var undef;
-					
-					doh.register("Store Indexes", [
-						{
-							name: "Create Index Automatically",
-							runTest:function (t) {
-								var indexes = {name:"name", keyPath:"name"};
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
-								
-								// Test DOMStringList length and content
-								t.is( 1, store.indexNames.length, 1);
-								t.is( "name", store.indexNames.item(0) );
-								t.t ( store.indexNames.contains("name"));
+					_Store, _Indexed, _Loader, Index,
+					Keys, KeyRange, QueryEngine, Range ) {
+		"use strict";
 
-								// fetch index and test properties
-								var index = store.index("name");
-								t.t( index instanceof Index );
-								t.is( "index", index.type );
-								t.is( "name", index.name );
-								t.is( store, index.store );
-								t.is( "name", index.keyPath );
-								t.is( false, index.unique );
-								t.is( false, index.multiEntry );
-								t.is( false, index.uppercase );
-								
-								// Both store and index must be empty.
-								t.is( 0, store.count() );
-								t.is( 0, index.count() );
+			// IMPORTANT:
+			//		Don't change the number of records without updating any of
+			//		the range and count tests.
+			var data = [
+				{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },				//  1
+				{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },				//  2
+				{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },		//  3
+				{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },		//  4
+				{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },		//  5
+				{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },				//  6
+				{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },	//  7
+				{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },		//  8
+				{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },	//  9
+				{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },		// 10
+				{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },		// 11
+				{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },				// 12
+				{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },				// 13
+				{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },				// 14
+				{ "name":"Manjula", "age":40, "parent":["Apu"], "hair":"brown"}				// 15
+			];
+			var undef;
 
-								//========================================================
-								// remove index
-								
-								store.deleteIndex( index.name );
-								t.is( 0, store.indexNames.length);
-								t.is( undef, store.index("name"));
-								t.e( Error, index, "count" );
+			doh.register("Store Indexes", [
+			{
+				name: "Create Index Automatically",
+				runTest:function (t) {
+					var indexes = {name:"name", keyPath:"name"};
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
 
-							}
-						},
-						{
-							name: "Create Index Programmatically",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: true, keyPath:null});
-								
-								store.createIndex( "name", "name" );
+					// Test DOMStringList length and content
+					t.is( 1, store.indexNames.length, 1);
+					t.is( "name", store.indexNames.item(0) );
+					t.t ( store.indexNames.contains("name"));
 
-								// Test DOMStringList length and content
-								t.is( 1, store.indexNames.length);
-								t.is( "name", store.indexNames.item(0) );
-								t.t ( store.indexNames.contains("name"));
+					// fetch index and test properties
+					var index = store.index("name");
+					t.t( index instanceof Index );
+					t.is( "index", index.type );
+					t.is( "name", index.name );
+					t.is( store, index.store );
+					t.is( "name", index.keyPath );
+					t.is( false, index.unique );
+					t.is( false, index.multiEntry );
+					t.is( false, index.uppercase );
 
-								// fetch index and test properties
-								var index = store.index("name");
-								t.t( index instanceof Index );
-								t.is( "index", index.type );
-								t.is( "name", index.name );
-								t.is( store, index.store );
-								t.is( "name", index.keyPath );
-								t.is( false, index.unique );
-								t.is( false, index.multiEntry );
-								t.is( false, index.uppercase );
-								
-								// Both store and index must be empty.
-								t.is( 0, store.count() );
-								t.is( 0, index.count() );
+					// Both store and index must be empty.
+					t.is( 0, store.count() );
+					t.is( 0, index.count() );
 
-								//========================================================
-								// remove index
-								
-								store.deleteIndex( index.name );
-								t.is( 0, store.indexNames.length );
-								t.is( undef, store.index("name"));
-								t.e( Error, index, "count" );
+					//========================================================
+					// remove index
 
-								store.destroy();
-							}
-						},
-						
-						// Test all possible combinations of 'unique' and 'multiEntry' with
-						// different index key types
+					store.deleteIndex( index.name );
+					t.is( 0, store.indexNames.length);
+					t.is( undef, store.index("name"));
+					t.e( Error, index, "count" );
 
-						{
-							name: "Index, Duplicate entries, index key NOT an array",
-							runTest:function (t) {
-								var indexes = {name:"name", keyPath:"name", options:{unique:false}};
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
-								
-								var index = store.index("name");
-								var obj = { name:"Bart" };
-								
-								t.t( !!store.add( obj ) );
-								t.t( !!store.add( obj ) );
-								t.t( !!store.add( obj ) );
-
-								// Get all reference keys from the index.
-								var results = index.getKeyRange("Bart");
-								t.is( 3, results.total );
-								store.destroy();
-							}
-						},
-
-						{
-							name: "Index, NO duplicate entries, index key NOT an array",
-							runTest:function (t) {
-								var indexes = {name:"name", keyPath:"name", options:{unique:true}};
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
-								
-								var index = store.index("name");
-								var obj = { name:"Bart" };
-								
-								t.t( !!store.add( obj ) );
-								t.e( Error, store, "add", [obj] );		// Key already exist (no record added)
-								t.e( Error, store, "add", [obj] );		// Key already exist (no record added);
-
-								t.is( 1, store.count() );
-								// Get all reference keys from the index.
-								var results = index.getKeyRange("Bart");
-								t.is( 1, results.total );
-								store.destroy();
-							}
-						},
-
-						{
-							name: "Index, Duplicate entries, index key is an array",
-							runTest:function (t) {
-								var indexes = {name:"parent", keyPath:"parent", options:{unique:false}};
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
-								
-								var index = store.index("parent");
-								var obj = { name:"Bart", parent:["Homer", "Marge"] };
-								
-								t.t( !!store.add( obj ) );
-								t.t( !!store.add( obj ) );
-								t.t( !!store.add( obj ) );
-
-								// Get all reference keys from the index.
-								var results = index.getKeyRange(["Homer", "Marge"]);
-								t.is( 3, results.total );
-								store.destroy();
-							}
-						},
-
-						{
-							name: "Index, Duplicate entries, index key is an invalid array",
-							runTest:function (t) {
-								var indexes = {name:"parent", keyPath:"parent", options:{unique:false}};
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
-								
-								var index = store.index("parent");
-								var obj = { name:"Bart", parent:["Homer", "Marge", null] };
-								
-								t.t( !!store.add( obj ) );
-								t.t( !!store.add( obj ) );
-								t.t( !!store.add( obj ) );
-
-								// Because the parent property contains an invalid key value (null)
-								// no index entries have been created.
-								var results = index.getKeyRange(["Homer", "Marge"]);
-								t.is( 0, results.total );
-								store.destroy();
-							}
-						},
-
-						{
-							name: "Index, MultiEntry, Duplicate entries, index key is an array",
-							runTest:function (t) {
-								var indexes = {name:"parent", keyPath:"parent", options:{unique:false, multiEntry:true}};
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
-								
-								var index = store.index("parent");
-								// Technically this is an invalid key array BUT because 'multiEntry'
-								// is enabled the array is reduced to ['Homer', 'Marge'].
-								var obj = { name:"Bart", parent:["Homer", "Marge", null] };
-								
-								t.t( !!store.add( obj ) );
-								t.t( !!store.add( obj ) );
-								t.t( !!store.add( obj ) );
-
-								// Count all unique index entries, not including duplicates.
-								t.is( 2, index.count(true) );
-								// Get all reference keys for 'Homer'
-								var results = index.getKeyRange("Homer");
-								t.is( 3, results.total );
-								var results = index.getKeyRange("Marge");
-								t.is( 3, results.total );
-								store.destroy();
-							}
-						},
-
-						{
-							name: "Index, MultiEntry, No Duplicate entries, index key is an array",
-							runTest:function (t) {
-								var indexes = {name:"parent", keyPath:"parent", options:{unique:true, multiEntry:true}};
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
-								
-								var index = store.index("parent");
-								// Technically this is an invalid key array BUT because 'multiEntry'
-								// is enabled the array is reduced to ['Homer', 'Marge'].
-								var obj = { name:"Bart", parent:["Homer", "Marge", null] };
-								
-								t.t( !!store.add( obj ) );
-								t.e( Error, store, "add", [obj] );		// Key already exist (no record added)
-								t.e( Error, store, "add", [obj] );		// Key already exist (no record added);
-
-								// Count all unique index entries, not including duplicates.
-								t.is( 2, index.count(true) );
-								// Get all reference keys for 'Homer'
-								var results = index.getKeyRange("Homer");
-								t.is( 1, results.total );
-								var results = index.getKeyRange("Marge");
-								t.is( 1, results.total );
-								store.destroy();
-							}
-						},
-
-						{
-							// Test deferred index.ready() 
-							name: "Create Index Programmatically, Deferred",
-							timeout: 2000,
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader]);
-								var store = new Store ( {data: data, autoIncrement: true, keyPath:null});
-								var defer = new doh.Deferred();
-								var max   = data.length;
-								
-								store.ready( 
-									function (store) {
-										var index = store.createIndex( "name", "name", {unique:false, async: true} );
-										index.ready( 
-											defer.getTestCallback( function (index) {
-												t.is( max, index.count() );
-											})
-										)
-									},
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						},
-
-						{
-							name: "Multiple Indexes, No multiEntry",
-							runTest:function (t) {
-								var indexes = [
-									{name:"parent", keyPath:"parent", options:{unique: false}},
-									{name:"name", keyPath:"name", options:{unique: false}},
-								];
-								var Store = declare( [_Store, _Indexed, _Loader]);
-								var store = new Store ( {data: data, autoIncrement: true, keyPath:null, indexes: indexes});
-								var results;
-								
-								// Test DOMStringList length and content
-								t.is( 2, store.indexNames.length);
-								t.t ( store.indexNames.contains("parent"));
-								t.t ( store.indexNames.contains("name"));
-
-								// fetch index and test properties
-								var pIndex = store.index("parent");
-								var nIndex = store.index("name");
-
-								t.t( !!(pIndex && nIndex) );
-
-								t.is( store.count(), nIndex.count() );
-								t.is( 15, nIndex.count() );			// Total entries
-								t.is( 15, pIndex.count() );			// Total entries
-								t.is( 6, pIndex.count(true) );	// unique entries.
-
-								t.t (!!pIndex.get( ["Homer","Marge"]));
-								results = pIndex.getRange( ["Homer","Marge"] );
-								t.is( 3, results.total );
-								
-								//========================================================
-								// remove index
-								
-								store.deleteIndex( nIndex.name );
-								store.deleteIndex( pIndex.name );
-								t.is( 0, store.indexNames.length);
-
-								store.destroy();
-							}
-						},
-						{
-							name: "Multiple Indexes, multiEntry, NO store keyPath",
-							runTest:function (t) {
-								var indexes = [
-									{name:"parent", keyPath:"parent", options:{unique: false, multiEntry: true}},
-									{name:"name", keyPath:"name", options:{unique: false}},
-								];
-								var Store = declare( [_Store, _Indexed, _Loader]);
-								var store = new Store ( {data: data, autoIncrement: true, keyPath:null, indexes: indexes});
-								var results, keyRange;
-								
-								// Test DOMStringList length and content
-								t.is( 2, store.indexNames.length);
-								t.t ( store.indexNames.contains("parent"));
-								t.t ( store.indexNames.contains("name"));
-
-								// fetch index and test properties
-								var pIndex = store.index("parent");
-								var nIndex = store.index("name");
-
-								t.t( !!(pIndex && nIndex) );
-
-								t.is( store.count(), nIndex.count() );
-								t.is( 19, pIndex.count() );			// Total entries
-								t.is( 8, pIndex.count(true) );	// unique entries.
-
-								// In range: "Homer", "Jacqueline", "Marge"
-								// - Homer 			reference key: [7,8,9]	 -> (Lisa, Bart, Maggie)
-								// - Jacqueline	    ,,   		 : [5,10,11] -> (Marge, Patty, Selma)
-								// - Marge			    ,,   		 : [7,8,9]	 -> (Lisa, Bart, Maggie)
-								keyRange = KeyRange.bound( "Homer", "Marge" );
-								
-								t.t (!!pIndex.get( "Homer"));						// (Lisa)
-								t.t (!!pIndex.get( keyRange ));					// (Lisa)
-								t.t (!!pIndex.getKey( "Homer"));				// (7)
-								t.t (!!pIndex.getKey( keyRange ));			// (7)
-
-								results = pIndex.getRange( "Homer" );		// (Lisa, Bart, Maggie)
-								t.is( 3, results.total );
-								results = pIndex.getRange( keyRange );	// (Lisa, Bart, Maggie, Marge, Patty, Selma, Lisa, Bart, Maggie)
-								t.is( 9, results.total );
-
-								// Same range, no duplicates
-								results = pIndex.getRange( keyRange, {duplicates:false} );	// (Lisa, Bart, Maggie, Marge, Patty, Selma)
-								t.is( 6, results.total );
-
-								//========================================================
-								// remove index
-								
-								store.deleteIndex( nIndex.name );
-								store.deleteIndex( pIndex.name );
-								t.is( 0, store.indexNames.length);
-
-								store.destroy();
-							}
-						},
-						{
-							name: "Multiple Indexes, multiEntry and store keyPath",
-							runTest:function (t) {
-								var indexes = [
-									{name:"parent", keyPath:"parent", options:{unique: false, multiEntry: true}},
-									{name:"name", keyPath:"name", options:{unique: false}},
-								];
-								var Store = declare( [_Store, _Indexed, _Loader]);
-								var store = new Store ( {data: data, keyPath:"name", indexes: indexes});
-								var results, keyRange;
-								
-								// Test DOMStringList length and content
-								t.is( 2, store.indexNames.length);
-								t.t ( store.indexNames.contains("parent"));
-								t.t ( store.indexNames.contains("name"));
-
-								// fetch index and test properties
-								var pIndex = store.index("parent");
-								var nIndex = store.index("name");
-
-								t.t( !!(pIndex && nIndex) );
-
-								t.is( store.count(), nIndex.count() );
-								t.is( 19, pIndex.count() );			// Total entries
-								t.is( 8, pIndex.count(true) );	// unique entries.
-
-								// In range: "Homer", "Jacqueline", "Marge"
-								// - Homer 			reference key: [7,8,9]	 -> (Lisa, Bart, Maggie)
-								// - Jacqueline	    ,,   		 : [5,10,11] -> (Marge, Patty, Selma)
-								// - Marge			    ,,   		 : [7,8,9]	 -> (Lisa, Bart, Maggie)
-								keyRange = KeyRange.bound( "Homer", "Marge" );
-								
-								t.t (!!pIndex.get( "Homer"));						// (Bart)
-								t.t (!!pIndex.get( keyRange ));					// (Bart)
-								t.t (!!pIndex.getKey( "Homer"));				// ("Bart")
-								t.t (!!pIndex.getKey( keyRange ));			// ("Bart")
-
-								results = pIndex.getRange( "Homer" );		// (Bart, Lisa, Maggie)
-								t.is( 3, results.total );
-								results = pIndex.getRange( keyRange );	// (Lisa, Bart, Maggie, Marge, Patty, Selma, Lisa, Bart, Maggie)
-								t.is( 9, results.total );
-
-								// Same range, no duplicates
-								results = pIndex.getRange( keyRange, {duplicates:false} );	// (Lisa, Bart, Maggie, Marge, Patty, Selma)
-								t.is( 6, results.total );
-								
-								//========================================================
-								// remove index
-								
-								store.deleteIndex( nIndex.name );
-								store.deleteIndex( pIndex.name );
-								t.is( 0, store.indexNames.length);
-
-								store.destroy();
-							}
-						},
-
-						{
-							name: "Remove Data - Multiple Indexes, multiEntry",
-							runTest:function (t) {
-								var indexes = [
-									{name:"parent", keyPath:"parent", options:{unique: false, multiEntry: true}},
-									{name:"name", keyPath:"name", options:{unique: false}},
-								];
-								var Store = declare( [_Store, _Indexed, _Loader]);
-								var store = new Store ( {data: data, keyPath:"name", indexes: indexes});
-								var results, keyRange;
-								
-								// Test DOMStringList length and content
-								t.is( 2, store.indexNames.length);
-								t.t ( store.indexNames.contains("parent"));
-								t.t ( store.indexNames.contains("name"));
-
-								// fetch index and test properties
-								var pIndex = store.index("parent");
-								var nIndex = store.index("name");
-
-								t.t( !!store.get("Homer"));
-								t.t( !!pIndex.get("Homer"));
-								t.t( !!nIndex.get("Homer"));
-
-								t.t( !!store.remove("Homer"));
-								t.f( !!store.get("Homer"));
-								
-								store.destroy();
-							}
-						},
-
-						{
-							name: "Destroy Store",
-							runTest:function (t) {
-								var indexes = {name:"name", keyPath:"name", options:{unique:false}};
-								var Store = declare( [_Store, _Indexed, _Loader]);
-								var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
-								
-								// Test DOMStringList length and content
-								t.is( 1, store.indexNames.length);
-								t.is( "name", store.indexNames.item(0) );
-								t.t ( store.indexNames.contains("name"));
-
-								// fetch index and test properties
-								var index = store.index("name");
-
-								store.destroy();
-
-								t.e( Error, store, "count" );
-								t.e( Error, index, "count" );
-
-							}
-						},
-						
-						{
-							// Test deferred index.ready() 
-							name: "Large Store, multiple indexes",
-							timeout: 10000,
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed, _Loader]);
-								var store = new Store ( {url:"../json/us-zipcodes-05k.json", suppressEvents: true, 
-																				 keyPath:"zip", maxErrors:25 });
-								var defer = new doh.Deferred();
-								
-								store.ready( 
-									function (store) {
-										var index = {
-											"states": store.createIndex( "states", "code", {async: true} ),
-											"city": store.createIndex( "city", "city", {async: true} )
-										};
-										var promise = promiseAll([ index.states.ready(), index.city.ready() ])
-										promise.then(
-											defer.getTestCallback( function () {
-												var results = index.states.getRange( "AZ" );
-												results = QueryEngine({city:/^C/})(results);
-												var count = results.total;
-											})
-										);
-									},
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
-							}
-						},
-
-
-					]);
-
-					ready( function () {
-						doh.run();
-
-					});
 				}
-      );
+			},
+			{
+				name: "Create Index Programmatically",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: true, keyPath:null});
+
+					store.createIndex( "name", "name");
+
+					// Test DOMStringList length and content
+					t.is( 1, store.indexNames.length);
+					t.is( "name", store.indexNames.item(0) );
+					t.t ( store.indexNames.contains("name"));
+
+					// fetch index and test properties
+					var index = store.index("name");
+					t.t( index instanceof Index );
+					t.is( "index", index.type );
+					t.is( "name", index.name );
+					t.is( store, index.store );
+					t.is( "name", index.keyPath );
+					t.is( false, index.unique );
+					t.is( false, index.multiEntry );
+					t.is( false, index.uppercase );
+
+					// Both store and index must be empty.
+					t.is( 0, store.count() );
+					t.is( 0, index.count() );
+
+					//========================================================
+					// remove index
+
+					store.deleteIndex( index.name );
+					t.is( 0, store.indexNames.length );
+					t.is( undef, store.index("name"));
+					t.e( Error, index, "count" );
+
+					store.destroy();
+				}
+			},
+
+			// Test all possible combinations of 'unique' and 'multiEntry' with
+			// different index key types
+
+			{
+				name: "Index, Duplicate entries, index key NOT an array",
+				runTest:function (t) {
+					var indexes = {name:"name", keyPath:"name", options:{unique:false}};
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
+
+					var index = store.index("name");
+					var obj = { name:"Bart" };
+
+					t.t( !!store.add( obj ) );
+					t.t( !!store.add( obj ) );
+					t.t( !!store.add( obj ) );
+
+					// Get all reference keys from the index.
+					var results = index.getKeyRange("Bart");
+					t.is( 3, results.total );
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Index, NO duplicate entries, index key NOT an array",
+				runTest:function (t) {
+					var indexes = {name:"name", keyPath:"name", options:{unique:true}};
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
+
+					var index = store.index("name");
+					var obj = { name:"Bart" };
+
+					t.t( !!store.add( obj ) );
+					t.e( Error, store, "add", [obj] );		// Key already exist (no record added)
+					t.e( Error, store, "add", [obj] );		// Key already exist (no record added);
+
+					t.is( 1, store.count() );
+					// Get all reference keys from the index.
+					var results = index.getKeyRange("Bart");
+					t.is( 1, results.total );
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Index, Duplicate entries, index key is an array",
+				runTest:function (t) {
+					var indexes = {name:"parent", keyPath:"parent", options:{unique:false}};
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
+
+					var index = store.index("parent");
+					var obj = { name:"Bart", parent:["Homer", "Marge"] };
+
+					t.t( !!store.add( obj ) );
+					t.t( !!store.add( obj ) );
+					t.t( !!store.add( obj ) );
+
+					// Get all reference keys from the index.
+					var results = index.getKeyRange(["Homer", "Marge"]);
+					t.is( 3, results.total );
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Index, Duplicate entries, index key is an invalid array",
+				runTest:function (t) {
+					var indexes = {name:"parent", keyPath:"parent", options:{unique:false}};
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
+
+					var index = store.index("parent");
+					var obj = { name:"Bart", parent:["Homer", "Marge", null] };
+
+					t.t( !!store.add( obj ) );
+					t.t( !!store.add( obj ) );
+					t.t( !!store.add( obj ) );
+
+					// Because the parent property contains an invalid key value (null)
+					// no index entries have been created.
+					var results = index.getKeyRange(["Homer", "Marge"]);
+					t.is( 0, results.total );
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Index, MultiEntry, Duplicate entries, index key is an array",
+				runTest:function (t) {
+					var indexes = {name:"parent", keyPath:"parent", options:{unique:false, multiEntry:true}};
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
+
+					var index = store.index("parent");
+					// Technically this is an invalid key array BUT because 'multiEntry'
+					// is enabled the array is reduced to ['Homer', 'Marge'].
+					var obj = { name:"Bart", parent:["Homer", "Marge", null] };
+
+					t.t( !!store.add( obj ) );
+					t.t( !!store.add( obj ) );
+					t.t( !!store.add( obj ) );
+
+					// Count all unique index entries, not including duplicates.
+					t.is( 2, index.count(true) );
+					// Get all reference keys for 'Homer'
+					var results = index.getKeyRange("Homer");
+					t.is( 3, results.total );
+					var results = index.getKeyRange("Marge");
+					t.is( 3, results.total );
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Index, MultiEntry, No Duplicate entries, index key is an array",
+				runTest:function (t) {
+					var indexes = {name:"parent", keyPath:"parent", options:{unique:true, multiEntry:true}};
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
+
+					var index = store.index("parent");
+					// Technically this is an invalid key array BUT because 'multiEntry'
+					// is enabled the array is reduced to ['Homer', 'Marge'].
+					var obj = { name:"Bart", parent:["Homer", "Marge", null] };
+
+					t.t( !!store.add( obj ) );
+					t.e( Error, store, "add", [obj] );		// Key already exist (no record added)
+					t.e( Error, store, "add", [obj] );		// Key already exist (no record added);
+
+					// Count all unique index entries, not including duplicates.
+					t.is( 2, index.count(true) );
+					// Get all reference keys for 'Homer'
+					var results = index.getKeyRange("Homer");
+					t.is( 1, results.total );
+					var results = index.getKeyRange("Marge");
+					t.is( 1, results.total );
+					store.destroy();
+				}
+			},
+
+			{
+				// Test deferred index.ready()
+				name: "Create Index Programmatically, Deferred",
+				timeout: 2000,
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed, _Loader]);
+					var store = new Store ( {data: data, autoIncrement: true, keyPath:null});
+					var defer = new doh.Deferred();
+					var max   = data.length;
+
+					store.ready(
+						function (store) {
+							var index = store.createIndex( "name", "name", {unique:false, async: true} );
+							index.ready(
+								defer.getTestCallback( function (index) {
+									t.is( max, index.count() );
+								})
+							)
+						},
+						function (err) {
+							defer.errback(err);
+						}
+					);
+					return defer;
+				}
+			},
+
+			{
+				name: "Multiple Indexes, No multiEntry",
+				runTest:function (t) {
+					var indexes = [
+						{name:"parent", keyPath:"parent", options:{unique: false}},
+						{name:"name", keyPath:"name", options:{unique: false, uppercase:true}},
+					];
+					var Store = declare( [_Store, _Indexed, _Loader]);
+					var store = new Store ( {data: data, autoIncrement: true, keyPath:null, indexes: indexes});
+					var results;
+
+					// Test DOMStringList length and content
+					t.is( 2, store.indexNames.length);
+					t.t ( store.indexNames.contains("parent"));
+					t.t ( store.indexNames.contains("name"));
+
+					// fetch index and test properties
+					var pIndex = store.index("parent");
+					var nIndex = store.index("name");
+
+					t.t( !!(pIndex && nIndex) );
+
+					t.is( store.count(), nIndex.count() );
+					t.is( 15, nIndex.count() );			// Total entries
+					t.is( 15, pIndex.count() );			// Total entries
+					t.is( 6, pIndex.count(true) );	// unique entries.
+
+					t.t (!!pIndex.get( ["Homer","Marge"]));
+					results = pIndex.getRange( ["Homer","Marge"] );
+					t.is( 3, results.total );
+
+					//========================================================
+					// remove index
+
+					store.deleteIndex( nIndex.name );
+					store.deleteIndex( pIndex.name );
+					t.is( 0, store.indexNames.length);
+
+					store.destroy();
+				}
+			},
+			{
+				name: "Multiple Indexes, multiEntry, NO store keyPath",
+				runTest:function (t) {
+					var indexes = [
+						{name:"parent", keyPath:"parent", options:{unique: false, multiEntry: true}},
+						{name:"name", keyPath:"name", options:{unique: false}},
+					];
+					var Store = declare( [_Store, _Indexed, _Loader]);
+					var store = new Store ( {data: data, autoIncrement: true, keyPath:null, indexes: indexes});
+					var results, keyRange;
+
+					// Test DOMStringList length and content
+					t.is( 2, store.indexNames.length);
+					t.t ( store.indexNames.contains("parent"));
+					t.t ( store.indexNames.contains("name"));
+
+					// fetch index and test properties
+					var pIndex = store.index("parent");
+					var nIndex = store.index("name");
+
+					t.t( !!(pIndex && nIndex) );
+
+					t.is( store.count(), nIndex.count() );
+					t.is( 19, pIndex.count() );			// Total entries
+					t.is( 8, pIndex.count(true) );	// unique entries.
+
+					// In range: "Homer", "Jacqueline", "Marge"
+					// - Homer 			reference key: [7,8,9]	 -> (Lisa, Bart, Maggie)
+					// - Jacqueline	    ,,   		 : [5,10,11] -> (Marge, Patty, Selma)
+					// - Marge			    ,,   		 : [7,8,9]	 -> (Lisa, Bart, Maggie)
+					keyRange = KeyRange.bound( "Homer", "Marge" );
+
+					t.t (!!pIndex.get( "Homer"));						// (Lisa)
+					t.t (!!pIndex.get( keyRange ));					// (Lisa)
+					t.t (!!pIndex.getKey( "Homer"));				// (7)
+					t.t (!!pIndex.getKey( keyRange ));			// (7)
+
+					results = pIndex.getRange( "Homer" );		// (Lisa, Bart, Maggie)
+					t.is( 3, results.total );
+					results = pIndex.getRange( keyRange );	// (Lisa, Bart, Maggie, Marge, Patty, Selma, Lisa, Bart, Maggie)
+					t.is( 9, results.total );
+
+					// Same range, no duplicates
+					results = pIndex.getRange( keyRange, {duplicates:false} );	// (Lisa, Bart, Maggie, Marge, Patty, Selma)
+					t.is( 6, results.total );
+
+					//========================================================
+					// remove index
+
+					store.deleteIndex( nIndex.name );
+					store.deleteIndex( pIndex.name );
+					t.is( 0, store.indexNames.length);
+
+					store.destroy();
+				}
+			},
+			{
+				name: "Multiple Indexes, multiEntry and store keyPath",
+				runTest:function (t) {
+					var indexes = [
+						{name:"parent", keyPath:"parent", options:{unique: false, multiEntry: true}},
+						{name:"name", keyPath:"name", options:{unique: false}},
+					];
+					var Store = declare( [_Store, _Indexed, _Loader]);
+					var store = new Store ( {data: data, keyPath:"name", indexes: indexes});
+					var results, keyRange;
+
+					// Test DOMStringList length and content
+					t.is( 2, store.indexNames.length);
+					t.t ( store.indexNames.contains("parent"));
+					t.t ( store.indexNames.contains("name"));
+
+					// fetch index and test properties
+					var pIndex = store.index("parent");
+					var nIndex = store.index("name");
+
+					t.t( !!(pIndex && nIndex) );
+
+					t.is( store.count(), nIndex.count() );
+					t.is( 19, pIndex.count() );			// Total entries
+					t.is( 8, pIndex.count(true) );	// unique entries.
+
+					// In range: "Homer", "Jacqueline", "Marge"
+					// - Homer 			reference key: [7,8,9]	 -> (Lisa, Bart, Maggie)
+					// - Jacqueline	    ,,   		 : [5,10,11] -> (Marge, Patty, Selma)
+					// - Marge			    ,,   		 : [7,8,9]	 -> (Lisa, Bart, Maggie)
+					keyRange = KeyRange.bound( "Homer", "Marge" );
+
+					t.t (!!pIndex.get( "Homer"));						// (Bart)
+					t.t (!!pIndex.get( keyRange ));					// (Bart)
+					t.t (!!pIndex.getKey( "Homer"));				// ("Bart")
+					t.t (!!pIndex.getKey( keyRange ));			// ("Bart")
+
+					results = pIndex.getRange( "Homer" );		// (Bart, Lisa, Maggie)
+					t.is( 3, results.total );
+					results = pIndex.getRange( keyRange );	// (Lisa, Bart, Maggie, Marge, Patty, Selma, Lisa, Bart, Maggie)
+					t.is( 9, results.total );
+
+					// Same range, no duplicates
+					results = pIndex.getRange( keyRange, {duplicates:false} );	// (Lisa, Bart, Maggie, Marge, Patty, Selma)
+					t.is( 6, results.total );
+
+					//========================================================
+					// remove index
+
+					store.deleteIndex( nIndex.name );
+					store.deleteIndex( pIndex.name );
+					t.is( 0, store.indexNames.length);
+
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Remove Data - Multiple Indexes, multiEntry",
+				runTest:function (t) {
+					var indexes = [
+						{name:"parent", keyPath:"parent", options:{unique: false, multiEntry: true}},
+						{name:"name", keyPath:"name", options:{unique: false}},
+					];
+					var Store = declare( [_Store, _Indexed, _Loader]);
+					var store = new Store ( {data: data, keyPath:"name", indexes: indexes});
+					var results, keyRange;
+
+					// Test DOMStringList length and content
+					t.is( 2, store.indexNames.length);
+					t.t ( store.indexNames.contains("parent"));
+					t.t ( store.indexNames.contains("name"));
+
+					// fetch index and test properties
+					var pIndex = store.index("parent");
+					var nIndex = store.index("name");
+
+					t.t( !!store.get("Homer"));
+					t.t( !!pIndex.get("Homer"));
+					t.t( !!nIndex.get("Homer"));
+
+					t.t( !!store.remove("Homer"));
+					t.f( !!store.get("Homer"));
+
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Destroy Store",
+				runTest:function (t) {
+					var indexes = {name:"name", keyPath:"name", options:{unique:false}};
+					var Store = declare( [_Store, _Indexed, _Loader]);
+					var store = new Store ( {autoIncrement: true, keyPath:null, indexes: indexes});
+
+					// Test DOMStringList length and content
+					t.is( 1, store.indexNames.length);
+					t.is( "name", store.indexNames.item(0) );
+					t.t ( store.indexNames.contains("name"));
+
+					// fetch index and test properties
+					var index = store.index("name");
+
+					store.destroy();
+
+					t.e( Error, store, "count" );
+					t.e( Error, index, "count" );
+
+				}
+			},
+
+			{
+				// Test deferred index.ready()
+				name: "Large Store, multiple indexes",
+				timeout: 10000,
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed, _Loader]);
+					var store = new Store ( {url:"../json/us-zipcodes-05k.json", suppressEvents: true,
+																	 keyPath:"zip", maxErrors:25 });
+					var defer = new doh.Deferred();
+
+					store.ready(
+						function (store) {
+							var index = {
+								"states": store.createIndex( "states", "code", {async: true} ),
+								"city": store.createIndex( "city", "city", {async: true} )
+							};
+							var promise = promiseAll([ index.states.ready(), index.city.ready() ])
+							promise.then(
+								defer.getTestCallback( function () {
+									var results = index.states.getRange( "AZ" );
+									results = QueryEngine({city:/^C/})(results);
+									var count = results.total;
+								})
+							);
+						},
+						function (err) {
+							defer.errback(err);
+						}
+					);
+					return defer;
+				}
+			}]);
+
+			ready( function () {
+				doh.run();
+
+			});
+		}
+	);
     </script>
 
   </head>

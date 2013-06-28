@@ -11,15 +11,15 @@
 
     <script type="text/javascript">
       var dojoConfig = {
-            async: true,
-            parseOnLoad: true,
-            isDebug: true,
-            baseUrl: "../../",
-            packages: [
-              { name: "dojo", location: "dojo" },
-              { name: "doh",  location: "util/doh" },
-              { name: "store",location: "indexedStore" }
-            ]
+		async: true,
+		parseOnLoad: true,
+		isDebug: true,
+		baseUrl: "../../",
+		packages: [
+		  { name: "dojo", location: "dojo" },
+		  { name: "doh",  location: "util/doh" },
+		  { name: "store",location: "indexedStore" }
+		]
       };
     </script>
 
@@ -35,310 +35,360 @@
         "store/_base/_Indexed",
         "store/_base/Keys",
         "store/_base/KeyRange",
-        "store/_base/Library",
-        "store/_base/Range",
+        "store/_base/library",
+        "store/_base/range",
         "store/_base/Record"
         ], function( doh, declare, lang, QueryResults, ready,
-											_Store, _Indexed, Keys, KeyRange, Lib, Range, Record ) {
-					"use strict";
-					
-					// IMPORTANT:
-					//		Don't change the number of records without updating any of
-					//		the range and count tests.
-					var data = [
-						{ "name":"Root", "parent":[], "hair":"none" },
-						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
-						{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
-						{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
-						{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
-						{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },
-						{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
-						{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
-						{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
-						{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },
-						{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },
-						{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },
-						{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
-						{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
-						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
-						{ "name":"Manjula", "age":40, "parent":"Apu", "hair":"brown"}
-					];
-					var length = data.length;
-					var undef;
-					
-					doh.register("Store and Index Ranges", [
-						{
-							name: "Key Range Properties",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store();
-								var keyRange, range;
+					_Store, _Indexed, Keys, KeyRange, lib, Range, Record ) {
+			"use strict";
 
-								// Test KeyRange
-								keyRange = KeyRange.only("a");
-								t.is ("a", keyRange.lower);
-								t.is ("a", keyRange.upper);
-								
-								// Test if a native IDBKeyRange implementation is being used. If so
-								// skip error testing, this because vendor specific implementations
-								// throw different errors/exceptions.
-								
-								var nativeRange = window.IDBKeyRange || window.webkitIDBKeyRange ||
-																	window.mozIDBKeyRange || window.msIDBKeyRange;
-								if (KeyRange != nativeRange) {
-									t.e( Error, KeyRange, "only", [] );
-									t.e( Error, KeyRange, "only", [null] );
-									t.e( Error, KeyRange, "lowerBound", [] );
-									t.e( Error, KeyRange, "lowerBound", [null] );
-									t.e( Error, KeyRange, "upperBound", [] );
-									t.e( Error, KeyRange, "upperBound", [null] );
-									t.e( Error, KeyRange, "bound", [] );
-									t.e( Error, KeyRange, "bound", [null] );
-									t.e( Error, KeyRange, "bound", ["a"] );
-									t.e( Error, KeyRange, "bound", [undef,"a"] );
-									t.e( Error, KeyRange, "bound", ["a",0] );			// String > Number
-								}
-							}
-						},
-						
-						{
-							name: "Store getRange() Parameters",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store();
-								var keyRange, range;
+			// IMPORTANT:
+			//		Don't change the number of records without updating any of
+			//		the range and count tests.
+			var data = [
+				{ "name":"Root", "parent":[], "hair":"none" },
+				{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
+				{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
+				{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
+				{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
+				{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },
+				{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
+				{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
+				{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
+				{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },
+				{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },
+				{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },
+				{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
+				{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
+				{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
+				{ "name":"Manjula", "age":40, "parent":"Apu", "hair":"brown"}
+			];
+			var length = data.length;
+			var undef;
 
-								// Test store range parameters
-								store.getRange();
-								store.getRange(null);
-								store.getRange(101);
-								keyRange = KeyRange.bound(100,105);
-								store.getRange(keyRange);
-								store.getRange(keyRange, "next");
-								store.getRange(keyRange, "nextunique");
-								store.getRange(keyRange, "prev");
-								store.getRange(keyRange, "prevunique");
+			doh.register("Store and Index Ranges", [
+			{
+				name: "Key Range Properties",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store();
+					var keyRange, range;
 
-								t.e( Error, store, "getRange", [null, "what?"] );
-							}
-						},
-						
-						{
-							name: "Index getRange() & getKeyRange() Parameters",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({keyPath:"name"});
-								var keyRange, range;
+					// Test KeyRange
+					keyRange = KeyRange.only("a");
+					t.is ("a", keyRange.lower);
+					t.is ("a", keyRange.upper);
 
-								var index = store.createIndex("parent", "parent", {multiEntry: true});
+					// Test if a native IDBKeyRange implementation is being used. If so
+					// skip error testing, this because vendor specific implementations
+					// throw different errors/exceptions.
 
-								// Test index range parameters
-								index.getRange();
-								index.getRange(null);
-								index.getRange(101);
-								keyRange = KeyRange.bound(100,105);
-								index.getRange(keyRange);
-								index.getRange(keyRange, false);
-								index.getRange(keyRange, "next");
-								index.getRange(keyRange, {direction:"next", duplicates:false});
-								index.getRange(keyRange, "nextunique");
-								index.getRange(keyRange, "prev");
-								index.getRange(keyRange, "prevunique");
+					var nativeRange = window.IDBKeyRange || window.webkitIDBKeyRange ||
+									  window.mozIDBKeyRange || window.msIDBKeyRange;
+					if (KeyRange != nativeRange) {
+						t.e( Error, KeyRange, "only", [] );
+						t.e( Error, KeyRange, "only", [null] );
+						t.e( Error, KeyRange, "lowerBound", [] );
+						t.e( Error, KeyRange, "lowerBound", [null] );
+						t.e( Error, KeyRange, "upperBound", [] );
+						t.e( Error, KeyRange, "upperBound", [null] );
+						t.e( Error, KeyRange, "bound", [] );
+						t.e( Error, KeyRange, "bound", [null] );
+						t.e( Error, KeyRange, "bound", ["a"] );
+						t.e( Error, KeyRange, "bound", [undef,"a"] );
+						t.e( Error, KeyRange, "bound", ["a",0] );			// String > Number
+					}
+				}
+			},
 
-								// Direction not nullable
-								t.e( Error, index, "getRange", [null, "what?"] );
+			{
+				name: "Store getRange() Parameters",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store();
+					var keyRange, range;
 
-								// Test index key range parameters
-								index.getKeyRange();
-								index.getKeyRange(null);
-								index.getKeyRange(101);
-								keyRange = KeyRange.bound(100,105);
-								index.getKeyRange(keyRange);
-								index.getKeyRange(keyRange, false);
-								index.getKeyRange(keyRange, "next");
-								index.getKeyRange(keyRange, "next", false);
-								index.getKeyRange(keyRange, "nextunique");
-								index.getKeyRange(keyRange, "prev");
-								index.getKeyRange(keyRange, "prevunique");
+					// Test store range parameters
+					store.getRange();
+					store.getRange(null);
+					store.getRange(101);
+					keyRange = KeyRange.bound(100,105);
+					store.getRange(keyRange);
+					store.getRange(keyRange, "next");
+					store.getRange(keyRange, "nextunique");
+					store.getRange(keyRange, "prev");
+					store.getRange(keyRange, "prevunique");
 
-								t.e( Error, index, "getKeyRange", [null, "what?"] );
-							}
-						},
+					t.e( Error, store, "getRange", [null, "what?"] );	// invalid direction
+				}
+			},
 
-						{
-							name: "Range values",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({data: data, keyPath:"name"});
-								var range;
+			{
+				name: "Index getRange() & getKeyRange() Parameters",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ({keyPath:"name"});
+					var keyRange, range;
 
-								var index = store.createIndex("parent", "parent", {multiEntry: true});
+					var index = store.createIndex("parent", "parent", {multiEntry: true});
 
-								// Test if Range only returns Objects and not instances of Record
-								range = Range( store );
-								range.forEach( function (obj) {
-									t.t ( Lib.isObject(obj) && !(obj instanceof Record));
-								});
-								range = Range( index );
-								range.forEach( function (obj) {
-									t.t ( Lib.isObject(obj) && !(obj instanceof Record));
-								});
-								// Get a key range, no duplicates
-								range = Range( index, null, null, false, true );
-								range.forEach( function (key) {
-									t.t (typeof key == "string");
-								});
+					// Test index range parameters
+					index.getRange();
+					index.getRange(null);
+					index.getRange(101);
+					keyRange = KeyRange.bound(100,105);
+					index.getRange(keyRange);
+					index.getRange(keyRange, false);
+					index.getRange(keyRange, "next");
+					index.getRange(keyRange, {direction:"next", duplicates:false});
+					index.getRange(keyRange, "nextunique");
+					index.getRange(keyRange, "prev");
+					index.getRange(keyRange, "prevunique");
 
-							}
-						},
+					t.e( Error, index, "getRange", [null, "what?"] );
 
-						{
-							name: "Range reversal",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: false, keyPath:null});
-								var index = store.createIndex("parents", "parent", {multiEntry: true});
-								var keyRange, rangeNxt, rangePrv;
-								var undef;
-								
-								// Insert data into the store, using a custom key
-								data.forEach( function (object, idx) {
-									var key = store.add( object, {key: idx+100} );
-								});
+					// Test index key range parameters
+					index.getKeyRange();
+					index.getKeyRange(null);
+					index.getKeyRange(101);
+					keyRange = KeyRange.bound(100,105);
+					index.getKeyRange(keyRange);
+					index.getKeyRange(keyRange, false);
+					index.getKeyRange(keyRange, "next");
+					index.getKeyRange(keyRange, "next", false);
+					index.getKeyRange(keyRange, "nextunique");
+					index.getKeyRange(keyRange, "prev");
+					index.getKeyRange(keyRange, "prevunique");
 
-								// Test range direction on the store
-								rangeNxt = store.getRange(null, "next");
-								rangePrv = store.getRange(null, "prev");
-								t.is (rangeNxt.length, rangePrv.length);
-								rangePrv.reverse();
-								rangeNxt.forEach( function (obj, idx) {
-									t.is (obj.name, rangePrv[idx].name);
-								});
+					t.e( Error, index, "getKeyRange", [null, "what?"] );
+				}
+			},
 
-								// 'nextunique' on a store is effectively the same as 'next'
-								// considering store keys MUST be unique to being with.
-								
-								rangeNxt = store.getRange(null, "nextunique");
-								rangePrv = store.getRange(null, "prevunique");
-								t.is (rangeNxt.length, rangePrv.length);
-								rangePrv.reverse();
-								rangeNxt.forEach( function (obj, idx) {
-									t.is (obj.name, rangePrv[idx].name);
-								});
+			{
+				name: "Range values",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ({data: data, keyPath:"name"});
+					var range;
 
+					var index = store.createIndex("parent", "parent", {multiEntry: true});
 
-								rangeNxt = index.getRange(null, "next");
-								rangePrv = index.getRange(null, "prev");
-								t.is (rangeNxt.length, rangePrv.length);
-								rangePrv.reverse();
-								rangeNxt.forEach( function (obj, idx) {
-									t.is (obj.name, rangePrv[idx].name);
-								});
-
-								rangeNxt = index.getKeyRange(null, "next");
-								rangePrv = index.getKeyRange(null, "prev");
-								t.is (rangeNxt.length, rangePrv.length);
-								rangePrv.reverse();
-								t.is (0, Keys.cmp( rangeNxt, rangePrv));
-
-								store.destroy();
-							}
-						},
-
-						{
-							name: "Range, no duplicates",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: false, keyPath:null});
-								var index = store.createIndex("parents", "parent", {multiEntry: true});
-								var rangeUniq, rangeDupl
-								
-								// Insert data into the store, using a custom key
-								data.forEach( function (object, idx) {
-									var key = store.add( object, {key: idx+100} );
-								});
-
-								rangeDupl = index.getKeyRange();
-								rangeUniq = index.getKeyRange(null, {duplicates:false});
-								t.is ( rangeUniq, Keys.purgeKey( rangeDupl));
-
-								store.destroy();
-							}
-						},
-
-
-						{
-							name: "Iterate store, NO key path, NO key generator",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: false, keyPath:null});
-								var keyRange, result;
-								var max = data.length;
-								var undef;
-								
-								t.is( store.count(), 0 );
-
-								// Insert data into the store, using a custom key
-								data.forEach( function (object, idx) {
-									var key = store.add( object, {key: idx+100} );
-								});
-
-								keyRange = KeyRange.bound(1,2);
-								store.get( keyRange );
-								
-								store.destroy();
-							}
-						},
-						
-						{
-							name: "Store with mixed keys",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({keyPath:null});
-								var date  = new Date();
-								var keyRange, range;
-								
-								store.add( {name:"Bart"}, {key:""} );
-								store.add( {name:"Lisa"}, {key:"Lisa"} );
-								store.add( {name:"Marge"}, {key:"Marge"} );
-								store.add( {name:"Maggie"}, {key: date} );
-								store.add( {name:"Todd"}, {key: [1]} );
-								store.add( {name:"Rod"}, {key: [2]} );
-								store.add( {name:"Homer"}, {key:10} );
-								store.add( {name:"Abe"}, {key:0} );
-
-								// Test record order: Number > Date > String > Array
-								var range = store.getRange();
-								t.is( 8,range.length );
-								t.is("Abe", range[0].name);
-								t.is("Homer", range[1].name);
-								t.is("Maggie", range[2].name);
-								t.is("Bart", range[3].name);
-								t.is("Lisa", range[4].name);
-								t.is("Marge", range[5].name);
-								t.is("Todd", range[6].name);
-								t.is("Rod", range[7].name);
-
-								keyRange = KeyRange.bound("",[]);
-								var range = store.getRange(keyRange);
-								t.is( 3,range.length );
-								t.is("Bart", range[0].name);
-								t.is("Lisa", range[1].name);
-								t.is("Marge", range[2].name);
-
-								store.destroy();
-							}
-						}
-						
-
-					]);
-
-					ready( function () {
-						doh.run();
-
+					// Test if Range only returns Objects and not instances of Record
+					range = Range( store );
+					range.forEach( function (obj) {
+						t.t ( lib.isObject(obj) && !(obj instanceof Record));
+					});
+					range = Range( index );
+					range.forEach( function (obj) {
+						t.t ( lib.isObject(obj) && !(obj instanceof Record));
+					});
+					// Get a key range, no duplicates
+					range = Range( index, null, null, false, true );
+					range.forEach( function (key) {
+						t.t (typeof key == "string");
 					});
 
 				}
+			},
+
+			{
+				name: "Range reversal",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: false, keyPath:null});
+					var index = store.createIndex("parents", "parent", {multiEntry: true});
+					var keyRange, rangeNxt, rangePrv;
+					var undef;
+
+					// Insert data into the store, using a custom key
+					data.forEach( function (object, idx) {
+						var key = store.add( object, {key: idx+100} );
+					});
+
+					// Test range direction on the store
+					rangeNxt = store.getRange(null, "next");
+					rangePrv = store.getRange(null, "prev");
+					t.is (rangeNxt.length, rangePrv.length);
+					rangePrv.reverse();
+					rangeNxt.forEach( function (obj, idx) {
+						t.is (obj.name, rangePrv[idx].name);
+					});
+
+					// 'nextunique' on a store is effectively the same as 'next'
+					// considering store keys MUST be unique to being with.
+
+					rangeNxt = store.getRange(null, "nextunique");
+					rangePrv = store.getRange(null, "prevunique");
+					t.is (rangeNxt.length, rangePrv.length);
+					rangePrv.reverse();
+					rangeNxt.forEach( function (obj, idx) {
+						t.is (obj.name, rangePrv[idx].name);
+					});
+
+
+					rangeNxt = index.getRange(null, "next");
+					rangePrv = index.getRange(null, "prev");
+					t.is (rangeNxt.length, rangePrv.length);
+					rangePrv.reverse();
+					rangeNxt.forEach( function (obj, idx) {
+						t.is (obj.name, rangePrv[idx].name);
+					});
+
+					rangeNxt = index.getKeyRange(null, "next");
+					rangePrv = index.getKeyRange(null, "prev");
+					t.is (rangeNxt.length, rangePrv.length);
+					rangePrv.reverse();
+					t.is (0, Keys.cmp( rangeNxt, rangePrv));
+
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Range, no duplicates",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: false, keyPath:null});
+					var index = store.createIndex("parents", "parent", {multiEntry: true});
+					var rangeDupl, rangeUniq;
+
+					// Insert data into the store, using a custom key
+					data.forEach( function (object, idx) {
+						var key = store.add( object, {key: idx+100} );
+					});
+
+					rangeDupl = index.getKeyRange();
+					rangeUniq = index.getKeyRange(null, {duplicates:false});
+					t.is ( rangeUniq, Keys.purgeKey( rangeDupl));
+
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Range, result sorted",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {data: data, keyPath:"name"});
+					var index = store.createIndex("parents", "parent", {multiEntry: true});
+					var sort  = [{property:"age", descending:true}];
+					var names = ["Selma", "Patty", "Marge", "Lisa", "Bart", "Maggie"];
+					var keyRange, results;
+
+					// Index entries: Homer, Jacqueline and Marge
+					keyRange = KeyRange.bound("Homer", "Marge");
+					results  = index.getRange(keyRange, {duplicates: false, sort:sort});
+					// Children sorted: Selma, Patty, Marge, Lisa, Bart and Maggie
+					results.forEach( function(obj, idx) {
+						t.is(names[idx], obj.name);
+					});
+					store.destroy();
+				}
+			},
+
+
+			{
+				name: "Iterate store, NO key path, NO key generator",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: false, keyPath:null});
+					var keyRange, result;
+					var max = data.length;
+					var undef;
+
+					t.is( store.count(), 0 );
+
+					// Insert data into the store, using a custom key
+					data.forEach( function (object, idx) {
+						var key = store.add( object, {key: idx+100} );
+					});
+
+					// Keys should start at 100
+					keyRange = KeyRange.bound(1,2);
+					t.f(store.get( keyRange ));
+
+					keyRange = KeyRange.bound(100,102);
+					result = store.get( keyRange );
+					t.t(result);
+					t.is("Root", result.name);
+
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Store with mixed keys",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ({keyPath:null});
+					var date  = new Date();
+					var keyRange, range;
+
+					store.add( {name:"Bart"}, {key:""} );
+					store.add( {name:"Lisa"}, {key:"Lisa"} );
+					store.add( {name:"Marge"}, {key:"Marge"} );
+					store.add( {name:"Maggie"}, {key: date} );
+					store.add( {name:"Todd"}, {key: [1]} );
+					store.add( {name:"Rod"}, {key: [2]} );
+					store.add( {name:"Homer"}, {key:10} );
+					store.add( {name:"Abe"}, {key:0} );
+
+					// Test record order: Number > Date > String > Array
+					range = store.getRange();
+					t.is( 8,range.length );
+					t.is("Abe", range[0].name);
+					t.is("Homer", range[1].name);
+					t.is("Maggie", range[2].name);
+					t.is("Bart", range[3].name);
+					t.is("Lisa", range[4].name);
+					t.is("Marge", range[5].name);
+					t.is("Todd", range[6].name);
+					t.is("Rod", range[7].name);
+
+					keyRange = KeyRange.bound("",[]);
+					range = store.getRange(keyRange);
+					t.is( 3, range.total );
+					t.is("Bart", range[0].name);
+					t.is("Lisa", range[1].name);
+					t.is("Marge", range[2].name);
+
+					// Get all record whose key value is a number starting at 0.
+					keyRange = KeyRange.bound(0, Infinity);
+					range = store.getRange(keyRange);
+					t.is( 2, range.total);
+					t.is("Abe", range[0].name);
+					t.is("Homer", range[1].name);
+
+
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Out of Range",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ({data: data, keyPath:"name"});
+					var keyRange, range;
+
+					keyRange = KeyRange.bound("X","Z");
+					range = store.getRange(keyRange);
+					t.is( 0, range.total);
+
+					keyRange = KeyRange.bound(0, Infinity);
+					range = store.getRange(keyRange);
+					t.is( 0, range.total);
+
+					store.destroy();
+				}
+			}]);
+
+			ready( function () {
+				doh.run();
+
+			});
+
+		}
       );
     </script>
 

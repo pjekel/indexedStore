@@ -11,21 +11,21 @@
 
     <script type="text/javascript">
       var dojoConfig = {
-            async: true,
-            parseOnLoad: true,
-            isDebug: true,
-            baseUrl: "../../",
-            packages: [
-              { name: "dojo", location: "dojo" },
-              { name: "doh",  location: "util/doh" },
-              { name: "store",location: "indexedStore" }
-            ]
+		async: true,
+		parseOnLoad: true,
+		isDebug: true,
+		baseUrl: "../../",
+		packages: [
+		  { name: "dojo", location: "dojo" },
+		  { name: "doh",  location: "util/doh" },
+		  { name: "store",location: "indexedStore" }
+		]
       };
     </script>
 
     <script type="text/javascript" src="../../dojo/dojo.js"></script>
     <script type="text/javascript">
-      require([
+    require([
         "doh/runner",
         "dojo/_base/declare",
         "dojo/_base/lang",
@@ -34,583 +34,582 @@
         "dojo/ready",
         "store/_base/_Store",
         "store/_base/_Indexed",
-        "store/_base/KeyRange"
+        "store/_base/KeyRange",
+		"store/loader/basic"
         ], function( doh, declare, lang, Promise, QueryResults, ready,
-											_Store, _Indexed, KeyRange, createError ) {
-					"use strict";
-					
-					// IMPORTANT:
-					//		Don't change the number of records without updating any of
-					//		the range and count tests.
-					var data = [
-						{ "name":"Root", "parent":[], "hair":"none" },
-						{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
-						{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
-						{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
-						{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
-						{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },
-						{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
-						{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
-						{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
-						{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },
-						{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },
-						{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },
-						{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
-						{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
-						{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
-						{ "name":"Manjula", "age":40, "parent":"Apu", "hair":"brown"}
-					];
-					
-					doh.register("Indexed Store", [
-						{
-							// Create a indexed store without a loader"
-							name: "Create Natural Store",
-							timeout: 1000,
-							runTest: function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ();
-								var defer = new doh.Deferred();
-								var max   = data.length;
+					_Store, _Indexed, KeyRange, Loader ) {
+		"use strict";
 
-								store.ready(
-									defer.getTestCallback( 
-										function (store) {
-											// Test for default values.
-											t.t(store.name != "" || store.name == null);
-											t.t(!store.autoIncrement);
-											t.is(store.keyPath, "id");
-											t.is(store.total, 0);
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}
-								);
-								return defer;
+			// IMPORTANT:
+			//		Don't change the number of records without updating any of
+			//		the range and count tests.
+			var data = [
+				{ "name":"Root", "parent":[], "hair":"none" },
+				{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
+				{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
+				{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
+				{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
+				{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },
+				{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
+				{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
+				{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
+				{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },
+				{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },
+				{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },
+				{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
+				{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
+				{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
+				{ "name":"Manjula", "age":40, "parent":"Apu", "hair":"brown"}
+			];
+
+			doh.register("Indexed Store", [
+			{
+				// Create a indexed store without a loader"
+				name: "Create Natural Store",
+				timeout: 1000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ();
+					var defer = new doh.Deferred();
+					var max   = data.length;
+
+					store.ready(
+						defer.getTestCallback(
+							function (store) {
+								// Test for default values.
+								t.t(store.name != "" || store.name == null);
+								t.t(!store.autoIncrement);
+								t.is(store.keyPath, "id");
+								t.is(store.total, 0);
 							}
-						},
-
-						{
-							name: "Insert Data - (No keyPath & No generator)",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: false, keyPath: null});
-								var keyRange, result;
-								var max = data.length;
-								
-								t.is( store.count(), 0 );
-
-								// Insert data into the store
-								data.forEach( function (object, idx) {
-									var key = store.add( object, {key: idx+1} );
-									t.t( typeof key == "number" );
-								});
-								result = store.getRange();
-								t.is( result.total, max );
-								// Each object should have NO id property
-								result.forEach( function (object) {
-									t.t( object.id == undefined );
-								});
-
-								var obj = {"name":"Manjula", "age":40, "parent":"Apu", "hair":"brown"};
-								// Explicit key must be supplied
-								t.e( Error, store, "add", [obj] );
-
-								// Test count options.
-								t.is( store.count(), max );
-								
-								// Test record retrieval
-								t.t( !store.get(0) );			// There should be no key == 0
-								t.t( !!store.get(1) );		// This should be Ok
-								t.f( !!store.get("1") );		// This should not.
-								t.f( !!store.get(max+1) );
-
-								// clear the store.
-								store.clear();
-								t.is( store.count(), 0 );
-								store.destroy();
-							}
-						},
-						{
-							name: "Insert Data - (No keyPath & key generator)",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: true, keyPath: null});
-								var keyRange, result;
-								var max = data.length;
-								
-								t.is( store.count(), 0 );
-
-								// Insert data into the store
-								data.forEach( function (object) {
-									var key = store.add( object );
-									t.t( typeof key == "number" );
-								});
-								result = store.getRange();
-								t.is( result.total, max );
-								// Each object should have NO id property
-								result.forEach( function (object) {
-									t.t( object.id == undefined );
-								});
-
-								// Test record retrieval
-								t.f( !!store.get(0) );			// There should be no key == 0
-								t.t( !!store.get(1) );		// This should be Ok
-								t.f( !!store.get("1") );		// This should not.
-								t.f( !!store.get(max+1) );
-
-								// Argument required test
-								t.e( Error, store, "get", null );
-								
-								// clear the store.
-								store.destroy();
-							}
-						},
-						{
-							name: "Insert Data - (Default keyPath & key generator)",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: true});
-								var keyRange, result;
-								var max = data.length;
-								
-								t.is( store.count(), 0 );
-
-								// Insert data into the store
-								data.forEach( function (object) {
-									var key = store.add( object );
-									t.t( typeof key == "number" );
-								});
-
-								// Test count options.
-								t.is( store.count(), max );
-								
-								// Test record retrieval
-								t.t( !store.get(0) );			// There should be no key == 0
-								t.t( !!store.get(1) );		// This should be Ok
-								t.f( !!store.get("1") );		// This should not.
-								t.f( !!store.get(max+1) );
-
-								// identity
-								t.is( store.getIdentity( store.get(1) ), 1);
-
-								// clear the store.
-								store.destroy();
-							}
-						},
-						{
-							name: "Insert Data - (Specific keyPath & No key generator)",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {keyPath:"name"});
-								var keyRange, result;
-								var max = data.length;
-								
-								t.is( store.count(), 0 );
-
-								// Insert data into the store
-								data.forEach( function (object) {
-									var key = store.add( object );
-									t.t( typeof key == "string" );
-								});
-
-								// Test count options.
-								t.is( store.count(), max );
-								
-								// Test record retrieval
-								t.t( !!store.get("Bart") );		// This should be Ok
-								t.t( !!store.get("Lisa") );
-								t.t( !!store.get("Apu") );
-								t.t( !!store.get("Patty") );
-
-								t.f( !!store.get("Stan") );		// These don't exist
-								t.f( !!store.get("Kyle") );		// These don't exist
-								t.f( !!store.get("Eric") );
-								t.f( !!store.get("Kenny") );
-
-								// identity
-								t.is( store.getIdentity( store.get("Bart") ), "Bart");
-
-								keyRange = KeyRange.bound("Abe", "Homer");
-								// Should return Abe, Apu, Bart and Homer
-								var expect = ["Abe", "Apu", "Bart","Homer"];
-								result = store.getRange( keyRange );
-								t.is( result.total, 4);
-								result.forEach( function (obj, idx) {
-									t.t( expect.indexOf(store.getIdentity(obj)) != -1);
-								});
-								// clear the store.
-								store.destroy();
-							}
-						},
-						{
-							name: "Insert Data - (Specific keyPath & No key generator & Uppercase keys)",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {keyPath:"name", uppercase:true});
-								var keyRange, result;
-								var max = data.length;
-								
-								t.is( store.count(), 0 );
-
-								// Insert data into the store
-								data.forEach( function (object) {
-									var key = store.add( object );
-									t.t( typeof key == "string" );
-								});
-
-								// Test count options.
-								t.is( store.count(), max );
-								
-								// Test record retrieval
-								t.t( !!store.get("BART") );		// This should be Ok
-								t.t( !!store.get("LISA") );
-								t.t( !!store.get("APU") );
-								t.t( !!store.get("PATTY") );
-
-								t.f( !!store.get("STAN") );		// These don't exist
-								t.f( !!store.get("KYLE") );		// These don't exist
-								t.f( !!store.get("ERIC") );
-								t.f( !!store.get("KENNY") );
-
-								// identity
-								t.is( store.getIdentity( store.get("BART") ), "BART");
-
-								keyRange = KeyRange.bound("ABE", "HOMER");
-								// Should return Abe, Apu, Bart and Homer
-								var expect = ["ABE", "APU", "BART","HOMER"];
-								result = store.getRange( keyRange );
-								t.is( result.total, 4);
-								result.forEach( function (obj, idx) {
-									t.t( expect.indexOf(store.getIdentity(obj)) != -1);
-								});
-								// Remove some records
-								t.t( store.remove("BART"));
-								t.t( store.remove("NED"));
-								t.f( !!store.get("BART") );
-								t.f( !!store.get("NED") );
-
-								// clear the store.
-								store.destroy();
-							}
-						},
-						{
-							name: "Insert Data - (Compound keyPath & No key generator)",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {keyPath:["name","hair"]});
-								var keyRange, result;
-								var max = data.length;
-								
-								t.is( store.count(), 0 );
-
-								// Insert data into the store
-								data.forEach( function (object) {
-									var key = store.add( object );
-									t.t( key instanceof Array );
-								});
-
-								// Test count options.
-								t.is( store.count(), max );
-
-								// Add another Bart but this time without hair and 40+ years older
-								var obj = { "name":"Bart", "age":50, "hair":"none" };
-								var key = store.add( obj );
-								
-								t.t( !!store.get(["Bart","blond"]) );
-								t.t( !!store.get(["Bart","none"]) );
-
-								keyRange = KeyRange.bound(["Bart"],["Bart", "z"]);
-								result = store.getRange( keyRange );
-								
-								// clear the store.
-								store.destroy();
-							}
-						},
-						{
-							name: "Insert Data - (add & put)",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: true, keyPath: null});
-								
-								t.is( store.count(), 0 );
-
-								// Insert data into the store
-								data.forEach( function (object, idx) {
-									var key = store.add( object, {key: idx+1} );
-									t.t( typeof key == "number" );
-								});
-
-								// Adding record with existing key should fail even if the overwrite
-								// flag is set.
-								var obj = { "name":"Bart", "age":9, "hair":"blond" };
-								t.e( Error, store, "add", [obj, {key:1}]);
-								t.e( Error, store, "add", [obj, {id:1}]);	// dojo store compatibility
-								t.e( Error, store, "add", [obj, {key:1, overwrite: true}]);
-								
-								t.e( Error, store, "put", [obj, {key:1, overwrite:false}]);
-								t.e( Error, store, "put", [obj, {id:1, overwrite:false}]);	// dojo store compatibility
-								t.is(store.put( obj, {key:1}), 1 );	// Should be Ok
-
-								// Test simple types, which should be Ok considering there is
-								// no key path.
-								t.t( !!store.put( 400 ) );
-								t.t( !!store.put( "Butters" ) );
-
-								// clear the store.
-								store.destroy();
-							}
-						},
-
-						{
-							name: "Insert data, mixed keys",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ({keyPath:null});
-								var date  = new Date();
-								
-								store.add( {name:"Homer"}, {key:10} );
-								store.add( {name:"Bart"}, {key:""} );
-								store.add( {name:"Lisa"}, {key:"Lisa"} );
-								store.add( {name:"Maggie"}, {key: date} );
-								store.add( {name:"Todd"}, {key: [1,2,3]} );
-
-								// According to the W3C presedence rule the records should be
-								// inserted in the following order:
-								//
-								//	"Homer", "Maggie", "Bart", "Lisa", "Todd"
-
-								var obj = store.get(10);
-								t.t ( !!obj && obj.name == "Homer");
-								var obj = store.get("");
-								t.t ( !!obj && obj.name == "Bart");
-								var obj = store.get("Lisa");
-								t.t ( !!obj && obj.name == "Lisa");
-								var obj = store.get(date);
-								t.t ( !!obj && obj.name == "Maggie");
-								var obj = store.get([1,2,3]);
-								t.t ( !!obj && obj.name == "Todd");
-								
-								// Test proper records order
-								var range = store.getRange();
-								t.is( "Homer", range[0].name );
-								t.is( "Maggie", range[1].name );
-								t.is( "Bart", range[2].name );
-								t.is( "Lisa", range[3].name );
-								t.is( "Todd", range[4].name );
-								
-								// destroy store.
-								store.destroy();
-							}
-						},
-						
-
-
-						{
-							name: "Count records",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: true, keyPath: null});
-								var keyRange, result;
-								var max = data.length;
-								
-								t.is( store.count(), 0 );
-
-								// Insert data into the store
-								data.forEach( function (object) {
-									var key = store.add( object );
-								});
-								result = store.getRange();
-								t.is( result.total, max );
-
-								// Test count.
-								t.is( store.count(), max );
-								t.is( store.count( 10 ), 1 );
-								t.is( store.count( KeyRange.bound(5,9) ), 5 );
-								t.is( store.query( null, null).total, max );
-								
-								// clear the store.
-								store.destroy();
-							}
-						},
-						{
-							name: "Test Ranges",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: true});
-								var keyRange, result;
-								var max = data.length;
-								
-								// Insert data into the store
-								data.forEach( function (object) {
-									var key = store.add( object );
-								});
-
-								// Test range
-								result = store.getRange();
-								t.is( result.total, max );
-								
-								keyRange = KeyRange.only(1);
-								t.t( !!store.get(keyRange) );
-								keyRange = KeyRange.bound(5,9);				// 5-9
-								result = store.get(keyRange);
-								t.is( store.getIdentity(result), 5);
-
-								keyRange = KeyRange.bound(5,9, true, true); // 6-8
-								result = store.get(keyRange);
-								t.is( store.getIdentity(result), 6);
-								keyRange = KeyRange.lowerBound(5); // 5 -> max
-								result = store.getRange(keyRange);
-								t.is (result.total, max-4);
-								keyRange = KeyRange.upperBound(5, true); // 1-4
-								result = store.getRange(keyRange);
-								t.is (result.total, 4);
-
-								// destroy store.
-								store.destroy();
-							}
-						},
-
-						{
-							name: "Removing data, No keyPath, Key generator",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoIncrement: false, keyPath: null});
-								var keyRange, result;
-								var max = data.length;
-								
-								// Insert data into the store
-								data.forEach( function (object, idx) {
-									var key = store.add( object, {key: idx+1} );
-									t.t( typeof key == "number" );
-								});
-
-								// Remove some records
-								t.t( store.remove(5));
-								t.f( !!store.get(5) );
-
-								keyRange = KeyRange.bound(7,9)
-								t.t( store.remove(keyRange ));
-
-								t.f( !!store.get(7) );
-								t.f( !!store.get(8) );
-								t.f( !!store.get(9) );
-
-								t.is(max-4, store.count());
-
-								store.destroy();
-							}
-						},
-
-						{
-							name: "Removing data, KeyPath",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {keyPath:"name"});
-								var keyRange, result;
-								var max = data.length;
-								
-								// Insert data into the store
-								data.forEach( function (object) {
-									var key = store.add( object );
-								});
-
-								t.e( Error, store, "remove" );	// store.remove()
-
-								t.t( store.remove("Bart"));
-								t.t( store.remove("Ned"));
-								t.f( !!store.get("Bart") );
-								t.f( !!store.get("Ned") );
-
-								// Range includes: Patty, Rod, Root, Selma
-								keyRange = KeyRange.bound("Patty","Selma");
-								t.t( store.remove(keyRange));
-								t.f( !!store.get("Patty") );
-								t.f( !!store.get("Selma") );
-
-								t.is(max-6, store.count());
-
-								// destroy store.
-								store.destroy();
-							}
-						},
-
-						{
-							name: "Store default Query behavour (1)",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {keyPath:"name"});
-								
-								// Store is empty but ready.
-								t.is(0, store.count());
-								var result = store.query();
-								t.t( result instanceof Array);
-
-								// destroy store.
-								store.destroy();
-							}
-						},
-
-						{
-							name: "Store default Query behavour (2)",
-							runTest:function (t) {
-								var Store = declare( [_Store, _Indexed]);
-								var store = new Store ( {autoLoad: false, keyPath:"name"});
-								var defer = new doh.Deferred();
-								var max   = data.length;
-
-								// Because the store is not 'ready' (e.g. nothing is loaded yet)
-								// query() should return a dojo/promise/Promise
-								
-								t.is(0, store.count());
-								var result0 = store.query();
-								
-								t.t( result0 instanceof Promise);
-
-								// Next: Load the store...
-								store.load( {data: data});
-
-								// NOTE:
-								//		Because the load request resolves BEFORE _storeReady we
-								// 		have to wait for _storeReady to do this specific test
-								//		otherwise result1 would still return a promise and result0
-								//		will not have been resolved yet.
-								
-								store.ready().then(
-									defer.getTestCallback( 
-										function () {
-											t.is(max, store.count());
-											var result1 = store.query();
-											t.t( result1 instanceof Array);
-
-											// Test if the first query has been resolved and 'total' is
-											// an actual number and no longer a promise.
-
-											t.t(typeof result0.total == "number");
-											t.is(max, result0.total);
-
-											// destroy store.
-											store.destroy();
-										}
-									),
-									function (err) {
-										defer.errback(err);
-									}									
-								);
-								return defer;
-							}
+						),
+						function (err) {
+							defer.errback(err);
 						}
+					);
+					return defer;
+				}
+			},
 
-					]);
+			{
+				name: "Insert Data - (No keyPath & No generator)",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: false, keyPath: null});
+					var keyRange, result;
+					var max = data.length;
 
-					ready( function () {
-						doh.run();
+					t.is( store.count(), 0 );
 
+					// Insert data into the store
+					data.forEach( function (object, idx) {
+						var key = store.add( object, {key: idx+1} );
+						t.t( typeof key == "number" );
+					});
+					result = store.getRange();
+					t.is( result.total, max );
+					// Each object should have NO id property
+					result.forEach( function (object) {
+						t.t( object.id == undefined );
 					});
 
+					var obj = {"name":"Manjula", "age":40, "parent":"Apu", "hair":"brown"};
+					// Explicit key must be supplied
+					t.e( Error, store, "add", [obj] );
 
+					// Test count options.
+					t.is( store.count(), max );
+
+					// Test record retrieval
+					t.t( !store.get(0) );			// There should be no key == 0
+					t.t( !!store.get(1) );		// This should be Ok
+					t.f( !!store.get("1") );		// This should not.
+					t.f( !!store.get(max+1) );
+
+					// clear the store.
+					store.clear();
+					t.is( store.count(), 0 );
+					store.destroy();
 				}
-      );
+			},
+			{
+				name: "Insert Data - (No keyPath & key generator)",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: true, keyPath: null});
+					var keyRange, result;
+					var max = data.length;
+
+					t.is( store.count(), 0 );
+
+					// Insert data into the store
+					data.forEach( function (object) {
+						var key = store.add( object );
+						t.t( typeof key == "number" );
+					});
+					result = store.getRange();
+					t.is( result.total, max );
+					// Each object should have NO id property
+					result.forEach( function (object) {
+						t.t( object.id == undefined );
+					});
+
+					// Test record retrieval
+					t.f( !!store.get(0) );			// There should be no key == 0
+					t.t( !!store.get(1) );		// This should be Ok
+					t.f( !!store.get("1") );		// This should not.
+					t.f( !!store.get(max+1) );
+
+					// Argument required test
+					t.e( Error, store, "get", null );
+
+					// clear the store.
+					store.destroy();
+				}
+			},
+			{
+				name: "Insert Data - (Default keyPath & key generator)",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: true});
+					var keyRange, result;
+					var max = data.length;
+
+					t.is( store.count(), 0 );
+
+					// Insert data into the store
+					data.forEach( function (object) {
+						var key = store.add( object );
+						t.t( typeof key == "number" );
+					});
+
+					// Test count options.
+					t.is( store.count(), max );
+
+					// Test record retrieval
+					t.t( !store.get(0) );			// There should be no key == 0
+					t.t( !!store.get(1) );		// This should be Ok
+					t.f( !!store.get("1") );		// This should not.
+					t.f( !!store.get(max+1) );
+
+					// identity
+					t.is( store.getIdentity( store.get(1) ), 1);
+
+					// clear the store.
+					store.destroy();
+				}
+			},
+			{
+				name: "Insert Data - (Specific keyPath & No key generator)",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {keyPath:"name"});
+					var keyRange, result;
+					var max = data.length;
+
+					t.is( store.count(), 0 );
+
+					// Insert data into the store
+					data.forEach( function (object) {
+						var key = store.add( object );
+						t.t( typeof key == "string" );
+					});
+
+					// Test count options.
+					t.is( store.count(), max );
+
+					// Test record retrieval
+					t.t( !!store.get("Bart") );		// This should be Ok
+					t.t( !!store.get("Lisa") );
+					t.t( !!store.get("Apu") );
+					t.t( !!store.get("Patty") );
+
+					t.f( !!store.get("Stan") );		// These don't exist
+					t.f( !!store.get("Kyle") );		// These don't exist
+					t.f( !!store.get("Eric") );
+					t.f( !!store.get("Kenny") );
+
+					// identity
+					t.is( store.getIdentity( store.get("Bart") ), "Bart");
+
+					keyRange = KeyRange.bound("Abe", "Homer");
+					// Should return Abe, Apu, Bart and Homer
+					var expect = ["Abe", "Apu", "Bart","Homer"];
+					result = store.getRange( keyRange );
+					t.is( result.total, 4);
+					result.forEach( function (obj, idx) {
+						t.t( expect.indexOf(store.getIdentity(obj)) != -1);
+					});
+					// clear the store.
+					store.destroy();
+				}
+			},
+			{
+				name: "Insert Data - (Specific keyPath & No key generator & Uppercase keys)",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {keyPath:"name", uppercase:true});
+					var keyRange, result;
+					var max = data.length;
+
+					t.is( store.count(), 0 );
+
+					// Insert data into the store
+					data.forEach( function (object) {
+						var key = store.add( object );
+						t.t( typeof key == "string" );
+					});
+
+					// Test count options.
+					t.is( store.count(), max );
+
+					// Test record retrieval
+					t.t( !!store.get("BART") );		// This should be Ok
+					t.t( !!store.get("LISA") );
+					t.t( !!store.get("APU") );
+					t.t( !!store.get("PATTY") );
+
+					t.f( !!store.get("STAN") );		// These don't exist
+					t.f( !!store.get("KYLE") );		// These don't exist
+					t.f( !!store.get("ERIC") );
+					t.f( !!store.get("KENNY") );
+
+					// identity
+					t.is( store.getIdentity( store.get("BART") ), "BART");
+
+					keyRange = KeyRange.bound("ABE", "HOMER");
+					// Should return Abe, Apu, Bart and Homer
+					var expect = ["ABE", "APU", "BART","HOMER"];
+					result = store.getRange( keyRange );
+					t.is( result.total, 4);
+					result.forEach( function (obj, idx) {
+						t.t( expect.indexOf(store.getIdentity(obj)) != -1);
+					});
+					// Remove some records
+					t.t( store.remove("BART"));
+					t.t( store.remove("NED"));
+					t.f( !!store.get("BART") );
+					t.f( !!store.get("NED") );
+
+					// clear the store.
+					store.destroy();
+				}
+			},
+			{
+				name: "Insert Data - (Compound keyPath & No key generator)",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {keyPath:["name","hair"]});
+					var keyRange, result;
+					var max = data.length;
+
+					t.is( store.count(), 0 );
+
+					// Insert data into the store
+					data.forEach( function (object) {
+						var key = store.add( object );
+						t.t( key instanceof Array );
+					});
+
+					// Test count options.
+					t.is( store.count(), max );
+
+					// Add another Bart but this time without hair and 40+ years older
+					var obj = { "name":"Bart", "age":50, "hair":"none" };
+					var key = store.add( obj );
+
+					t.t( !!store.get(["Bart","blond"]) );
+					t.t( !!store.get(["Bart","none"]) );
+
+					keyRange = KeyRange.bound(["Bart"],["Bart", "z"]);
+					result = store.getRange( keyRange );
+
+					// clear the store.
+					store.destroy();
+				}
+			},
+			{
+				name: "Insert Data - (add & put)",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: true, keyPath: null});
+
+					t.is( store.count(), 0 );
+
+					// Insert data into the store
+					data.forEach( function (object, idx) {
+						var key = store.add( object, {key: idx+1} );
+						t.t( typeof key == "number" );
+					});
+
+					// Adding record with existing key should fail even if the overwrite
+					// flag is set.
+					var obj = { "name":"Bart", "age":9, "hair":"blond" };
+					t.e( Error, store, "add", [obj, {key:1}]);
+					t.e( Error, store, "add", [obj, {id:1}]);	// dojo store compatibility
+					t.e( Error, store, "add", [obj, {key:1, overwrite: true}]);
+
+					t.e( Error, store, "put", [obj, {key:1, overwrite:false}]);
+					t.e( Error, store, "put", [obj, {id:1, overwrite:false}]);	// dojo store compatibility
+					t.is(store.put( obj, {key:1}), 1 );	// Should be Ok
+
+					// Test simple types, which should be Ok considering there is
+					// no key path.
+					t.t( !!store.put( 400 ) );
+					t.t( !!store.put( "Butters" ) );
+
+					// clear the store.
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Insert data, mixed keys",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ({keyPath:null});
+					var date  = new Date();
+
+					store.add( {name:"Homer"}, {key:10} );
+					store.add( {name:"Bart"}, {key:""} );
+					store.add( {name:"Lisa"}, {key:"Lisa"} );
+					store.add( {name:"Maggie"}, {key: date} );
+					store.add( {name:"Todd"}, {key: [1,2,3]} );
+
+					// According to the W3C presedence rule the records should be
+					// inserted in the following order:
+					//
+					//	"Homer", "Maggie", "Bart", "Lisa", "Todd"
+
+					var obj = store.get(10);
+					t.t ( !!obj && obj.name == "Homer");
+					var obj = store.get("");
+					t.t ( !!obj && obj.name == "Bart");
+					var obj = store.get("Lisa");
+					t.t ( !!obj && obj.name == "Lisa");
+					var obj = store.get(date);
+					t.t ( !!obj && obj.name == "Maggie");
+					var obj = store.get([1,2,3]);
+					t.t ( !!obj && obj.name == "Todd");
+
+					// Test proper records order
+					var range = store.getRange();
+					t.is( "Homer", range[0].name );
+					t.is( "Maggie", range[1].name );
+					t.is( "Bart", range[2].name );
+					t.is( "Lisa", range[3].name );
+					t.is( "Todd", range[4].name );
+
+					// destroy store.
+					store.destroy();
+				}
+			},
+
+
+
+			{
+				name: "Count records",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: true, keyPath: null});
+					var keyRange, result;
+					var max = data.length;
+
+					t.is( store.count(), 0 );
+
+					// Insert data into the store
+					data.forEach( function (object) {
+						var key = store.add( object );
+					});
+					result = store.getRange();
+					t.is( result.total, max );
+
+					// Test count.
+					t.is( store.count(), max );
+					t.is( store.count( 10 ), 1 );
+					t.is( store.count( KeyRange.bound(5,9) ), 5 );
+					t.is( store.query( null, null).total, max );
+
+					// clear the store.
+					store.destroy();
+				}
+			},
+			{
+				name: "Test Ranges",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: true});
+					var keyRange, result;
+					var max = data.length;
+
+					// Insert data into the store
+					data.forEach( function (object) {
+						var key = store.add( object );
+					});
+
+					// Test range
+					result = store.getRange();
+					t.is( result.total, max );
+
+					keyRange = KeyRange.only(1);
+					t.t( !!store.get(keyRange) );
+					keyRange = KeyRange.bound(5,9);				// 5-9
+					result = store.get(keyRange);
+					t.is( store.getIdentity(result), 5);
+
+					keyRange = KeyRange.bound(5,9, true, true); // 6-8
+					result = store.get(keyRange);
+					t.is( store.getIdentity(result), 6);
+					keyRange = KeyRange.lowerBound(5); // 5 -> max
+					result = store.getRange(keyRange);
+					t.is (result.total, max-4);
+					keyRange = KeyRange.upperBound(5, true); // 1-4
+					result = store.getRange(keyRange);
+					t.is (result.total, 4);
+
+					// destroy store.
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Removing data, No keyPath, Key generator",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {autoIncrement: false, keyPath: null});
+					var keyRange, result;
+					var max = data.length;
+
+					// Insert data into the store
+					data.forEach( function (object, idx) {
+						var key = store.add( object, {key: idx+1} );
+						t.t( typeof key == "number" );
+					});
+
+					// Remove some records
+					t.t( store.remove(5));
+					t.f( !!store.get(5) );
+
+					keyRange = KeyRange.bound(7,9)
+					t.t( store.remove(keyRange ));
+
+					t.f( !!store.get(7) );
+					t.f( !!store.get(8) );
+					t.f( !!store.get(9) );
+
+					t.is(max-4, store.count());
+
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Removing data, KeyPath",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {keyPath:"name"});
+					var keyRange, result;
+					var max = data.length;
+
+					// Insert data into the store
+					data.forEach( function (object) {
+						var key = store.add( object );
+					});
+
+					t.e( Error, store, "remove" );	// store.remove()
+
+					t.t( store.remove("Bart"));
+					t.t( store.remove("Ned"));
+					t.f( !!store.get("Bart") );
+					t.f( !!store.get("Ned") );
+
+					// Range includes: Patty, Rod, Root, Selma
+					keyRange = KeyRange.bound("Patty","Selma");
+					t.t( store.remove(keyRange));
+					t.f( !!store.get("Patty") );
+					t.f( !!store.get("Selma") );
+
+					t.is(max-6, store.count());
+
+					// destroy store.
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Store default Query behavour (1)",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ( {keyPath:"name"});
+
+					// Store is empty but ready.
+					t.is(0, store.count());
+					var result = store.query();
+					t.t( result instanceof Array);
+
+					// destroy store.
+					store.destroy();
+				}
+			},
+
+			{
+				name: "Store default Query behavour (2)",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed, Loader]);
+					var store = new Store ( {autoLoad: false, keyPath:"name"});
+					var defer = new doh.Deferred();
+					var max   = data.length;
+
+					// Because the store is not 'ready' (e.g. nothing is loaded yet)
+					// query() should return a dojo/promise/Promise
+
+					t.is(0, store.count());
+					var result0 = store.query();
+
+					t.t( result0 instanceof Promise);
+
+					// Next: Load the store...
+					store.load( {data: data});
+
+					// NOTE:
+					//		Because the load request resolves BEFORE _storeReady we
+					// 		have to wait for _storeReady to do this specific test
+					//		otherwise result1 would still return a promise and result0
+					//		will not have been resolved yet.
+
+					store.ready().then(
+						defer.getTestCallback(
+							function () {
+								t.is(max, store.count());
+								var result1 = store.query();
+								t.t( result1 instanceof Array);
+
+								// Test if the first query has been resolved and 'total' is
+								// an actual number and no longer a promise.
+
+								t.t(typeof result0.total == "number");
+								t.is(max, result0.total);
+
+								// destroy store.
+								store.destroy();
+							}
+						),
+						function (err) {
+							defer.errback(err);
+						}
+					);
+					return defer;
+				}
+			}]);
+
+			ready( function () {
+				doh.run();
+
+			});
+
+
+		}
+	);
     </script>
 
   </head>

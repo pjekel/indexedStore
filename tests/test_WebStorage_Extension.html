@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>WebStorage Extension</title>
+    <style type="text/css">
+      @import "../../dijit/themes/claro/claro.css";
+      @import "../../dijit/themes/claro/document.css";
+      @import "../../dijit/tests/css/dijitTests.css";
+    </style>
+
+    <script type="text/javascript">
+      var dojoConfig = {
+		async: true,
+		parseOnLoad: true,
+		isDebug: false,
+		baseUrl: "../../",
+		packages: [
+		  { name: "dojo", location: "dojo" },
+		  { name: "doh",  location: "util/doh" },
+		  { name: "store",location: "indexedStore" }
+		]
+      };
+    </script>
+
+    <script type="text/javascript" src="../../dojo/dojo.js"></script>
+    <script type="text/javascript">
+      require([
+        "doh/runner",
+        "dojo/_base/declare",
+        "dojo/ready",
+        "store/_base/_Store",
+        "store/_base/_Indexed",
+        "store/_base/_Loader!Basic",
+        "store/_base/range",
+		"store/extension/Eventable",
+		"store/extension/Hierarchy",
+		"store/extension/WebStorage",
+		"store/transaction/Manager"
+        ], function( doh, declare, ready, _Store, _Indexed, Loader, range, Eventable,
+					 Hierarchy, WebStorage, Manager ) {
+			"use strict";
+
+			// IMPORTANT:
+			//		THIS SET OF TEST CASES WILL CLEAR ALL LOCAL STORAGE
+
+			var webStorage = window.localStorage;
+			if (!webStorage) {
+				return;
+			}
+
+			var data = [
+				{ "name":"Root", "parent":[], "hair":"none" },
+				{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
+				{ "name":"Mona", "age":65, "parent":["Root"], "hair":"none" },
+				{ "name":"Jacqueline", "age":63, "parent":["Root"], "hair":"none" },
+				{ "name":"Homer", "age":42, "parent":["Abe","Mona"], "hair":"none" },
+				{ "name":"Marge", "age":35, "parent":["Jacqueline"], "hair":"blond" },
+				{ "name":"Ned", "age":40, "parent":["Root"], "hair":"none" },
+				{ "name":"Lisa", "age":10, "parent":["Homer","Marge"], "hair":"blond" },
+				{ "name":"Bart", "age":9, "parent":["Homer","Marge"], "hair":"blond" },
+				{ "name":"Maggie", "age":2, "parent":["Homer","Marge"], "hair":"black" },
+				{ "name":"Patty", "age":37, "parent":["Jacqueline"], "hair":"blond" },
+				{ "name":"Selma", "age":38, "parent":["Jacqueline"], "hair":"blond" },
+				{ "name":"Rod", "age":9, "parent":["Ned"], "hair":"blond" },
+				{ "name":"Todd", "age":8, "parent":["Ned"], "hair":"blond" },
+				{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
+				{ "name":"Manjula", "age":40, "parent":["Apu"], "hair":"brown"}
+			];
+			var max = data.length;
+
+			doh.register("WebStorage Extension", [
+			{
+				name: "WebStorage, no store loader",
+				timeout: 2000,
+				runTest: function (t) {
+
+					var Store = declare( [_Store, _Indexed, WebStorage]);
+					var i, store;
+					var abc = webStorage;
+
+					webStorage.clear();		// Clear the webStorage object.
+
+					store = new Store({autoLoad: false, name:"testStore", keyPath: "name"});
+
+					t.t( store.features.has("storage"));
+					t.is( 0, webStorage.length );
+					t.is( 0, store.total );
+
+					// Insert objects into the store
+					for (i = 0; i < max; i++) {
+						store.put(data[i]);
+					}
+					t.is( max, webStorage.length );
+					t.is( max, store.total );
+
+					// Get all the keys from the indexed store and test if we get a
+					// result back when fetching the keys from the webStorage.
+					var keys = range.keys(store);
+					t.is( max, keys.length);
+					keys.forEach(function (key) {
+						var storeKey = store._keyPrefix + key;
+						var storeVal = webStorage.getItem(storeKey);
+						t.t(storeVal != null);
+					});
+
+					// Remove two records
+					store.remove("Lisa");
+					store.remove("Todd");
+
+					var keys = range.keys(store);
+					t.is( max-2, webStorage.length );
+					t.is( max-2, keys.length);
+
+					keys.forEach(function (key) {
+						var storeKey = store._keyPrefix + key;
+						var storeVal = webStorage.getItem(storeKey);
+						t.t(storeVal != null);
+					});
+
+					store.clear();
+					t.is( 0, webStorage.length );
+					t.is( 0, store.total );
+
+					// Try to insert an invalid key. No records should be added to
+					// either the indexed store or webStorage.
+
+					t.e( Error, store, "add", [{name:null, age: 55}]);
+					t.is( 0, webStorage.length );
+					t.is( 0, store.total );
+
+				}
+			},
+
+			{
+				name: "WebStorage, store with loader",
+				timeout: 2000,
+				runTest: function (t) {
+
+					var Store   = declare( [_Store, _Indexed, Loader, WebStorage]);
+					var store, defer;
+
+					webStorage.clear();		// Clear the webStorage object.
+
+					store = new Store({autoLoad: false, name:"testStore", keyPath: "name"});
+					defer = new doh.Deferred();
+
+					t.t( store.features.has("storage"));
+					t.is( 0, webStorage.length );
+					t.is( 0, store.total );
+
+					// Use store loader to populate the indexed store and webStorage.
+					store.load({data: data}).then(
+						defer.getTestCallback(
+							function (data) {
+								t.is( max, store.total );
+								t.is( max, data.length );
+								t.is( max, webStorage.length );
+							}
+						),
+						function (err) {
+							defer.errback(err);
+						}
+					);
+					return defer;
+				}
+			},
+
+			{
+				name: "WebStorage, populate store from webStorage",
+				timeout: 2000,
+				runTest: function (t) {
+
+					var Store = declare( [_Store, _Indexed, Loader, WebStorage]);
+					var store0 = new Store({name:"testStore", keyPath: "name"});
+
+					t.is( max, webStorage.length );
+					t.is( max, store0.total );
+
+					// Create another store with a different name...
+					var store1 = new Store({name:"testStore2", keyPath: "name"});
+					t.is( max, webStorage.length );
+					t.is( 0, store1.total );
+				}
+			},
+
+			{
+				name: "WebStorage, transaction success",
+				timeout: 2000,
+				runTest: function (t) {
+
+					// Note: At this point the webStorage is still populated therefore
+					// no need to load any data using a loader
+
+					var Store = declare( [_Store, _Indexed, Eventable, WebStorage]);
+					var store = new Store({name:"testStore", keyPath: "name"});
+					var defer = new doh.Deferred();
+
+					t.is( max, webStorage.length );
+					t.is( max, store.total );
+
+					// Start a transaction
+					var trans = Manager.transaction(store,
+						function (trans) {
+							var tStore = trans.store("testStore");
+							var keys = range.keys(tStore);
+							t.is(max, keys.length);
+
+							keys.forEach( function (key) {
+								tStore.remove(key);
+							});
+							// webStorage should be unchanged but the transaction
+							// store should be empty.
+							t.is( max, webStorage.length );
+							t.is(0, tStore.total);
+						},
+						"readwrite"
+					);
+
+					// In case any of the transaction notifications fail....
+					store.onerror = function (event) {
+						defer.reject(event.error);
+					};
+					// Note: transactions are event driven...
+					trans.oncomplete = function (event) {
+						defer.getTestCallback( function (event) {
+							// After the transaction both the webStorage and the
+							// primary store should be empty.
+							t.is(0, webStorage.length );
+							t.is(0, store.total);
+						})(event);
+					};
+					trans.onabort = function (event) {
+						defer.reject(this.error);
+					};
+
+					return defer;
+				}
+			},
+
+			{
+				name: "WebStorage, transaction abort",
+				timeout: 2000,
+				runTest: function (t) {
+
+					// Note: Because of the previous test the webStorage is empty,
+					// therefore reload the store.
+
+					var Store = declare( [_Store, _Indexed, Loader, Eventable, WebStorage]);
+					var store = new Store({data: data, name:"testStore", keyPath: "name"});
+					var defer = new doh.Deferred();
+
+					t.is( max, webStorage.length );
+					t.is( max, store.total );
+
+					// Start a transaction
+					var trans = Manager.transaction(store,
+						function (trans) {
+							var tStore = trans.store("testStore");
+							var keys = range.keys(tStore);
+							t.is(max, keys.length);
+
+							keys.forEach( function (key) {
+								tStore.remove(key);
+							});
+							// webStorage should be unchanged but the transaction
+							// store should be empty.
+							t.is( max, webStorage.length );
+							t.is(0, tStore.total);
+
+							// Force a transaction abort
+							trans.abort();
+						},
+						"readwrite"
+					);
+
+					store.onerror = function (event) {
+						defer.reject(event.error);
+					};
+					trans.oncomplete = function (event) {
+						defer.reject(this.error);
+					};
+					trans.onabort = function (event) {
+						defer.getTestCallback( function (event) {
+							// After the transaction both the webStorage and the
+							// primary store should be unchanged.
+							t.is(max, webStorage.length );
+							t.is(max, store.total);
+						})(event);
+					};
+
+					return defer;
+				}
+			},
+
+			{
+				name: "WebStorage, Hierarchy, no store loader",
+				runTest: function (t) {
+
+					// Populate the store using webStorage
+
+					var Store = declare( [_Store, _Indexed, Hierarchy, WebStorage]);
+					var store = new Store({name:"testStore", keyPath: "name"});
+					var abc = webStorage;
+
+					t.is( max, webStorage.length );
+					t.is( max, store.total );
+
+					var index = store.index("parents");
+					t.t(index.count != 0);
+
+					var homer = store.get("Homer");
+					var results = store.getChildren(homer);
+
+					t.is(3, results.total);
+				}
+			}
+
+			]);
+
+			ready( function () {
+				doh.run();
+
+			});
+
+		}
+    );
+    </script>
+
+  </head>
+
+  <body class="claro">
+    <h1 class="DemoTitle">WebStorage Extension</h1>
+  </body>
+</html>

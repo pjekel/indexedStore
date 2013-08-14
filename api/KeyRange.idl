@@ -1,0 +1,14 @@
+/**
+ *		KEYRANGE
+ */
+interface KeyRange {
+    readonly    attribute	any 	    lower;
+    readonly    attribute	any			upper;
+    readonly    attribute	boolean 	lowerOpen;
+    readonly    attribute	boolean		upperOpen;
+
+    static KeyRange only (any value);
+    static KeyRange lowerBound (any lower, optional boolean open);
+    static KeyRange upperBound (any upper, optional boolean open);
+    static KeyRange bound (any lower, any upper, optional boolean lowerOpen, optional boolean upperOpen);
+};

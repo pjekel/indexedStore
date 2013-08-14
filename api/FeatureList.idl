@@ -1,0 +1,14 @@
+/**
+ *		FEATURE LIST
+ */
+ 
+[Constructor(optional (DOMString or DOMString[]) name)]
+interface FeatureList {
+	readonly	attribute	DOMString[]		features;
+	readonly	attribute	long			length;
+
+	void		add((DOMString or DOMString[]) name, optional any value);
+	any			has((DOMString or DOMString[]) name, optional boolean all);
+	void		remove((DOMString or DOMString[]) name);
+};
+

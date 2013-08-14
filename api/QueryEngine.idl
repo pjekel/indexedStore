@@ -1,0 +1,14 @@
+dictionary QueryDirectives : PageDirectives {
+	//	Match object properties case insensitive. Default is false.
+	boolean	ignoreCase = false;
+
+	DOMString?	unique = null;
+};
+
+interface QueryInterface {
+	static	QueryFunction	QueryEngine(optional (object or QueryFilter) query, optional QueryDirectives options);
+};
+
+callback QueryFunction = object[] (any[] data);
+callback QueryFilter = boolean (object value);
+

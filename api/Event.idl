@@ -1,0 +1,44 @@
+//
+//	http://www.w3.org/TR/dom/#events
+//
+dictionary EventInit {
+	boolean bubbles;
+	boolean cancelable;
+};
+
+/*
+ *		EVENT
+ */
+[Constructor(DOMString type, optional EventInit eventInitDict)]
+interface Event {
+	const unsigned short NONE = 0;
+	const unsigned short CAPTURING_PHASE = 1;
+	const unsigned short AT_TARGET = 2;
+	const unsigned short BUBBLING_PHASE = 3;
+	readonly	attribute DOMString type;
+	readonly	attribute EventTarget? target;
+	readonly	attribute EventTarget? currentTarget;
+	readonly	attribute unsigned short eventPhase;
+	readonly	attribute boolean bubbles;
+	readonly	attribute boolean cancelable;
+	readonly	attribute boolean defaultPrevented;
+	readonly	attribute boolean isTrusted;
+	readonly	attribute DOMTimeStamp timeStamp;
+	void initEvent(DOMString type, boolean bubbles, boolean cancelable);
+	void preventDefault();
+	void stopPropagation();
+	void stopImmediatePropagation();
+};
+
+/*
+ *		EVENT
+ */
+interface EventTarget {
+	void addEventListener(DOMString type, EventListener? callback, optional boolean capture = false);
+	void removeEventListener(DOMString type, EventListener? callback, optional boolean capture = false);
+	boolean dispatchEvent(Event event);
+};
+
+callback interface EventListener {
+	void handleEvent(Event event);
+};

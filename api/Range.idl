@@ -1,0 +1,11 @@
+
+dictionary RangeDirectives {
+	//	The range required direction. Valid options are: 'next', 'nextunique',
+	//	'prev' or 'prevunique'. (default is 'next').
+	DOMString	direction = "next";
+
+	//	Determines if duplicate keys are allowed in the range. If false, all
+	//	duplicate key entries are removed from the range. (default is true).
+	boolean	duplicates = true;
+};
+

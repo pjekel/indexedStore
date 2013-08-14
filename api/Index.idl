@@ -1,0 +1,49 @@
+/**
+ *		INDEX
+ */
+
+ dictionary IndexDirectives {
+	boolean	async = false;
+
+	//	When this flag is true, the index enforces that no two records in
+	//	the index has the same key.
+	boolean	unique = false;
+
+	//	If the multiEntry flag is false, then a single record whose key is
+	//	an Array is added to the index. If the multiEntry flag is true, then
+	//	the one record is added to the index for each item in the Array.
+	//	The key for each record is the value of respective item in the Array.
+	boolean	multiEntry = false;
+
+	//	Indicates if the object key is to be stored in all uppercase chars.
+	//	If true, all key string values are converted to uppercase before
+	//	storing the record. The object property values used to compose the
+	//	key are not affected.
+	boolean	uppercase = false;
+};
+
+callback IndexReadyError = void (Error err);
+callback IndexReadyOk = void (Index index);
+
+[Constructor(Store store, DOMString name, KeyPath keyPath, optional IndexDirectives options)]
+interface Index : EventTarget {
+	readonly	attribute	DOMString	baseClass = "index";
+	readonly	attribute	boolean		multiEntry;
+	readonly	attribute	KeyPath		keyPath;
+	readonly	attribute	DOMString	name;
+	readonly	attribute	Store		store;
+	readonly	attribute	boolean		unique;
+	readonly	attribute	boolean		uppercase;
+
+	integer		count(optional (Key or KeyRange) key, optional boolean unique);
+	any?		get((Key or KeyRange) key);
+	Key?		getKey((Key or KeyRange) key);
+	QueryResult	getRange(optional (Key or KeyRange) keyRange, optional (DOMString or KeyRangeOptions) options);
+	QueryResult	getKeyRange(optional (Key or KeyRange) keyRange, optional (DOMString or RangeDirectives) options);
+	Cursor		openCursor(optional (Key or KeyRange) keyRange, DOMString? direction);
+	Cursor		openKeyCursor(optional (Key or KeyRange) keyRange, DOMString? direction);
+	Promise		ready(optional IndexReadyOk whenReady, optional IndexReadyError whenError, optional object scope);
+};
+
+KeyRangeOptions implements RangeDirectives;
+KeyRangeOptions implements PageDirectives;

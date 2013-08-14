@@ -1,0 +1,149 @@
+//
+//
+//
+
+dictionary StoreDirectives {
+	//	If true, enables the store key generator.
+	boolean autoIncrement = false;
+
+	//	If true, the store content will be deleted when the store is closed.
+	boolean async = false;
+
+	// clearOnClose: Boolean
+	boolean clearOnClose = false;
+
+	//	A JavaScript key:values pairs object whose properties and associated
+	//	values are added to new store objects if such properties are missing
+	//	from the new store object.
+	object defaultProperties = null;
+
+	//	The property name to use as the object identity property. The value of
+	//	this property should be unique. If the object being added to the store
+	//	does NOT have this property it will be added to the object.
+	//	The idProperty is supported for dojo/store compatibility only, use
+	//	keyPath instead.
+	DOMString idProperty = "id";
+
+	//	A JavaScript key:value pairs object or an array of objects defining
+	//	the store indexes. An index object object looks like:
+	//		{ name: String, keyPath: KeyPath, options: Object? }
+	(object or object[])indexes = null;
+
+	//	A key path is a DOMString or sequence<DOMString> that defines how to
+	//	extract a key from an object.  A valid key path is either the empty
+	//	string, a JavaScript identifier, or multiple Javascript identifiers
+	//	separated by periods (.)
+	//	(Note that spaces are not allowed within a key path)
+	(DOMString or DOMString[])? keyPath = null;
+
+	//	Name of the store. If omitted, one will be generated however, if you
+	//	elect to use transactions it is recommended to provide a unique name
+	//	for each store.
+	DOMString name = "";
+
+	//	Defines the query engine to use for querying the data store.
+	QueryEngine queryEngine = _QueryEngine;
+
+	//	Suppress the dispatching of events. Under certain circumstances it
+	//	may be desirable to suppress the delivery of events. Both the base
+	//	and extended loader will suppress event delivery while loading the
+	//	store.
+	boolean suppressEvents = false;
+
+	//	Indicates if the object key is to be stored in all uppercase chars.
+	//	If true, all key string values are converted to uppercase before
+	//	storing the record. The object property values used to compose the
+	//	key are not affected.
+	boolean uppercase = false;
+
+	//	The initial version number of any new store record.
+	long version = 1;
+}
+
+dictionary PutDirectives {
+	//	For dojo/store compatibility only, use key instead.
+	//	Indicates the identity of the object if a new object is created
+	any? 	id = null;
+
+	//	Key value to be used for the object. Only allowed if no key path is
+	//	specified for the store.
+	Key?	key = null;
+
+	//	If the collection of objects in the store has a natural ordering, this
+	//	indicates that the created or updated object should be placed before
+	//	the object specified by the value of this property. The property value
+	//	can be an object or id. If omitted or null indicates that the object
+	//	should be last.
+	(object or Key)? before = null;
+
+	//	If the store is hierarchical this property indicates the new parent(s)
+	//	of the created or updated object. This property value can be an Id or
+	//	object or an array of those types.
+	(object or Key)? parent = null;
+
+	//	If this is provided as a boolean it indicates that the object should or
+	//	should not overwrite an existing object. A value of true indicates that
+	//	a new object should not be created, instead the operation should update
+	//	an existing object. A value of false indicates that an existing object
+	//	should not be updated, a new object should be created (which is the same
+	//	as an add() operation). When this property is not provided, either an
+	//	update or creation is acceptable.
+	boolean overwrite = false;
+};
+
+/**
+ *		STORE
+ */
+callback StoreReadyProgress = void ();
+callback StoreReadyError = void (Error err);
+callback StoreReadyOk = void (_Store store);
+
+[Constructor(StoreDirectives directives)]
+interface _Store : EvenTarget {
+	readonly	attribute	boolean			async;
+	readonly	attribute	boolean			autoIncrement;
+	readonly 	attribute	DOMString		baseClass = "store";
+	readonly	attribute	FeatureList		features;
+	readonly	attribute	DOMString		idProperty;
+	readonly	attribute	(DOMString or DOMString[])?	keyPath;
+	readonly	attribute	DOMString		name;
+	readonly	attribute	long			revision;
+	readonly	attribute	long			sid;
+	readonly	attribute	long			total;
+	readonly	attribute	boolean			uppercase;
+	readonly	attribute	long			version;
+
+				attribute	boolean			clearOnClose;
+				attribute	object			defaultProperties;
+				attribute	(object or object[])	indexed;
+				attribute	DOMStringList	indexNames;
+				attribute	QueryEngine		queryEngine;
+				attribute	boolean			suppressEvents;
+
+				attribute	EventListener	onerror;
+				attribute	EventListener	onload;
+
+	Key			add(any value, optional PutDirectives options);
+	void		clear();
+	void		close(optional boolean clear);
+	integer		count(optional (Key or KeyRange) key);
+	Index		createIndex(DOMString name, KeyPath keyPath, optional IndexDirectives options);
+	void		deleteIndex(DOMString name);
+	void		destroy();
+	any?		get((Key or KeyRange) key);
+	Key?		getIdentity(any value);
+	object		getMeta(any value);
+	QueryResult	getRange(optional (Key or KeyRange) keyRnage, optional RangeDirectives options);
+	Index		index(DOMString name);
+	Key			put(any value, optional PutDirectives options);
+	QueryResult	query(optional (object or QueryFilter) query, optional QueryDirectives options);
+	Promise		ready(optional StoreReadyOk whenReady, optional StoreReadyError whenError, optional object scope);
+	boolean		remove(Key key);
+};
+
+interface _Indexed {
+	Cursor		openCursor(optional KeyRange? keyRange, optional Direction direction = "next")
+};
+
+interface _Natural {
+};

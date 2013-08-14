@@ -1,0 +1,53 @@
+/*
+ *
+ */
+typedef double Number;
+typedef (DOMString or double or Date) KeyType
+typedef (KeyType or sequence<KeyType>) Key;
+typedef (DOMString or sequence<DOMString>) KeyPath;
+
+dictionary PageDirectives {
+	//	A list of attributes to sort on, as well as direction For example:
+	//		[{property: "price", descending: true}].
+	//	If the sort directive is omitted, then the natural order of the store
+	//	may be applied if there is a natural order.
+	SortDirectives[]	sort = null;
+
+	//	The first result to begin iteration on
+	Number	start = 0;
+
+	//	The number of how many results should be returned.
+	Number	count = Infinity;
+};
+
+dictionary SortDirectives {
+	//	The name of the attribute to sort on. (For DOJO compatibility, use property
+	//	instead).
+	DOMString?	_attribute = null;
+
+	//	The name of the property to sort on.
+	DOMString?	property = null;
+
+	//	The direction of the sort.	Default is false.
+	boolean	descending = false;
+
+	//	Compare attribute values case insensitive. Default is false.
+	boolean	ignoreCase = false;
+};
+
+enum Direction {
+	"next",
+	"nextunique",
+	"prev",
+	"prevunique"
+};
+
+[Constructor(sequence<Record> records, optional long ls = -1, optional long eq = -1, optional long gt = 0)]
+interface Location {
+	attribute long		ls;
+	attribute long		eq;
+	attribute long		gt;
+	attribute object	record;
+	attribute any		key;
+	attribute any		value;
+};

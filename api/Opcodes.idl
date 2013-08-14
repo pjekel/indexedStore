@@ -1,0 +1,16 @@
+typedef	(DOMString or long)	Opcode;
+
+interface Opcodes {
+	const	Opcode 	NEW	   = 0;
+	const	Opcode	DELETE = 1;
+	const	Opcode	UPDATE = 2;
+	const	Opcode	CLEAR  = 3;
+	const	Opcode	CLOSE  = 4;
+	
+	static	boolean				isOpcode(any opcode);
+	static	sequence<DOMString>	keys();
+	static	DOMString?			name(Opcode opcode);
+	static	sequence<Opcode>	toArray();
+	
+	stringifier DOMString 		toString();	
+}

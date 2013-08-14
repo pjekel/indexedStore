@@ -1,0 +1,20 @@
+/**
+ *		CURSOR
+ */
+
+ [Constructor((Store or Index)source, optional KeyRange range, optional Direction direction, optional boolean keyCursor)]
+ interface Cursor {
+	readonly    attribute (Store or Index) source;
+	readonly    attribute Direction		direction;
+	readonly    attribute Key			key;
+	readonly    attribute Key			primaryKey;
+
+	void		advance([EnforceRange] unsigned long count);
+	void		next (optional Key key);
+	void		remove ();
+	void 		update (any value);
+};
+
+interface CursorWithValue : Cursor {
+	readonly    attribute any	value;
+}

@@ -1,0 +1,11 @@
+/**
+ *		RECORD
+ */
+[Constructor(Key key, any value, optional object tags)]
+interface Record {
+	attribute	Key		key;
+	attribute	any		value;
+	attribute	object	tags;
+
+	void		destroy();
+};

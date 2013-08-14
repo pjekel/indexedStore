@@ -76,7 +76,7 @@ define(["../_base/library",
 		if (options.start) {
 			data.splice(0, options.start);
 		}
-		if (options.count) {
+		if (options.count > 0 && options.count !== Infinity) {
 			data.length = options.count;
 		}
 		return data;

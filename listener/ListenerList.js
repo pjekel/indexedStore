@@ -8,10 +8,10 @@
 //	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["./Listener",
-		"../_base/library",
-		"../error/createError!../error/StoreErrors.json"
-	], function (Listener, lib, createError) {
+define(["../_base/library",
+		"../error/createError!../error/StoreErrors.json",
+		"./Listener"
+	], function (lib, createError, Listener) {
 	"use strict";
 	// module:
 	//		indexedStore/listener/ListenerList
@@ -19,9 +19,15 @@ define(["./Listener",
 	//		This module implements the ListenerList object. A ListenerList object
 	//		is a container of Listener instances arranged by type.
 
-	var StoreError = createError("ListenerList");		// Create the StoreError type.
-	var isString   = lib.isString;
-	var defProp    = lib.defProp;
+	var C_ANYTYPE = "*";
+
+	var ListError = createError("ListenerList");		// Create the ListError type.
+	var isString  = lib.isString;
+	var defProp   = lib.defProp;
+
+	function isValidType(type) {
+		return (isString(type) || typeof type == "number");
+	}
 
 	function ListenerList(actions) {
 		// summary:
@@ -31,11 +37,43 @@ define(["./Listener",
 		//		will be associated with the ListenerList (see also setActions())
 		// tag:
 		//		public
-
 		var destroyed = false;
 		var listeners = {};
 		var count     = 0;
 		var self      = this;
+
+		//=====================================================================
+		// Private methods
+
+		function insertListener(type, listener, priority) {
+			// summary:
+			//		Insert a listener in order of its priority. The order of listeners
+			//		determines the order in which they will be invoked when triggered.
+			//		Listeners without priority will be invoked last in the order they
+			//		have been submitted.
+			// type: String
+			//		Type of listener
+			// listener: Listener
+			//		Instance of Listener
+			// priority: Number?
+			// tag:
+			//		private
+			var lsByType = listeners[type] || [];
+			var length = lsByType.length;
+			var idx = 0, prio;
+
+			if (length && typeof priority == "number") {
+				for (idx = 0; idx < length; idx++) {
+					prio = lsByType[idx].priority;
+					if (prio === undefined || priority < prio) {
+						break;
+					}
+				}
+				listener.priority = priority;
+			}
+			lsByType.splice(idx, 0, listener);
+			return lsByType;
+		}
 
 		function removeAll(type) {
 			// summary:
@@ -46,28 +84,58 @@ define(["./Listener",
 			// tag:
 			//		public
 			if (type) {
-				if (type instanceof Array) {
-					type.forEach(removeAll);
-				} else if (isString(type)) {
-					if (/,/.test(type)) {
-						removeAll(type.split(/\s*,\s*/));
-					} else {
+				var types = lib.anyToArray(type);
+				types.forEach(function (type) {
+					if (isValidType(type)) {
 						var lsByType = listeners[type];
 						if (lsByType) {
 							delete listeners[type];
 							count -= lsByType.length;
 						}
+					} else {
+						throw new ListError("Parameter", "removeAll", "invalid type argument");
 					}
-				} else {
-					throw new StoreError("Parameter", "removeAll", "invalid type argument");
-				}
+				});
 			} else {
 				listeners = {};
 				count = 0;
 			}
 		}
 
-		this.addListener = function (type, listener, scope) {
+		function triggerActions(actions, type, aspect, vargs) {
+			// summary:
+			// actions: Actions
+			//		Instance of indexedStore/listener/Actions
+			// type: String | Number
+			// aspect: String
+			// vargs: any[]
+			// tag:
+			//		private
+			if (actions) {
+				actions.trigger.apply(actions, [type, aspect].concat(vargs));
+			}
+		}
+
+		function triggerListener(listeners, type, vargs, scope) {
+			// summary:
+			// listeners: Listener[]
+			// type: String | Number
+			// vargs: any[]
+			// tag:
+			//		private
+			listeners.forEach(function (lstn) {
+				var func = lstn.listener || (lstn.scope || scope || window)[lstn.bindName];
+				var args = [type].concat((lstn.args || []), vargs);
+				if (func instanceof Function) {
+					func.apply((lstn.scope || scope), args);
+				}
+			});
+		}
+
+		//=====================================================================
+		// Public methods
+
+		this.addListener = function (type, listener, scope, priority) {
 			// summary:
 			//		Add a listener to the list.
 			// type: String|String[]
@@ -76,41 +144,44 @@ define(["./Listener",
 			//		Callback function, an instance of Listener or a string
 			// scope: Object?
 			//		Object to use as 'this' when invoking the listener.
+			// priority: Number?
+			//		Determines the order in which listeners for the same trigger
+			//		type are invoked. If omitted the listener is added to the end
+			//		of the list. Listeners with priority are sorted in ascending
+			//		order. (lowest number has the highest priority).
 			// returns: Object
 			//		An object which has a remove method which can be called to remove
 			//		the listener from the ListenerList.
 			// tag:
 			//		Public
+			var types;
 
 			if (destroyed) {
-				throw new StoreError("InvalidState", "addListener", "ListenerList was destroyed");
-			} else if (!listener) {
-				throw new StoreError("Parameter", "addListener", "listener argument required");
+				throw new ListError("InvalidState", "addListener", "ListenerList was destroyed");
 			}
-			if (type instanceof Array) {
-				type.forEach(function (type) {
-					self.addListener(type, listener, scope);
-				});
-			} else if (isString(type)) {
-				if (/,/.test(type)) {
-					return self.addListener(type.split(/\s*,\s*/), listener, scope);
+			if (type && listener) {
+				if (arguments.length == 3 && typeof arguments[2] == "number") {
+					priority = arguments[2];
+					scope    = undefined;
 				}
-				self.removeListener(type, listener);
-				var lsByType = listeners[type] || [];
-
-				listener = new Listener(listener, scope);
-
-				lsByType.push(listener);
-				listeners[type] = lsByType;
-				count++;
-			} else {
-				throw new StoreError("Parameter", "addListener", "invalid type argument");
+				types = lib.anyToArray(type);
+				types.forEach(function (type) {
+					if (isValidType(type)) {
+						this.removeListener(type, listener);
+						listener = new Listener(listener, scope);
+						listeners[type] = insertListener(type, listener, priority);
+						count++;
+					} else {
+						throw new ListError("Parameter", "addListener", "invalid type argument");
+					}
+				}, this);
+				return {
+					remove: function () {
+						self.removeListener(type, listener, scope);
+					}
+				};
 			}
-			return {
-				remove: function () {
-					self.removeListener(type, listener, scope);
-				}
-			};
+			throw new ListError("Parameter", "addListener", "required argument missing");
 		};
 
 		this.destroy = function () {
@@ -135,11 +206,10 @@ define(["./Listener",
 			//		type and the value being an array of all listeners for that type.
 			// tag:
 			//		Public
-			var list = {};
+			var key, list = {};
 			if (type) {
 				list = (listeners[type] || []).slice();
 			} else {
-				var key;
 				for (key in listeners) {
 					list[key] = listeners[key].slice();
 				}
@@ -149,11 +219,11 @@ define(["./Listener",
 
 		this.getByCallback = function (type, callback) {
 			// summary:
+			//		Get a listener by its callback
 			// type: String
 			// callback: Function
 			// tag:
 			//		Public
-
 			if (typeof callback == "function") {
 				var lsByType = listeners[type];
 				var listener;
@@ -168,10 +238,18 @@ define(["./Listener",
 				}
 				return listener;
 			}
-			throw new StoreError("Parameter", "getByCallback", "callback is not a callable object");
+			throw new ListError("Parameter", "getByCallback", "callback is not a callable object");
 		};
 
 		this.getListeners = function () {
+			// summary:
+			//		Get all listeners
+			// returns: Object
+			//		A JavaScript key:value pairs object. Each object key represents
+			//		a listener type, the value is an array of Listener objects for
+			//		the given type.
+			// tag:
+			//		public
 			return this.getByType();
 		};
 
@@ -195,14 +273,9 @@ define(["./Listener",
 				if (!(listener instanceof Listener)) {
 					listener = new Listener(listener, scope);
 				}
-				if (type instanceof Array) {
-					type.forEach(function (type) {
-						self.removeListener(type, listener, scope);
-					});
-				} else if (isString(type)) {
-					if (/,/.test(type)) {
-						self.removeListener(type.split(/\s*,\s*/), listener, scope);
-					} else {
+				var types = lib.anyToArray(type);
+				types.forEach(function (type) {
+					if (isValidType(type)) {
 						var lsByType = listeners[type];
 						if (lsByType) {
 							lsByType.some(function (l, i) {
@@ -217,10 +290,10 @@ define(["./Listener",
 								delete listeners[type];
 							}
 						}
+					} else {
+						throw new ListError("Parameter", "removeListener", "invalid type argument");
 					}
-				} else {
-					throw new StoreError("Parameter", "addListener", "invalid type argument");
-				}
+				});
 			} else {
 				removeAll(type);
 			}
@@ -228,14 +301,16 @@ define(["./Listener",
 
 		this.setActions = function (actions) {
 			// summary:
+			//		Associate actions with the ListenerList
 			// actions:
+			//		Instance of Actions
 			// tag:
 			//		Public
 			if (actions) {
 				if (typeof actions.after == "function" && typeof actions.before == "function") {
 					this.actions = actions;
 				} else {
-					throw new StoreError("Parameter", "setActions", "invalid actions argument");
+					throw new ListError("Parameter", "setActions", "invalid actions argument");
 				}
 			}
 		};
@@ -251,32 +326,28 @@ define(["./Listener",
 			//
 			//				callback(type [,arg0 [,arg1, ... ,argN]])
 			//
-			// type: String
+			// type: String|Number
 			//		Listener type.
 			// tag:
 			//		Public
+			var vargs = Array.prototype.slice.call(arguments, 1);
+			var lsByType;
 
-			if (isString(type)) {
-				var lst = listeners[type];
-				var act = self.actions && self.actions.trigger(type, "before");
-				if (lst) {
-					var a, c, i, T, l;
-					for (i = 0; i < lst.length; i++) {
-						l = lst[i];
-						T = l.scope;
-						c = l.listener || (T || window)[l.bindName];
-						a = l.args ? [].concat(type, l.args, Array.prototype.slice.call(arguments, 1))
-											 : arguments;
-						if (c instanceof Function) {
-							c.apply(T, a);
-						}
-					}
+			if (isValidType(type) && type !== C_ANYTYPE) {
+				lsByType  = listeners[type] || [];
+				if (this.actions) {
+					triggerActions(this.actions, type, "before", vargs);
+					triggerListener(lsByType, type, vargs, this);
+					triggerActions(this.actions, type, "after", vargs);
+				} else {
+					triggerListener(lsByType, type, vargs, this);
 				}
-				act = self.actions && self.actions.trigger(type, "after");
 			} else {
-				throw new StoreError("Parameter", "trigger", "invalid type argument");
+				throw new ListError("TypeError", "trigger", "invalid type argument");
 			}
 		};
+
+		//=====================================================================
 
 		defProp(this, "length", {get: function () { return count; }, enumerable: true});
 

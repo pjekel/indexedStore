@@ -8,136 +8,130 @@
 //	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["dojo/_base/declare",
-		"dojo/Deferred",
-		"../_base/library",
+define(["../_base/library",
 		"../error/createError!../error/StoreErrors.json",
+		"./_LoadDeferred",
 		"./_LoaderBase"
-	], function (declare, Deferred, lib, createError, Loader) {
+	], function (lib, createError, LoadDeferred, LoaderBase) {
+	"use strict";
 
-	// module:
-	//		indexedStore/loader/basic
+	// module
+	//		indexedStore/loader/Basic
 	// summary:
-	//		Extend the store with basic load capability. A store loader consists
-	//		of two parts:
+	//		Implements the Basic data loader. This loader is used if only in-memory
+	//		objects are to be loaded. If loading data using URL's or Web Storage is
+	//		required use the Advanced loader instead.
+	// interface:
+	//		[Constructor(Store store, LoadDirectives kwArgs)]
+	//		interface LoaderBasic : LoaderBase {
+	//		}
 	//
-	//			1) A store extension and,
-	//			2) The actual loader (./_LoaderBase).
+	//		dictionary LoadDirectives {
+	//				...
+	//		}
 	//
-	//		This module is the store extension which adds the load() and setData()
-	//		methods to the store and creates a new instance of the actual store
-	//		loader.
+	// example:
+	//		The indexedStore loaders are normally instantiated using the plug-in
+	//		class _Loader (indexedStore/_base/_Loader)
+	//
+	//	|	require(["dojo/_base/declare",
+	//	|	         "store/_base/_Store",
+	//	|	         "store/_base/_Indexed",
+	//	|	         "store/_base/_Loader!Basic",
+	//	|	                   ...
+	//	|	        ], function (declare, _Store, _Indexed, _Loader, ... ) {
+	//	|
+	//	|	    var StoreClass = declare([_Store, _Indexed, _Loader]);
+	//	|	    var myStore = new StoreClass({data: myData, keyPath: "name"});
+	//	|	                   ...
+	//	|	});
+
 
 	var StoreError = createError("Loader");		// Create the StoreError type.
-	var isObject   = lib.isObject;
-	var mixin      = lib.mixin;
 
-	var _Loader = declare(null, {
+	// Define the additional load directives supported by this loader.
+	var privateDirectives = {
+		// data: any
+		//		Data object. If handleAs is not specified data must be an array
+		//		of objects. However, the store put no constraints on the type of
+		//		objects. (See also the 'handleAs' property).
+		data: null
+	};
 
-		//=========================================================================
-		// Constructor keyword arguments (LoadDirectives):
+	function LoaderBasic(store, kwArgs) {
+		// summary:
+		//		Basic loader constructor
+		// store: Store
+		// storeArgs: Object
+		// tag:
+		//		public
 
-		// data: Array
-		//		An array of objects to be loaded in the store.
-		data: null,
+		LoaderBase.call(this, store, "basic", kwArgs);
 
-		// handleAs: String
-		handleAs: null,
-
-		// overwrite: Boolean
-		//		If true, overwrite store objects if objects with the same key already
-		//		exist, otherwise an exception of type ConstraintError is thrown.
-		//		This overwrite property only applies when loading data.
-		//		(See also maxErrors)
-		overwrite: false,
-
-		//=========================================================================
-		// Constructor
-
-		constructor: function (kwArgs) {
+		this._getData = function (request) {
 			// summary:
-			// kwArgs: Object?
-			//		A JavaScript key:value pairs object
-			//			{
-			//				data: any?
-			//				handleAs: String?,
-			//				overwrite: Boolean?
-			//			}
-
-			if (this.features.has("hierarchy")) {
-				throw new StoreError("Dependency", "constructor", "loader must be installed prior to any extension");
-			}
-			this.loader = new Loader(this);		// Overwrite default store loader.
-			this.features.add("loaderBasic");
-		},
-
-		//=========================================================================
-		// Public IndexedStore/api/store API methods
-
-		load: function (options) {
-			// summary:
-			//		Load a set of objects into the store.
-			// options: LoadDirectives?
-			//		LoadDirectives, see (indexedStore/loader/_LoaderBase for details).
-			// returns: dojo/promise/Promise
-			//		The promise returned has an extra property not found on on standard
-			//		promises: response. The response property is a standard promise that
-			//		is resolved with an object representing the response from the server.
-			// example:
-			//	|	store.load({data: myObjects, overwrite: true});
+			//
+			// request: LoadRequest
+			// returns: Promise
+			//		A dojo/request style promise. The promise has an additional
+			//		property not found on standard promises: response.
 			// tag:
-			//		public
+			//		private
+			var data = request.directives.data;
+				// Mimic a dojo/request result.
+			var response = {text: data, data: data, status: 200};
+			var deferred = new LoadDeferred();
 
-			var directives = {
-				data: this.data,
-				handleAs: this.handleAs,
-				overwrite: !!this.overwrite
-			};
-			var suppress = this.suppressEvents;
-			var store    = this;
-			var promise;
+			deferred.resolve(response);
+			return deferred.promise;
+		};
 
-			options = mixin(directives, options);
-			this.suppressEvents = true;
-
-			// If the initial load request failed, reset _storeReady to allow for
-			// another attempt.
-			if (this._storeReady.isRejected()) {
-				this._storeReady = new Deferred();
-				this.waiting     = this._storeReady.promise;
-			}
-
-			promise = this.loader.load(options);
-			promise.always(function () {
-				store.suppressEvents = suppress;
-				store.data = null;
-			});
-			promise.then(
-				function () {
-					setTimeout(function () {
-						store._emit("load");
-						store._storeReady.resolve(store);
-					}, 0);
-					store.waiting = false;
-				},
-				store._storeReady.reject
-			);
-			return promise;
-		},
-
-		setData: function (data) {
+		this._storeData = function (request, response) {
 			// summary:
-			//		Clear the store and load the data. This method is provided for
-			//		dojo/store/Memory compatibility only (See also load())
-			// data: Object[]?
-			//		An array of objects.
+			//		Load an array of data objects into the store.
+			// request: LoadRequest
+			// response: Object
+			// options: LoadDirectives
+			//		A JavaScript key:value pairs object. The object properties define
+			//		additional directives for the load process.
 			// tag:
-			//		Public
-			this.data = data;
-			this.clear();
-			this.load();
-		}
+			//		private
+			var i, max;
+			var options = request.directives;
+			var flags   = options.overwrite ? {overwrite: true} : null;
+			var store   = this.store;
+			var data    = response.data || [];
+			var stored  = [];
 
-	});	/* end declare() */
-	return _Loader;
+			max = data.length;
+
+			if (data instanceof Array) {
+				store._trigger("preload", data, options);
+				try {
+					for (i = 0; i < max; i++) {
+						store._storeRecord(data[i], flags);
+						stored.push(data[i]);
+					}
+					store._trigger("postload", stored, options, 0);
+				} catch (err) {
+					store._trigger("postload", stored, options, 1);
+					throw err;
+				}
+			} else {
+				throw new StoreError("DataError", "_loadData", "store data must be an array of objects");
+			}
+			return true;
+		};
+
+		this._directives.declare(privateDirectives, kwArgs);
+		this.features.add("data", true);
+
+		lib.protect(this);
+
+	} /* end Advanced() */
+
+	LoaderBasic.prototype = new LoaderBase();
+	LoaderBasic.prototype.constructor = LoaderBasic;
+
+	return LoaderBasic;
 });

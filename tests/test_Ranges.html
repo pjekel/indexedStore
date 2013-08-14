@@ -13,7 +13,7 @@
       var dojoConfig = {
 		async: true,
 		parseOnLoad: true,
-		isDebug: true,
+		isDebug: false,
 		baseUrl: "../../",
 		packages: [
 		  { name: "dojo", location: "dojo" },
@@ -45,6 +45,29 @@
 			// IMPORTANT:
 			//		Don't change the number of records without updating any of
 			//		the range and count tests.
+			// All records are sorted in ascending key order....
+			// All records are sorted in ascending key order....
+			var estr = "The Empty String";
+			var records = [
+				new Record( "", {"name": estr} ),						//  0
+				new Record( "Abe", {"name": "Abe"} ),					//  1
+				new Record( "Apu", {"name": "Apu"} ),					//  2
+				new Record( "Bart", {"name": "Bart"} ),				//  3
+				new Record( "Homer", {"name": "Homer"} ),				//  4
+				new Record( "Jacqueline", {"name": "Jacqueline"} ),	//  5
+				new Record( "Lisa", {"name": "Lisa"} ),				//  6
+				new Record( "Maggie", {"name": "Maggie"} ),			//  7
+				new Record( "Manjula", {"name": "Manjula"} ),			//  8
+				new Record( "Marge", {"name": "Marge"} ),				//  9
+				new Record( "Mona", {"name": "Mona"} ),				// 10
+				new Record( "Ned", {"name": "Ned"} ),					// 11
+				new Record( "Patty", {"name": "Patty"} ),				// 12
+				new Record( "Rod", {"name": "Rod"} ),					// 13
+				new Record( "Selma", {"name": "Selma"} ),				// 14
+				new Record( "Todd", {"name": "Todd"} )				// 15
+			];
+			var recLen = records.length;
+
 			var data = [
 				{ "name":"Root", "parent":[], "hair":"none" },
 				{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
@@ -63,7 +86,7 @@
 				{ "name":"Apu", "age":40, "parent":["Root"], "hair":"black" },
 				{ "name":"Manjula", "age":40, "parent":"Apu", "hair":"brown"}
 			];
-			var length = data.length;
+			var datLen = data.length;
 			var undef;
 
 			doh.register("Store and Index Ranges", [
@@ -98,6 +121,102 @@
 						t.e( Error, KeyRange, "bound", [undef,"a"] );
 						t.e( Error, KeyRange, "bound", ["a",0] );			// String > Number
 					}
+				}
+			},
+
+			{
+				name: "Range functions with record array",
+				runTest:function (t) {
+					var keyRange, range;
+
+					// Test is Range.records() returns instances of Record.
+					range = Range.records(records);
+					range.forEach(function (record, idx) {
+						t.is(record.key, records[idx].key);
+						t.t(record instanceof Record);
+					});
+					t.is( recLen, range.total);
+
+					keyRange = KeyRange.bound("Apu", "Marge");
+					range = Range.records(records, keyRange);
+					range.forEach(function (record, idx) {
+						t.t(record instanceof Record);
+					});
+					t.is( 8, range.total);
+
+					// Test is Range.values() returns objects instead of Records.
+					range = Range.values(records);
+					range.forEach(function (value, idx) {
+						t.is(value.name, records[idx].value.name);
+						t.f(value instanceof Record);
+					});
+					t.is( recLen, range.total);
+
+					keyRange = KeyRange.bound("Apu", "Marge");
+					range = Range.values(records, keyRange);
+					range.forEach(function (value, idx) {
+						t.f(value instanceof Record);
+					});
+					t.is( 8, range.total);
+
+					// Test is Range.keys() returns objects instead of Records.
+					range = Range.keys(records);
+					range.forEach(function (key, idx) {
+						t.is(key, records[idx].key);
+						t.t(typeof key == "string");
+					});
+					t.is( recLen, range.total);
+
+					keyRange = KeyRange.bound("Apu", "Marge");
+					range = Range.keys(records, keyRange);
+					range.forEach(function (key, idx) {
+						t.t(typeof key == "string");
+					});
+					t.is( 8, range.total);
+
+				}
+			},
+
+			{
+				name: "Range functions with store",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store({keyPath:"name"});
+					var keyRange, range;
+
+					// Insert data into the store, using a custom key
+					data.forEach( function (object) {
+						var key = store.add( object );
+					});
+
+					// Test is Range.records() returns instances of Record.
+					range = Range.records(store);
+					range.forEach(function (record, idx) {
+						t.t(record instanceof Record);
+					});
+					t.is( datLen, range.total);
+
+					keyRange = KeyRange.bound("Apu", "Marge");
+					range = Range.records(store, keyRange);
+					range.forEach(function (record, idx) {
+						t.t(record instanceof Record);
+					});
+					t.is( 8, range.total);
+
+					// Test is Range.values() returns objects instead of Records
+					range = Range.values(store);
+					range.forEach(function (value, idx) {
+						t.f(value instanceof Record);
+					});
+					t.is( datLen, range.total);
+
+					// Test is Range.keys() returns strings instead of objects or Records
+					range = Range.keys(store);
+					range.forEach(function (key, idx) {
+						t.t(typeof key == "string");
+					});
+					t.is( datLen, range.total);
+
 				}
 			},
 
@@ -161,33 +280,6 @@
 					index.getKeyRange(keyRange, "prevunique");
 
 					t.e( Error, index, "getKeyRange", [null, "what?"] );
-				}
-			},
-
-			{
-				name: "Range values",
-				runTest:function (t) {
-					var Store = declare( [_Store, _Indexed]);
-					var store = new Store ({data: data, keyPath:"name"});
-					var range;
-
-					var index = store.createIndex("parent", "parent", {multiEntry: true});
-
-					// Test if Range only returns Objects and not instances of Record
-					range = Range( store );
-					range.forEach( function (obj) {
-						t.t ( lib.isObject(obj) && !(obj instanceof Record));
-					});
-					range = Range( index );
-					range.forEach( function (obj) {
-						t.t ( lib.isObject(obj) && !(obj instanceof Record));
-					});
-					// Get a key range, no duplicates
-					range = Range( index, null, null, false, true );
-					range.forEach( function (key) {
-						t.t (typeof key == "string");
-					});
-
 				}
 			},
 
@@ -269,11 +361,16 @@
 				name: "Range, result sorted",
 				runTest:function (t) {
 					var Store = declare( [_Store, _Indexed]);
-					var store = new Store ( {data: data, keyPath:"name"});
+					var store = new Store ( {keyPath:"name"});
 					var index = store.createIndex("parents", "parent", {multiEntry: true});
 					var sort  = [{property:"age", descending:true}];
 					var names = ["Selma", "Patty", "Marge", "Lisa", "Bart", "Maggie"];
 					var keyRange, results;
+
+					// Insert data into the store, using a custom key
+					data.forEach( function (object, idx) {
+						var key = store.add( object );
+					});
 
 					// Index entries: Homer, Jacqueline and Marge
 					keyRange = KeyRange.bound("Homer", "Marge");
@@ -368,8 +465,13 @@
 				name: "Out of Range",
 				runTest:function (t) {
 					var Store = declare( [_Store, _Indexed]);
-					var store = new Store ({data: data, keyPath:"name"});
+					var store = new Store({keyPath:"name"});
 					var keyRange, range;
+
+					// Insert data into the store, using a custom key
+					data.forEach( function (object, idx) {
+						var key = store.add( object );
+					});
 
 					keyRange = KeyRange.bound("X","Z");
 					range = store.getRange(keyRange);

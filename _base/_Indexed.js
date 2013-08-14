@@ -9,16 +9,19 @@
 //
 
 define(["dojo/_base/declare",
+		"./_assert",
+		"./_Procedures",
 		"./Cursor",
 		"./Keys",
 		"./KeyRange",
 		"./library",
 		"./Location",
+		"./opcodes",
 		"./Record",
-		"../error/createError!../error/StoreErrors.json",
-		"../transaction/_opcodes"
-	], function (declare, Cursor, Keys, KeyRange, lib, Location, Record,
-				 createError, _opcodes) {
+		"../dom/event/Event",
+		"../error/createError!../error/StoreErrors.json"
+	], function (declare, assert, _Procedures, Cursor, Keys, KeyRange, lib, Location, opcodes, Record,
+				 Event, createError) {
 	"use strict";
 	// module:
 	//		indexedStore/_base/_Indexed
@@ -40,12 +43,20 @@ define(["dojo/_base/declare",
 	//		the records are structures in a binary tree the store itself can be used
 	//		as an index.
 	//
+	// interface:
+	//		_Indexed interface {
+	//			void	_indexRecord();
+	//			void	_removeFromIndex();
+	//			Cursor	openCursor();
+	//		};
+	//		_Indexed implements _Procedures;
+	//
 	// example:
 	//	|	require(["dojo/_base/declare",
 	//	|	         "store/_base/_Store",
 	//	|	         "store/_base/_Indexed",
-	//	|	         "store/_base/_Loader",
-	//	|          "store/_base/KeyRange"
+	//	|	         "store/_base/_Loader!Advanced",
+	//	|            "store/_base/KeyRange"
 	//	|	        ], function (declare, _Store, _Indexed, _Loader, KeyRange) {
 	//	|
 	//	|	  var store = declare([_Store, _Indexed, Loader]);
@@ -68,19 +79,19 @@ define(["dojo/_base/declare",
 	var C_MSG_CONSTRAINT_ERROR = "record with key [%{0}] already exist";
 	var C_MSG_DEPENDENCY       = "base class '_Store' must be loaded first";
 
-	var _Indexed = declare(null, {
+	var _Indexed = declare([_Procedures], {
 
 		//===================================================================
 		// Constructor
 
-		constructor: function () {
+		constructor: function (kwArgs) {
 			if (this.features.has("store")) {
 				if (this.features.has("natural")) {
 					throw new StoreError("Dependency", "constructor", C_MSG_MUTUAL_EXCLUSIVE);
 				}
-				this.features.add("indexed");
+				// Mix in the appropriate directives...
 				lib.defProp(this, "indexed", {value: true, writable: false, enumerable: true});
-				lib.protect(this);
+				this.features.add("indexed");
 			} else {
 				throw new StoreError("Dependency", "constructor", C_MSG_DEPENDENCY);
 			}
@@ -92,9 +103,11 @@ define(["dojo/_base/declare",
 		_clearRecords: function () {
 			// summary:
 			//		Remove all records from the store and all indexes.
+			// returns: Record[]
+			//		An array of all deleted records
 			// tag:
 			//		protected
-			var name, index;
+			var name, index, oldRecs = clone(this._records, false);
 			for (name in this._indexes) {
 				index = this._indexes[name];
 				index._clear();
@@ -104,6 +117,7 @@ define(["dojo/_base/declare",
 			});
 			this._records = [];
 			this.total = 0;
+			return oldRecs;
 		},
 
 		//===================================================================
@@ -144,23 +158,27 @@ define(["dojo/_base/declare",
 			//		true on successful completion otherwise false.
 			// tag:
 			//		protected
+			var event, key, tags, value;
 			try {
 				this._removeFromIndex(record);
 				return true;
 			} catch (err) {
-				throw new StoreError(err, "_deleteRecord");
+				err   = StoreError.call(err, err, "_deleteRecord");
+				event = new Event("error", {error: err, bubbles: true});
+				this.dispatchEvent(event);
+				throw err;
 			} finally {
 				// Make sure we destroy the real store record and not a clone.
 				record = this._records.splice(recNum, 1)[0];
-				var value  = record.value;
-				var key    = record.key;
-				var rev    = record.rev;
+				value  = record.value;
+				key    = record.key;
+				tags   = record.tags;
 				record.destroy();
 
 				this.total = this._records.length;
 				this.revision++;
 
-				this._notify(_opcodes.DELETE, key, null, value, rev, recNum);
+				this._notify(opcodes.DELETE, key, null, value, recNum, null, tags);
 			}
 			return false;
 		},
@@ -226,7 +244,7 @@ define(["dojo/_base/declare",
 			}
 		},
 
-		_storeRecord: function (value, options) {
+		_storeRecord: function (value, options, tags) {
 			// summary:
 			//		Add a record to the store. Throws an exception of type ConstraintError
 			//		if the key already exists and overwrite flag is set to false.
@@ -237,62 +255,72 @@ define(["dojo/_base/declare",
 			//		Record value property (the object)
 			// options: Store.PutDirectives
 			//		Optional, PutDirectives
+			// tags: Object?
+			//		Optional set of properties to be stored with the record.
 			// returns:
 			//		Record key.
 			// tag:
 			//		protected
-			var opType, optKey, overwrite = false;
-			var curRev, curVal, stale;
+			var curRev, curTag, curVal, event, opType, optKey, newVal, newRec;
+			var cloned  = this._clone, overwrite = false;
+			var records = this._records;
 
 			if (options) {
 				overwrite = !!options.overwrite;
 				optKey    = options.key != null ? options.key : (options.id != null ? options.id : null);
-				stale     = !!options.stale;
+				cloned    = options.clone !== undefined ? !!options.clone : cloned;
 			}
 			// Extract key value and test if the primary key already exists.
-			var keyVal = Keys.getKey(this, value, optKey, this.uppercase);
-			// Try to locate the record.
-			var curLoc = this._retrieveRecord(keyVal);
-			var curRec = curLoc.record;
-			var curAt  = curLoc.eq;
-
-			if (curRec) {
-				if (!overwrite) {
-					throw new StoreError("ConstraintError", "_storeRecord", C_MSG_CONSTRAINT_ERROR, keyVal);
-				}
-				opType = _opcodes.UPDATE;
-				curRev = curRec.rev;
-				curVal = curRec.value;
-
-				this._removeFromIndex(curRec);
-			} else {
-				opType = _opcodes.NEW;
-				curRev = 0;
-				if (this.defaultProperties) {
-					this._applyDefaults(value);
-				}
-			}
-
 			try {
-				var newVal = this._clone ? clone(value) : value;
-				var newRec = new Record(keyVal, newVal, curRev + 1, stale);
+				var keyVal = Keys.getKey(this, value, optKey, this.uppercase);
+				// Try to locate the record.
+				var curLoc = this._retrieveRecord(keyVal);
+				var curRec = curLoc.record;
+				var curAt  = curLoc.eq;
+
+				if (curRec) {
+					if (!overwrite) {
+						var err = new Error("object with key [" + keyVal + "] already exists");
+						err.name = "ConstraintError";
+						throw err;
+					}
+					opType = opcodes.UPDATE;
+					curRev = curRec.tags.rev;
+					curTag = curRec.tags;
+					curVal = curRec.value;
+
+					this._removeFromIndex(curRec);
+				} else {
+					if (this.defaultProperties) {
+						this._applyDefaults(value);
+					}
+					opType = opcodes.NEW;
+					curRev = 0;
+				}
+				tags   = mixin(curTag, tags, {rev: curRev + 1});
+				newVal = cloned ? clone(value) : value;
+				newRec = new Record(keyVal, newVal, clone(tags));
+
+				// Index the record first in case an error occurs.
+				this._indexRecord(newRec);
+				if (curRec) {
+					records[curAt] = newRec;
+				} else {
+					records.splice(curLoc.gt, 0, newRec);
+					curAt = curLoc.gt;
+				}
+				this.total = records.length;
+				this.revision++;
+
+				this._notify(opType, keyVal, value, curVal, curAt, options, tags);
+				return keyVal;
 			} catch (err) {
-				throw new StoreError("DataCloneError", "_storeRecord");
+				// In case of an exception dispatch an error event at the store.
+				err   = StoreError.call(err, err, "_storeRecord");
+				event = new Event("error", {error: err, bubbles: true});
+				this.dispatchEvent(event);
+				throw err;
 			}
-
-			// Index the record first in case an error occurs.
-			this._indexRecord(newRec);
-			if (curRec) {
-				this._records[curAt] = newRec;
-			} else {
-				this._records.splice(curLoc.gt, 0, newRec);
-				curAt = curLoc.gt;
-			}
-			this.total = this._records.length;
-			this.revision++;
-
-			this._notify(opType, keyVal, value, curVal, curRev, curAt, options);
-			return keyVal;
 		},
 
 		//=========================================================================
@@ -319,11 +347,13 @@ define(["dojo/_base/declare",
 			//	| };
 			// tag:
 			//		Public
+			assert.store(this, "openCursor");
+			assert.key(keyRange, "openCursor");
+
 			var dir = direction || "next";
 			if (!lib.isDirection(dir)) {
 				throw new StoreError("DataError", "openCursor");
 			}
-			this._assertKey(keyRange, "openCursor");
 			var cursor = new Cursor(this, keyRange, dir, false);
 			return cursor;
 		}

@@ -9,16 +9,16 @@
 //
 
 define(["dojo/when",
+		"dojo/Deferred",
 		"dojo/promise/all",
-		"../_base/Eventer",
 		"../_base/library",
+		"../_base/opcodes",
 		"../dom/event/Event",
 		"../dom/event/EventTarget",
 		"../error/createError!../error/StoreErrors.json",
-		"./_Transactional",
-		"./_opcodes"
-	], function (when, all, Eventer, lib, Event, EventTarget, createError,
-				 _Transactional, _opcodes) {
+		"./_Transactional"
+	], function (when, Deferred, all, lib, opcodes, Event, EventTarget, createError,
+				 _Transactional) {
 	"use strict";
 
 	// module:
@@ -29,7 +29,7 @@ define(["dojo/when",
 	// description:
 	//		This module implements the relevant parts of IDBTransaction. In contrast
 	//		to the IndexedDB specs the use of transactions is optional and therefore
-	//		not required to interface with an indexedstore or index.
+	//		not required to interface with an indexedStore or index.
 	//		This module handles the instantiation and process flow of transactions,
 	//		module indexedStore/transaction/_Transactional handles the setup and
 	//		rundown of transactions.
@@ -47,14 +47,74 @@ define(["dojo/when",
 	//			readonly	attribute	Error	error;
 	//			readonly	attribute	boolean active;
 	//			readonly	attribute	number	tid;
+	//			readonly	attribute	Promise	promise;
 	//
-	//			void abort ();
-	//			Store objectStore (string name);
+	//			void	abort ();
+	//			Store 	objectStore (string name);
+	//			Store 	store (string name);
+	//
 	//			attribute EventHandler	onabort;
 	//			attribute EventHandler	onerror;
 	//			attribute EventHandler	oncomplete;
 	//		};
-
+	//
+	// example:
+	//	|	require(["dojo/_base/declare",
+	//	|	         "store/_base/_Store",
+	//	|	         "store/_base/_Indexed",
+	//	|	         "store/extension/WebStorage",
+	//	|	         "store/transaction/Manager"
+	//	|           ], function (declare, _Store, _Indexed, WebStorage, Manager) {
+	//	|
+	//	|	    var WebStore = declare([_Store, _Indexed, WebStorage]);
+	//	|	    var myStore  = new WebStore({name: "myStore", keyPath: "name"});
+	//	|	                  ...
+	//	|	    var trans = Manager.transaction(myStore,
+	//	|	        function (transaction) {
+	//	|	            var tStore = transaction.store("myStore");
+	//	|	            tStore.put({name: "Homer", lastName: "Simpson"});
+	//	|           }, "readwrite");
+	//	|
+	//	|	    trans.oncomplete = function (event) {
+	//	|	        var homer = myStore.get("Homer");
+	//	|	        if (homer) {
+	//	|	            console.log("Bingo");
+	//	|	        }
+	//	|	    };
+	//	|	    trans.onabort = function (event) {
+	//	|	        console.log(trans.error);
+	//	|	    };
+	//	|	});
+	//
+	//	|	require(["dojo/_base/declare",
+	//	|	         "store/_base/_Store",
+	//	|	         "store/_base/_Indexed",
+	//	|	         "store/extension/WebStorage",
+	//	|	         "store/transaction/Manager"
+	//	|           ], function (declare, _Store, _Indexed, WebStorage, Manager) {
+	//	|
+	//	|	    var WebStore = declare([_Store, _Indexed, WebStorage]);
+	//	|	    var myStore  = new WebStore({name: "myStore", keyPath: "name"});
+	//	|	                  ...
+	//	|	    var trans = Manager.transaction(myStore,
+	//	|	        function (transaction) {
+	//	|	            var tStore = transaction.store("myStore");
+	//	|	            tStore.put({name: "Homer", lastName: "Simpson"});
+	//	|           }, "readwrite");
+	//	|
+	//	|	    trans.promise.then(
+	//	|	        function () {
+	//	|	            var homer = myStore.get("Homer");
+	//	|	            if (homer) {
+	//	|	                console.log("Bingo");
+	//	|	            }
+	//	|	        },
+	//	|	        function (err) {
+	//	|	            console.log(err.error);
+	//	|	        }
+	//	|	    );
+	//	|	});
+	
 	var	TRANSACTION_MANAGER = "indexedStore.TransactionMgr";
 	var StoreError = createError("Transaction");		// Create the StoreError type.
 	var debug = dojo.config.isDebug || false;
@@ -80,21 +140,21 @@ define(["dojo/when",
 		//		If true, smart journaling will is applied, that is, operations that
 		//		cancel each out are automatically removed from the journal. Default
 		//		is true.
+		// returns: Transaction
+		//		The Transaction
 		// tag:
 		//		Public
 
 		var manager  = getProp(TRANSACTION_MANAGER, window);
-		var eventer  = new Eventer(this, "abort, complete, error");
 		var defReqs  = 0;
+		var defer    = new Deferred(this.abort);
 		var self     = this;
 
 		smart = smart != null ? !!smart : true;
 
 		function abort(error) {
 			// summary:
-			//		Abort the transaction. Called as the result of an exception. To abort
-			//		transactions programmatically call the Transaction.abort() function
-			//		instead.
+			//		Abort the transaction. Called as the result of an exception.
 			// error: Error|String
 			//		Reason
 			// tag:
@@ -106,32 +166,23 @@ define(["dojo/when",
 					self.error = error instanceof Error ? error : new StoreError(error);
 				}
 				self.dispatchEvent(new Event("abort", {bubbles: true}));
-			}
-		}
-
-		function fireError(err) {
-			// summary:
-			//		Fire an error event. An error occurred during the processing of the
-			//		transaction, fire the error event and abort the transaction.
-			// err: Error
-			//		Error condition, typically an instance of Error.
-			// tag:
-			//		private
-			if (!self._done) {
-				var event = new Event("error", {error: err, bubbles: true, cancelable: true});
-				if (self.dispatchEvent(event)) {
-					abort(err);
-				}
+				defer.reject(error);
 			}
 		}
 
 		function commit(result) {
 			// summary:
-			//		Commit the transaction.
-			// result: any
+			//		Commit the transaction. Committing a transaction is a multi
+			//		step process.
+			// result: Boolean?
+			//		If false, a silent abort is performed. A silent abort differs
+			//		from a regular abort in that it does not emit an error or abort
+			//		event.
+			//		A transaction callback has two options to abort a transaction:
+			//		1) calling the abort() method or 2) returning boolean false.
 			// tag:
 			//		Private
-			var pStore, tStore, oper;
+			var i, pStore, tStore, oper, vargs;
 
 			if (!self._done) {
 				if (result !== false) {
@@ -144,33 +195,76 @@ define(["dojo/when",
 								defReqs = 0;
 								commit();
 							},
-							fireError
+							defer.reject
 						);
 						return;
 					}
-
 					oper = self._oper.slice();
 
-					// Merge the cloned store(s) back into their parent store(s)
+					// Step 1 - Trigger a 'commit' for every store operations so
+					//          any extension dealing with external entities, like
+					//          WebStorage, can do their thing.
+					try {
+						for (i = 0; i < oper.length; i++) {
+							vargs = oper[i]
+							tStore = vargs[0];				// Transactional store
+							pStore = tStore.parentStore;	// Parent store.
+							pStore._trigger("commit", vargs[1]);
+						}
+					} catch (err) {
+						// In case of an error reverse all previous operations.
+						reverse(oper.slice(0, i), err);
+						return;
+					}
+
+					// Step 2 - Merge the cloned store(s) back into their parent
+					//			store(s)
 					_Transactional.commit(self);
 					_Transactional.done(self);
 
-					// The complete event does not bubble and is not cancelable....
-					var event = new Event("complete");
-					self.dispatchEvent(event);
-
-					// Finally, notify the parent store of all updates. Please note that
-					// the parent store notifications are not part of the transaction.
+					// Step 3 - Resolve the transaction which will also fire the
+					//          transaction 'complete' event.
+					defer.resolve();
+					
+					// Step 4 - Finally, playback the notifications for the parent
+					//          store.
 					oper.forEach(function (vargs) {
-						tStore = vargs[0];				// Transactional store
-						pStore = tStore.parentStore;	// Parent store.
-						pStore._notify.apply(pStore, vargs[1]);
+						try {
+							tStore = vargs[0];				// Transactional store
+							pStore = tStore.parentStore;	// Parent store.
+							pStore._notify.apply(pStore, vargs[1]);
+						} finally {
+						}
 					});
+					
 				} else {
 					// Execute a silent abort.
 					_Transactional.done(self);
-					self.dispatchEvent(new Event("complete"));
+					defer.resolve();
 				}
+			}
+		}
+
+		function reverse(oper, err) {
+			// summary:
+			//		Reverse store operations. An exception was thrown during the
+			//		transaction commit phase, reverse all previous successful
+			//		store operations and abort the transaction.
+			// oper: any[]
+			//		The array of successfully comitted operations.
+			// err: Error
+			//		Error condition, typically an instance of Error.
+			// tag;
+			//		private
+			try {
+				oper.reverse();		// Reverse operation sequence.
+				oper.forEach(function (vargs) {
+					var tStore = vargs[0];				// Transactional store
+					var pStore = tStore.parentStore;	// Parent store.
+					pStore._trigger("reverse", vargs[1]);
+				});
+			} finally {
+				abort(err);
 			}
 		}
 
@@ -186,14 +280,14 @@ define(["dojo/when",
 			// store: Store
 			//		The originating (transactional) store.
 			// vargs: any[]
-			//		An array-like object of arguments. The arguments are as follows:
+			//		An array of arguments. The arguments are as follows:
 			//			[opType, key, newVal, oldVal, oldRev, at, options]
 			// tag:
 			//		protected
 			if (!this._done) {
 				var append = !!(this.active && vargs);
 				if (append) {
-					if (smart && vargs[0] == _opcodes.DELETE) {
+					if (smart && vargs[0] == opcodes.DELETE) {
 						// Search for all previous operations in the same store and key.
 						var ops = this._oper.filter(function (op) {
 							return (op[0] == store && op[1][1] == vargs[1]);
@@ -201,17 +295,17 @@ define(["dojo/when",
 						if (ops.length) {
 							ops.forEach(function (op) {
 								this._oper.splice(this._oper.indexOf(op), 1);
-								if (op[1][0] == _opcodes.NEW) {
+								if (op[1][0] == opcodes.NEW) {
 									append = false;
 								}
 								store._updates--;		// Credit the operation.
 							}, this);
 						}
 					}
-				}
-				if (append) {
-					this._oper.push(arguments);
-					store._updates++;
+					if (append) {
+						this._oper.push([store, vargs]);
+						store._updates++;
+					}
 				}
 			} else {
 				throw new StoreError("TransactionInactive", "_journal");
@@ -234,9 +328,9 @@ define(["dojo/when",
 				// Clone all stores part of the transaction
 				_Transactional.setup(this);
 				try {
-					when(callback(this), commit, fireError);
+					when(callback(this), commit, defer.reject);
 				} catch (err) {
-					fireError(err);
+					defer.reject(err);
 				}
 			}
 		};
@@ -272,35 +366,49 @@ define(["dojo/when",
 			// summary:
 			//		Returns a Store object representing an object store that is within
 			//		the scope of this transaction.
-			// name: String
-			//		The name of requested object store.
+			// name: String?
+			//		The name of requested object store. The name argument may be
+			//		omitted if the transaction scope includes exactly one store.
 			// tag:
 			//		public
-			var scope = this._scope[name];
-			if (scope) {
-				if (scope.parent._destroyed || this._done) {
-					throw new StoreError("InvalidState", "objectStore");
+			var scope, names;
+
+			if (name) {
+				scope = this._scope[name];
+				if (scope) {
+					if (scope.parent._destroyed || this._done) {
+						throw new StoreError("InvalidState", "objectStore");
+					}
+					return scope.clone;
 				}
-				return scope.clone;
+			} else {
+				names = Object.keys(this._scope);
+				if (names.length == 1) {
+					return this.store(names[0]);
+				}
 			}
 			throw new StoreError("NotFound", "objectStore");
 		};
 
 		//=========================================================================
 
+		// Initialize the event target with the Transaction Manager as the parent
+		// and create the special onabort, oncomplete and onerror properties.
+		EventTarget.call(this, manager);
+		EventTarget.declareHandler(this, "abort, complete, error");
+
 		this._done    = false;
 		this._handle  = null;
 		this._promLst = [];
 		this._oper    = [];
 		this._scope   = {};
-		this._state   = _opcodes.IDLE;
+		this._state   = Transaction.IDLE;
 		this._timeout = timeout || 0;
 
 		this.tid      = manager.uniqueId();		// For debug only
 		this.active   = true;
 		this.mode     = "readonly";
-
-		EventTarget.call(this, manager);
+		this.promise  = defer.promise;
 
 		if (!(typeof callback == "function")) {
 			throw new StoreError("DataError", "constructor", "callback is not a callable object");
@@ -327,7 +435,7 @@ define(["dojo/when",
 			// store may still change while the transaction is pending.
 
 			stores.forEach(function (store) {
-				if (store.type == "store" && store.name) {
+				if (store.baseClass == "store" && store.name) {
 					this._scope[store.name] = {parent: store, clone: undefined};
 				} else {
 					throw new StoreError("TypeError", "constructor", "invalid store");
@@ -337,22 +445,46 @@ define(["dojo/when",
 			throw new StoreError("DataError", "constructor", "store argument required");
 		}
 
+		// Tie the deferred and event handling together.
+		defer.then(
+			function () {
+				self.dispatchEvent(new Event("complete"));
+			},
+			function (err) {
+				if (!self._done) {
+					var event = new Event("error", {error: err, bubbles: true});
+					self.dispatchEvent(event);
+					abort(err);
+				}
+			}
+		);
+
 		// Listen for errors from a store or its index. The default propagation path
-		// of an error is: Index -> Store ->Transaction -> Manager
+		// of an error is: Index -> Store -> Transaction -> Manager
 
 		this.addEventListener("error", function (event) {
 			if (event.eventPhase != Event.AT_TARGET) {
 				abort(event.error);
 			}
+			return false;	// Let dispatcher know we didn't handle the error.
 		});
 
-		lib.writable(this, "tid, mode, parent", false);
 		// Hide protected properties.
+		lib.readOnly(this, "tid, mode");
 		lib.protect(this);
 	}	/* end Transaction() */
 
+	Transaction.IDLE    = 0;
+	Transaction.PENDING = 1;
+	Transaction.ACTIVE  = 2;
+	Transaction.DONE    = 4;
+	
 	Transaction.prototype = new EventTarget();
 	Transaction.prototype.constructor = Transaction;
+
+	Transaction.prototype.toString = function () {
+		return "[object Transaction]";
+	};
 
 	return Transaction;
 });	/* end define() */

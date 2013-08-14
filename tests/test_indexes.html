@@ -13,7 +13,7 @@
       var dojoConfig = {
 		async: true,
 		parseOnLoad: true,
-		isDebug: true,
+		isDebug: false,
 		baseUrl: "../../",
 		packages: [
 		  { name: "dojo", location: "dojo" },
@@ -34,7 +34,7 @@
         "dojo/ready",
         "store/_base/_Store",
         "store/_base/_Indexed",
-        "store/loader/advanced",
+        "store/_base/_Loader!advanced",
         "store/_base/Index",		// for instanceof only...
         "store/_base/Keys",
         "store/_base/KeyRange",
@@ -83,8 +83,9 @@
 					// fetch index and test properties
 					var index = store.index("name");
 					t.t( index instanceof Index );
-					t.is( "index", index.type );
+					t.is( "index", index.baseClass );
 					t.is( "name", index.name );
+					t.is( store, index.parent );
 					t.is( store, index.store );
 					t.is( "name", index.keyPath );
 					t.is( false, index.unique );
@@ -121,7 +122,7 @@
 					// fetch index and test properties
 					var index = store.index("name");
 					t.t( index instanceof Index );
-					t.is( "index", index.type );
+					t.is( "index", index.baseClass );
 					t.is( "name", index.name );
 					t.is( store, index.store );
 					t.is( "name", index.keyPath );

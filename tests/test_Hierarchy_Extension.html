@@ -13,7 +13,7 @@
       var dojoConfig = {
 		async: true,
 		parseOnLoad: true,
-		isDebug: true,
+		isDebug: false,
 		baseUrl: "../../",
 		packages: [
 		  { name: "dojo", location: "dojo" },
@@ -33,7 +33,7 @@
         "dojo/ready",
         "store/_base/_Store",
         "store/_base/_Indexed",
-        "store/loader/advanced",
+        "store/_base/_Loader!advanced",
         "store/_base/_Natural",
         "store/_base/Keys",
         "store/_base/KeyRange",
@@ -327,6 +327,29 @@
 					return defer;
 				}
 			},
+
+			{
+				name: "Parent has the empty key",
+				runTest:function (t) {
+					var Store = declare( [_Store, _Indexed, Hierarchy]);
+					var store = new Store ();
+
+					var index = store.index("parents");
+
+					store.add({id: "", name:"Homer"});
+					var homer = store.get("");
+
+					store.add({id: "1", name: "Bart"}, {parent:homer});
+					store.add({id: "2", name: "Lisa"}, {parent:homer});
+					store.add({id: "3", name: "Maggie"}, {parent:homer});
+
+					// Get all reference keys from the index.
+					var results = index.getKeyRange("");
+					t.is( 3, results.total );
+					store.destroy();
+				}
+			},
+
 
 			{
 				name: "Get Parents",

@@ -18,8 +18,33 @@ define(["../shim/shims"], function () {
 	//		other modules.
 
 	var _toString  = Object.prototype.toString;
+	var encodeURI  = encodeURIComponent;
 
 	var lib = {
+
+		anyToArray: function (any) {
+			// summary:
+			//		Convert an argument to an array of arguments. If 'any' is a comma
+			//		separated string the string is split.
+			// any: any?
+			// tag:
+			//		public
+			var res = [];
+			if (any) {
+				if (!(any instanceof Array)) {
+					if (typeof any.split == "function") {
+						res = any.split(/\s*,\s*/);
+					} else if (any.length) {
+						res = Array.prototype.slice.call(any);
+					} else {
+						res = [any];
+					}
+				} else {
+					res = any.slice();
+				}
+			}
+			return res;
+		},
 
 		clone: function clone(object, strict) {
 			// summary:
@@ -99,7 +124,7 @@ define(["../shim/shims"], function () {
 			// props: Object?
 			// tag:
 			//		public
-			return props ? lib.mixin(Object.create(obj), props) : Object.create(props);
+			return props ? lib.mixin(Object.create(obj), props) : Object.create(obj);
 		},
 
 		enumerate: function (object, property, value) {
@@ -108,18 +133,53 @@ define(["../shim/shims"], function () {
 			// property: String|String[]
 			// value: Boolean
 			if (object && property) {
-				if (property instanceof Array) {
-					property.forEach(function (prop) {
-						this.enumerate(object, prop, value);
-					}, this);
-				} else if (/,/.test(property)) {
-					this.enumerate(object, property.split(/\s*,\s*/), value);
-				} else if (typeof object[property] == "function") {
-					Object.defineProperty(object, property, {value: object[property], enumerable: false});
-				} else {
-					Object.defineProperty(object, property, {enumerable: !!value});
+				var props = lib.anyToArray(property);
+				props.forEach(function (prop) {
+					if (typeof object[prop] == "function") {
+						Object.defineProperty(object, prop, {value: object[prop], enumerable: !!value});
+					} else {
+						Object.defineProperty(object, prop, {enumerable: !!value});
+					}
+				});
+			}
+		},
+
+		filterOwn: function (base /* *[,obj] */) {
+			// summary:
+			//		Extract any key:value pair from obj whose key is present in base.
+			// base: Object
+			//		A JavaScript key:value pairs object providing the 'own' properties
+			//		and associated default values.
+			// obj: Object?
+			//		A JavaScript key:value pairs objects. Each key:value pair overwrites
+			//		the matching key:value in base. Keys in obj not present in base are
+			//		ignored.
+			// returns: Object
+			// tag:
+			//		public
+			var idx, key, keys, obj, ownProp = {};
+			if (base) {
+				keys = Object.keys(base);	// Get own properties
+				for (idx = 1; idx < arguments.length; idx++) {
+					obj = arguments[idx];
+					if (obj) {
+						keys.forEach(function (key) {
+							if (obj.hasOwnProperty(key)) {
+								ownProp[key] = obj[key];
+							}
+						});
+					}
+				}
+				// Normalize values.
+				for (key in ownProp) {
+					if (typeof base[key] == "boolean") {
+						ownProp[key] = !!ownProp[key];
+					} else if (typeof base[key] == "number") {
+						ownProp[key] = Number(ownProp[key]) || 0;
+					}
 				}
 			}
+			return ownProp;
 		},
 
 		getClass: function (obj) {
@@ -133,13 +193,17 @@ define(["../shim/shims"], function () {
 			return _toString.call(obj).slice(8, -1);
 		},
 
-		getProp: function (propPath, object) {
+		getProp: function (propPath, object, defVal) {
 			// summary:
-			//		Return property value identified by a dot-separated property path
+			//		Return property value identified by a dot-separated property
+			//		path
 			// propPath: String
 			//		A dot (.) separated property name like: feature.attribute.type
 			// object: (Object|Array)?
 			//		JavaScript object
+			// defVal: any?
+			//		Default value. If the requested property does not exists or
+			//		returns undefined, the default value is returned.
 			// tag:
 			//		public
 			var key, segm, i = 0, obj = object || window;
@@ -151,7 +215,7 @@ define(["../shim/shims"], function () {
 					obj = obj[key];
 					key = segm[i++];
 				}
-				return obj;
+				return obj !== undefined ? obj : defVal;
 			}
 			throw new TypeError("parameter 'obj' must be an obj or array");
 		},
@@ -195,6 +259,30 @@ define(["../shim/shims"], function () {
 			// tag:
 			//		Public
 			return (obj !== undefined && _toString.call(obj).slice(8, -1) == "String");
+		},
+
+		keyToPath: function (key, encode) {
+			// summary:
+			// key:
+			// encode: Boolean?
+			// tag:
+			//		private
+			var path = (key || ""), comp;
+			if (key) {
+				if (key instanceof Array) {
+					path = key.join("/");
+				} else {
+					path = key.toString();
+				}
+				// Strip leading and trailing forward slashes and encode the individual
+				// path components if requested.
+				path = path.replace(/^\s*\/|\/\s*$/g, "").trim();
+				if (path && encode) {
+					comp = path.split("/").map(encodeURI);
+					path = comp.join("/");
+				}
+			}
+			return path;
 		},
 
 		move: function (objAry, from, to, value) {
@@ -255,13 +343,84 @@ define(["../shim/shims"], function () {
 			return dst;
 		},
 
-		protect: function (object) {
+		mixinOwn: function (target, base /* *[,obj] */) {
 			// summary:
-			// object: Object
+			//		Mix a set of base (properties) into the target and initialize
+			//		them with the values found in the obj arguments. Any key in obj's
+			//		that has no matching key in base is ignored.
+			// target: Object
+			// base: Object
+			//		A JavaScript key:value pairs object providing the default properties
+			//		to be added to the target object.
+			// values: Object
+			//		A JavaScript key:value pairs object. Each key:value pair overwrites
+			//		the matching key:value in base. Keys in values not present in
+			//		base are ignored.
+			// tag:
+			//		public
+			var args = Array.prototype.slice.call(arguments, 1);
+			var own  = lib.filterOwn.apply(null, args);
+			return lib.mixin(target, base, own);
+		},
+
+		objectToURIQuery: function (query) {
+			// summary:
+			// query:
+			// tag:
+			//		private
+			var assign, args = [], empty = {}, key, value;
+			if (lib.isObject(query)) {
+				for (key in query) {
+					if (!empty.hasOwnProperty(key)) {
+						assign = encodeURI(key) + "=";
+						value  = query[key];
+						if (value instanceof Array) {
+							value.forEach(function (aryVal) {
+								args.push(assign + encodeURI(aryVal));
+							});
+						} else {
+							if (value instanceof RegExp) {
+								value = value.toString();
+							}
+							args.push(assign + (encodeURI(value) || ""));
+						}
+					}
+				}
+			}
+			return args.join("&");
+		},
+
+		protect: function (any) {
+			// summary:
+			// any: Object
 			// tag:
 			//		Public
-			var props = Object.keys(object).filter(function (prop) { return (/^_/).test(prop); });
-//			this.enumerate(object, props, false);
+			var props = Object.keys(any).filter(function (prop) { return (/^_/).test(prop); });
+//			this.enumerate(any, props, false);
+		},
+
+		readOnly: function (obj, property, value) {
+			// summary:
+			// obj: Object
+			// property: String|String[]
+			// value: Boolean?
+			// tag:
+			//		Public
+			if (obj && property) {
+				var write = value != null ? !value : false;
+				var props = lib.anyToArray(property);
+				props.forEach(function (prop) {
+					var desc = Object.getOwnPropertyDescriptor(obj, prop);
+					if (desc) {
+						if (!write && (desc.get || desc.set)) {
+							delete desc.set;
+						} else {
+							desc.writable = write;
+						}
+						Object.defineProperty(obj, prop, desc);
+					}
+				});
+			}
 		},
 
 		setProp: function (propPath, value, object) {
@@ -282,33 +441,13 @@ define(["../shim/shims"], function () {
 				var key  = segm[i++];
 
 				while (obj && key) {
-					obj = (key in obj) ? obj[key] : obj[key] = {};
+					obj = (key in obj) ? obj[key] : (obj[key] = {});
 					key = segm[i++];
 				}
 				obj[prop] = value;
 				return value;
 			}
 			throw new TypeError("parameter 'obj' must be an obj or array");
-		},
-
-		writable: function (object, property, value) {
-			// summary:
-			// object: Object
-			// property: String|String[]
-			// value: Boolean
-			// tag:
-			//		Public
-			if (object && property) {
-				if (property instanceof Array) {
-					property.forEach(function (prop) {
-						this.writable(object, prop, value);
-					}, this);
-				} else if (/,/.test(property)) {
-					this.writable(object, property.split(/\s*,\s*/), value);
-				} else {
-					this.defProp(object, property, {writable: value});
-				}
-			}
 		}
 	};	/* end lib */
 	return lib;

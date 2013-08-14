@@ -9,11 +9,12 @@
 //
 
 define(["../../_base/library",
+		"../../listener/Listener",
 		"../../listener/ListenerList",
 		"../../error/createError!../../error/StoreErrors.json",
 		"./EventDefaults",
 		"./Event"
-		], function (lib, ListenerList, createError, EventDefaults, Event) {
+		], function (lib, Listener, ListenerList, createError, EventDefaults, Event) {
 	"use strict";
 
 	// module:
@@ -24,9 +25,12 @@ define(["../../_base/library",
 	//	http://www.w3.org/TR/dom/		(DOM4)
 	//	http://www.w3.org/TR/DOM-Level-3-Events/
 
-	var StoreError  = createError("EventTarget");		// Create the StoreError type.
-	var NativeEvent = window.Event;
-	var PROPERTY = "parent";
+	var StoreError   = createError("EventTarget");		// Create the StoreError type.
+	var emptyHandler = function (event) { return false; };
+	var NativeEvent  = window.Event;
+	var PROPERTY     = "parent";
+
+	var unhandled = lib.getProp("indexedStore.event.unhandledError", null, true);
 
 	function propagate(path, phase, event) {
 		// summary:
@@ -42,9 +46,10 @@ define(["../../_base/library",
 		//		True if further event propagation is to be stopped otherwise false.
 		// tag:
 		//		Private
-		var curTarget, i = 0, j, lstn, listeners, evt = event;
-		curTarget = path[i++];
-		while (curTarget && !evt.stopPropagate) {
+		var cb, handled, i = 0, j, lstn, listeners, evt = event;
+		var curTarget = path[i++];
+
+		while (curTarget && !evt._stopPropagate) {
 			if (curTarget instanceof EventTarget) {
 				listeners = curTarget.getEventListeners(evt.type, phase);
 				j = 0;
@@ -53,17 +58,22 @@ define(["../../_base/library",
 					evt.eventPhase    = phase;
 					lstn = listeners[j++];
 
-					while (lstn && !evt.stopImmediate) {
+					while (lstn && !evt._stopImmediate) {
 						// Make sure the event propagation is not interrupted and that any
-						// exception thrown by the lstn is caught here.
+						// exception thrown by the handler is caught here.
 						try {
-							var cb = lstn.listener || (lstn.scope || window)[lstn.bindName];
+							cb = lstn.listener || (lstn.scope || window)[lstn.bindName];
 							if (cb) {
-								cb.call(curTarget, evt);
+								// If the handler returns anything other than false
+								// it is assumed the handler processed the event.
+								if (cb.call(curTarget, evt) !== false) {
+									event._handled = true;
+								}
 							}
 						} catch (err) {
-//								console.error("EventHandler (",event.type,"): ", err);
-							event.error = err;
+							if (!event._handlerError) {
+								lib.defProp(event, "_handlerError", {value: err});
+							}
 						}
 						lstn = listeners[j++];
 					}
@@ -71,7 +81,7 @@ define(["../../_base/library",
 			}
 			curTarget = path[i++];
 		}
-		return !evt.stopPropagate;
+		return !evt._stopPropagate;
 	}
 
 	function validatePath(path, target) {
@@ -208,7 +218,7 @@ define(["../../_base/library",
 			//		Public
 
 			if (event instanceof Event && event.type) {
-				if (!event.dispatch && event.eventPhase == Event.NONE) {
+				if (!event._dispatch && event.eventPhase == Event.NONE) {
 					var parent = this[PROPERTY];
 					var path   = [];
 
@@ -220,7 +230,7 @@ define(["../../_base/library",
 							parent = parent[PROPERTY];
 						}
 					}
-					event.dispatch = true;
+					event._dispatch = true;
 					event.target   = this;
 
 					// Trigger any default actions required BEFORE dispatching
@@ -229,7 +239,7 @@ define(["../../_base/library",
 							EventDefaults.trigger(event.type, "before", event);
 						} catch (err0) {}
 					}
-					if (!event.stopPropagate) {
+					if (!event._stopPropagate) {
 						// If there is no propagation path simply fire the event at the
 						// target (e.g. 'this');
 						if (!path.length) {
@@ -251,8 +261,16 @@ define(["../../_base/library",
 					// Reset the event.
 					event.currentTarget = null;
 					event.eventPhase    = Event.NONE;
-					event.dispatch      = false;
+					event._dispatch     = false;
 
+					if (!event._handled && event.type === "error") {
+						EventTarget.unhandledError(event);
+					}
+					// If any of the event handlers threw an exception re-throw
+					// it now.
+					if (event._handlerError) {
+						throw event._handlerError;
+					}
 					return !event.defaultPrevented;
 				}
 				throw new StoreError("InvalidStateError", "dispatchEvent");
@@ -268,9 +286,90 @@ define(["../../_base/library",
 		};	/* end dispatchEvent() */
 
 		// Add the 'parent' property to the EvenTarget
-		lib.defProp(this, PROPERTY, {value: parent,	enumerable: true, writable: true });
-
+		lib.defProp(this, PROPERTY, {value: parent,	enumerable: true, writable: true,
+									 configurable: true});
 	} /* end EventTarget() */
+
+	EventTarget.declareHandler = function (target, types) {
+		// summary:
+		//		Add an event handler property to the target.
+		// description
+		//		Add an event handler to the store.  Adding an event handler adds
+		//		a special property to the store with the name: on<type>.
+		//		The new property can be assigned a function with a prototype of:
+		//			function handler(event) { ... }
+		//		Assigning the property a function will register the function as
+		//		an event listener for the specified type.  However, reassigning
+		//		the property results in the removal of current listener.
+		//		If multiple listeners are required for the same event type use
+		//		the addEventListener() method instead.
+		// target: EventTarget
+		// types: String|String[]
+		//		A string or a comma-separated-value string or an array of strings
+		//		specifying the event type(s) for which an handler entry is declared.
+		// example:
+		//	|	EventTarget.declareHandler(store, "error");
+		//	|	store.onerror = function (event) {
+		//	|	          ...
+		//	|	};
+		// tag:
+		//		public
+		if (!(target instanceof EventTarget)) {
+			throw new StoreError("TypeError", "declareHandler", "target is not an EventTarget");
+		}
+		types = lib.anyToArray(types);
+		types.forEach(function (type) {
+			if (lib.isString(type)) {
+				var propName = "on" + type.toLowerCase();
+				var listener = null;
+
+				lib.defProp(target, propName, {
+					get: function () {
+						return listener;
+					},
+					set: function (callback) {
+						if (callback !== null) {
+							if (callback instanceof Function) {
+								// Remove the current listener before adding the new.
+								target.removeEventListener(type, listener, false);
+								target.addEventListener(type, callback);
+								listener = callback;
+							} else {
+								throw new StoreError("TypeError", "declareHandler", "callback is not a callable object");
+							}
+						} else {
+							target.removeEventListener(type, listener, false);
+							listener = null;
+						}
+					},
+					configurable: true,
+					enumerable: true
+				});
+			} else {
+				throw new StoreError("TypeError", "declareHandler", "invalid event type");
+			}
+		});
+		return types;
+	};
+
+	EventTarget.unhandledError = function (event) {
+		// summary:
+		//		An 'error' event was dispatched but no handler processed it.
+		// event:
+		//		Synthetic event
+		// tag:
+		//		protected
+		if (unhandled !== false) {
+			var target = event.target.toString();
+			var error  = event.error;
+			var text   = "[Event has no error property]";
+
+			if (error instanceof Error) {
+				text = error.toString();
+			}
+			console.error("Unhandled error event, Target: ", target, "\n", text);
+		}
+	};
 
 	return EventTarget;
 });

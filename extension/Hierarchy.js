@@ -10,12 +10,13 @@
 
 define(["dojo/_base/declare",
 		"dojo/when",
+		"../_base/_assert",
 		"../_base/Keys",
 		"../_base/library",
 		"../_base/range",
 		"../error/createError!../error/StoreErrors.json",
 		"../util/QueryResults"
-	], function (declare, when, Keys, lib, recRange, createError, QueryResults) {
+	], function (declare, when, assert, Keys, lib, range, createError, QueryResults) {
 
 	var StoreError = createError("Hierarchy");		// Create the StoreError type.
 	var isObject   = lib.isObject;
@@ -26,8 +27,7 @@ define(["dojo/_base/declare",
 	//		store/extension/Hierarchy
 	// summary:
 
-	var Hierarchy = declare(null, {
-
+	var HierarchyDirectives = {
 		// multiParented: Boolean|String
 		//		Indicates if the store is to support multi-parented objects. If true
 		//		the parent property	of store objects is stored as an array allowing
@@ -38,31 +38,28 @@ define(["dojo/_base/declare",
 		// parentProperty: String
 		//		 The property name of an object whose value represents the object's
 		//		parent id(s).
-		parentProperty: "parent",
+		parentProperty: "parent"
+	};
 
-		// End constructor keyword arguments
-		//=========================================================================
-
-		// hierarchical: Boolean [read-only]
-		//		Indicates this store is capable of maintaining an object hierarchy.
-		//		The cbtree Models tests for the presence of this property in order to
-		//		determine if it has to set the parent property of an object or if the
-		//		store will handle it.
-		hierarchical: true,
+	var Hierarchy = declare(null, {
 
 		//=========================================================================
 		// constructor
 
-		constructor: function () {
+		constructor: function (kwArgs) {
 			if (this.features.has("indexed") || this.features.has("natural")) {
 				if (this.features.has("observable")) {
 					throw new StoreError("Dependency", "constructor", "Observable must be loaded after the Hierarchy module");
 				}
+				// Mix in the appropriate directives...
+				lib.defProp(this, "hierarchical", {value: true, writable: false, enumerable: true});
+				this._directives.declare(HierarchyDirectives, kwArgs);
+
 				if (this.parentProperty instanceof Array || !Keys.validPath(this.parentProperty)) {
 					throw new StoreError("TypeError", "constructor", "invalid keypath: '%{0}'", this.parentProperty);
 				}
 				this.createIndex(C_INDEXNAME, this.parentProperty, { unique: false, multiEntry: true});
-
+				this._register("preload", this._preload, this);
 				this.features.add("hierarchy");
 			} else {
 				throw new StoreError("Dependency", "constructor", "base class '_Natural' or '_Indexed' must be loaded first");
@@ -80,7 +77,7 @@ define(["dojo/_base/declare",
 			// returns: Keys[]
 			//		An array of parent Ids.
 			// tag:
-			//		Private
+			//		Protected
 			var parentIds = object[this.parentProperty] || [];
 			return (parentIds instanceof Array ? parentIds : [parentIds]);
 		},
@@ -96,10 +93,10 @@ define(["dojo/_base/declare",
 			// returns: Keys[]
 			//		An array of parent keys.
 			// tag:
-			//		Private
+			//		Protected
 			var parentIds = [];
 
-			if (parents) {
+			if (parents != null) {
 				parents = (parents instanceof Array ? parents : [parents]);
 				parents.forEach(function (parent) {
 					if (isObject(parent)) {
@@ -118,17 +115,17 @@ define(["dojo/_base/declare",
 			return parentIds;
 		},
 
-		_loadData: function (data) {
+		_preload: function (action, data) {
 			// summary:
-			//		Load an array of data objects into the store and indexes it. If the
-			//		store property 'multiParented' is set to "auto" test if any object
-			//		has a parent property whose value is an array. If so, switch to the
-			//		multi parented mode.
+			//		Auto detect multi-parenting. If the store property 'multiParented'
+			//		is set to "auto" test if any object has a parent property whose
+			//		value is an array. If so, switch to the multi parented mode.
+			//		This method is called as the result of a 'load' trigger by any of
+			//		the loaders.
 			// data: Object[]
 			//		An array of objects.
 			// tag:
-			//		Private
-
+			//		Protected, callback
 			if (data instanceof Array && this.multiParented == "auto") {
 				if (data.length > 0) {
 					// Detect the multi parent mode.
@@ -137,8 +134,6 @@ define(["dojo/_base/declare",
 					}, this);
 				}
 			}
-			// Load the store
-			this.inherited(arguments);
 		},
 
 		_setParentType: function (value, parents) {
@@ -148,7 +143,7 @@ define(["dojo/_base/declare",
 			// value: Object
 			// parents: Key|Key[]
 			// tag:
-			//		Private
+			//		Protected
 			var isArray = parents instanceof Array;
 			if (this.multiParented === false) {
 				if (isArray) {
@@ -159,7 +154,8 @@ define(["dojo/_base/declare",
 					parents = (parents ? [parents] : []);
 				}
 			} else if (this.multiParented === "auto") {
-				this.multiParented = (parents instanceof Array);
+				this.multiParented = (parents instanceof Array && parents.length > 1);
+				return this._setParentType(value, parents);
 			}
 			value[this.parentProperty] = parents;
 		},
@@ -172,7 +168,7 @@ define(["dojo/_base/declare",
 			// returns: Object[]
 			//		An array of objects in store order.
 			// tag:
-			//		Private
+			//		Protected
 			var loc, temp = [];
 
 			keys.forEach(function (key) {
@@ -193,10 +189,10 @@ define(["dojo/_base/declare",
 			// returns: Key
 			//		Record key.
 			// tag:
-			//		Private
+			//		Protected
 			var key, optKey, parents;
 
-			if (options && options.parent) {
+			if (options && options.parent != null) {
 				optKey  = options.key != null ? options.key : (options.id != null ? options.id : null);
 				key     = Keys.keyValue(this.keyPath, value, this.uppercase) || optKey;
 				parents = this._getParentKeys(key, options.parent);
@@ -250,8 +246,8 @@ define(["dojo/_base/declare",
 		getChildren: function (parent, options) {
 			// summary:
 			//		Retrieves the children of an object.
-			// parent: Object
-			//		The object to find the children of.
+			// parent: Object|Key
+			//		The object or key to find the children of.
 			// options: Store.QueryOptions
 			//		Additional options to apply to the retrieval of the children.
 			// returns: QueryResults
@@ -259,28 +255,27 @@ define(["dojo/_base/declare",
 			//		the parent object.
 			// tag:
 			//		Public
+			var key   = isObject(parent) ? this.getIdentity(parent) : parent;
+			var index = this.index(C_INDEXNAME);
+			var values, refKeys, results, query = {};
 
-			if (isObject(parent)) {
-				var key = this.getIdentity(parent);
-				var results;
-				if (key) {
-					var index = this.index(C_INDEXNAME);
-					var range, keys, query = {};
+			assert.index(index, "getChildren");
 
+			if (Keys.validKey(key)) {
+				if (key != null) {
 					// Depending on if this is an indexed or natural store we either
 					// fetch the records directly using the 'parents' index, or get
 					// the primary keys and fetch the records locally preserving the
 					// store order.
-
 					if (this.natural) {
-						keys  = recRange(index, key, "next", true, true);
-						range = this._storeOrder(keys);
+						refKeys = range.keys(index, key, "next");
+						values = this._storeOrder(refKeys);
 					} else {
-						range = recRange(index, key, "next", true, false);
+						values = range.values(index, key);
 					}
 					query[this.parentProperty] = key;
 					// Call the query() method so the result can be made observable.
-					results = this.query(query, options, range);
+					results = this.query(query, options, values);
 				} else {
 					results = QueryResults([]);
 				}
@@ -313,6 +308,10 @@ define(["dojo/_base/declare",
 			throw new StoreError("DataError", "getParents");
 		},
 
+		getParentsIndex: function () {
+			return this.index(C_INDEXNAME);
+		},
+
 		hasChildren: function (parent) {
 			// summary:
 			//		Test if a parent object has known children.
@@ -327,41 +326,36 @@ define(["dojo/_base/declare",
 			throw new StoreError("DataError", "hasChildren");
 		},
 
-		query: function (query, options /*, data */) {
+		removeChildren: function (parent, recursive) {
 			// summary:
-			//		Queries the store for objects. The query executes asynchronously if,
-			//		and only if, the store is not ready or a load request is currently
-			//		in progress.
-			// query: Object?
-			//		The query to use for retrieving objects from the store.
-			// options: QueryOptions?
-			//		The optional arguments to apply to the resultset.
-			// returns: dojo/store/api/Store.QueryResults
-			//		The results of the query, extended with iterative methods.
+			//		Remove all children of a given parent
+			// parent: Object|Key
+			//		The parent whose descendants are to be removed.
+			// recursive: Boolean?
+			//		If true, all descendants of parent are removed.
 			// tag:
 			//		Public
-
-			// If the reserved argument data is specified the query is performed on
-			// the data argument only. (INTERNAL USE ONLY)
-
-			var vargs = arguments;
-			var data  = (vargs.length > 2 ?	vargs[2] : null);
-			var defer = this.waiting || this.loader.loading;
-			var store = this;
-
-			// NOTE: defer is either boolean false or a dojo/promise/Promise.
-			if (defer == false || data) {
-				var objects = store.queryEngine(query, options)(data || store._records);
-				return QueryResults(store._clone ? clone(objects) : objects);
+			function deleteChildren(store, index, parentKey, recursive) {
+				var childKeys = range.keys(index, parentKey);
+				childKeys.forEach(function (key) {
+					if (recursive) {
+						deleteChildren(store, index, key);
+					}
+					store._deleteKeyRange(key);
+				});
 			}
-			// Store is not ready or a load request is in progress.
-			var results = QueryResults(
-				when(defer, function () {
-					var objects = store.queryEngine(query, options)(store._records);
-					return store._clone ? clone(objects) : objects;
-				})
-			);
-			return results;
+
+			var pKey  = isObject(parent) ? this.getIdentity(parent) : parent;
+			var index = this.index(C_INDEXNAME);
+			var childKeys;
+
+			assert.index(index, "removeChildren");
+
+			if (Keys.validKey(pKey)) {
+				deleteChildren(this, index, pKey, recursive);
+				return;
+			}
+			throw new StoreError("DataError", "removeChildren");
 		},
 
 		removeParent: function (child, parents) {
@@ -374,6 +368,8 @@ define(["dojo/_base/declare",
 			//		list of parent(s) of child.
 			// returns: Boolean
 			//		true if the parent key(s) were successfully removed otherwise false.
+			// tag:
+			//		Public
 
 			if (isObject(child)) {
 				var remKeys = this._getParentKeys(this.getIdentity(child), parents);

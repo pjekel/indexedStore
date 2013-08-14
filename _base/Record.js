@@ -14,7 +14,7 @@ define([], function () {
 	// module:
 	//		store/_base/Record
 
-	function Record(key, value, revision, stale) {
+	function Record(key, value, tags) {
 		// summary:
 		//		Definition of an IndexedDB record.
 		// key: Key
@@ -23,18 +23,17 @@ define([], function () {
 		//		of valid keys.
 		// value: Object
 		//		Record value (a JavaScript key:value pairs object).
-		// revision: Number?
-		// stale: Boolean?
+		// tags: Object?
+		//		An arbitrary JavaScript key:value pairs object.  The properties
+		//		depend on the type of store and extensions used and may include
+		//		things like revision, staleness, etc...
 		// returns: Record
 		//		A new instance of a Record object.
 		// tag:
 		//		Public
 		this.key   = key;
 		this.value = value;
-
-		// indexedStore extensions
-		this.stale = !!stale;
-		this.rev   = revision || 0;
+		this.tags  = tags ? tags : {};
 	}
 
 	Record.prototype.destroy = function () {

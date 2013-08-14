@@ -12,7 +12,8 @@ define(["../error/createError!../error/StoreErrors.json",
 		"../listener/ListenerList",
 		"./Keys",
 		"./library",
-	], function (createError, ListenerList, Keys, lib) {
+		"./opcodes"
+	], function (createError, ListenerList, Keys, lib, opcodes) {
 	"use strict";
 
 	// module:
@@ -87,42 +88,37 @@ define(["../error/createError!../error/StoreErrors.json",
 		// tag:
 		//		public
 
-		var handle   = null;
-		var propList = [];
-		var spotters = new ListenerList();
-		var self     = this;
-
-		function watchProperty(action, key, newObj, oldObj, at) {
+		function watchProperty(action, key, newObj, oldObj) {
 			// summary:
 			//		Test if any of the object properties being monitored have changed.
 			//		This method is called immediately after the store is updated.
 			// action: String
-			//		Store operation performed, always "write'
+			//		Store operation performed. (always opcodes.UPDATE)
 			// key: Key
 			//		Object key
 			// newObj: Object
 			//		New object.
 			// oldObj: Object
 			//		Old object.
-			// at: Number
 			// tag:
 			//		Private, callback
 
 			function test(store, prop, newObj, oldObj) {
 				var newVal = getProp(prop, newObj);
 				var oldVal = getProp(prop, oldObj);
+				var props;
+				
 				if (Keys.cmp(newVal, oldVal)) {
 					// Notify all listeners, if any.
 					spotters.trigger(prop, newObj, newVal, oldVal);
-					// Create a DOM4 style custom event.
 					if (store.eventable && !store.suppressEvents) {
-						var props = {	item: newObj,	property: prop,	newValue: newVal, oldValue: oldVal};
-						store._emit("set", props, true);
+						props = {item: newObj, property: prop, newValue: newVal, oldValue: oldVal};
+						store.emit("set", props, true);
 					}
 				}
 			}
-			// Only inspect updated objects, ignore new or deleted objects
-			if (propList.length && at != -1 && oldObj) {
+
+			if (propList.length) {
 				propList.forEach(function (prop) {
 					test(source, prop, newObj, oldObj);
 				});
@@ -145,7 +141,7 @@ define(["../error/createError!../error/StoreErrors.json",
 			//		Return the list of listeners registered with the Watcher instance
 			//		for a given property.
 			// property?
-			//		Property name(s) for which the listeners are returned. If ommitted
+			//		Property name(s) for which the listeners are returned. If omitted
 			//		all listeners are returned.
 			// returns: Object|Listener[]
 			//		If the property argument is specified an array of all listeners for
@@ -169,44 +165,39 @@ define(["../error/createError!../error/StoreErrors.json",
 			//		Callback, if specified the listener is called when the property of
 			//		a store object changed. The signature of listener is as follows:
 			//			listener(object, property, newValue, oldValue)
-			//		The listener argument is required if the store is not eventable.
-			//		(See indexedStore/extension/Eventable)
+			//
+			//		THE LISTENER ARGUMENT IS REQUIRED IF THE STORE IS NOT EVENTABLE.
 			//  scope: Object?
 			//		Object to use as this when executing the listener.
+			// returns: Object
+			//		An object which has a remove method which can be called to remove
+			//		the listener from the ListenerList.
 			// tag:
 			//		Public
 
 			if (property) {
-				if (property instanceof Array) {
-					property.forEach(function (prop) {
-						self.watch(prop, listener);
-					});
-				} else if (isString(property)) {
-					if (/,/.test(property)) {
-						return self.watch(property.split(/\s*,\s*/), listener);
-					}
-					// Single property.
-					if (Keys.validPath(property)) {
+				var props = lib.anyToArray(property);
+				props.forEach(function (prop) {
+					if (Keys.validPath(prop)) {
 						if (listener) {
-							spotters.addListener(property, listener, scope);
+							spotters.addListener(prop, listener, scope);
 						} else {
 							if (!source.eventable) {
 								throw new StoreError("ParameterMissing", "watch", "store is not eventable, listener required");
 							}
 						}
-						if (propList.indexOf(property) == -1) {
-							// register the listener with the store.
+						if (propList.indexOf(prop) == -1) {
+							// Now that we have something to watch for, register the
+							// listener for store updates.
 							if (!handle) {
-								handle = source._register("write", watchProperty);
+								handle = source._register(opcodes.UPDATE, watchProperty);
 							}
-							propList.push(property);
+							propList.push(prop);
 						}
 					} else {
 						throw new StoreError("DataError", "watch", "invalid property path");
 					}
-				} else {
-					throw new StoreError("TypeError", "watch", "invalid property");
-				}
+				});
 				return {
 					remove: function () {
 						self.unwatch(property, listener, scope);
@@ -220,46 +211,47 @@ define(["../error/createError!../error/StoreErrors.json",
 			//		Remove a property name from the list of properties being monitored.
 			// property: String|String[]
 			//		Property name or property path.
-			// listener: Function|Listener
+			// listener: Function|Listener?
 			//		Function or a Listener object. If a listener is specified only the
 			//		specific listener is removed otherwise all available listeners for
 			//		the property are removed.
+			// scope: Object?
+			//		The scope associated with the listener. The scope argument is only
+			//		required when the listener argument is a string, in all other cases
+			//		scope is ignored.
 			// tag:
 			//		Public
 			if (property) {
-				if (property instanceof Array) {
-					property.forEach(function (prop) {
-						self.unwatch(prop, listener, scope);
-					});
-					return;
-				}
-				if (isString(property)) {
-					if (/,/.test(property)) {
-						return self.unwatch(property.split(/\s*,\s*/), listener, scope);
-					}
-				}
-				if (Keys.validPath(property)) {
-					spotters.removeListener(property, listener, scope);
-					if (!spotters.getByType(property).length) {
-						var index = propList.indexOf(property);
-						if (index > -1) {
-							propList.splice(index, 1);
-							if (!propList.length) {
-								// Unregister from the store...
-								handle.remove();
-								handle = null;
+				var props = lib.anyToArray(property);
+				props.forEach(function (prop) {
+					if (Keys.validPath(prop)) {
+						spotters.removeListener(prop, listener, scope);
+						if (!spotters.getByType(prop).length) {
+							var index = propList.indexOf(prop);
+							if (index > -1) {
+								propList.splice(index, 1);
+								if (!propList.length) {
+									// Unregister from the store...
+									handle.remove();
+									handle = null;
+								}
 							}
 						}
+					} else {
+						throw new StoreError("TypeError", "watch", "invalid property");
 					}
-				} else {
-					throw new StoreError("TypeError", "watch", "invalid property");
-				}
+				});
 			}
 		};
 
 		//======================================================================
 
-		if (source && source.type == "store") {
+		var handle   = null;
+		var propList = [];
+		var spotters = new ListenerList();
+		var self     = this;
+
+		if (source && source.baseClass == "store") {
 			defProp(this, "properties", {
 				get: function () {
 					return propList;

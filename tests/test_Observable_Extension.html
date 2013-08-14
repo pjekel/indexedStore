@@ -13,7 +13,7 @@
       var dojoConfig = {
 		async: true,
 		parseOnLoad: true,
-		isDebug: true,
+		isDebug: false,
 		baseUrl: "../../",
 		packages: [
 		  { name: "dojo", location: "dojo" },
@@ -28,12 +28,12 @@
       require([
         "doh/runner",
         "dojo/_base/declare",
-				"dojo/promise/Promise",
+		"dojo/promise/Promise",
         "dojo/ready",
         "dojo/when",
         "store/_base/_Store",
         "store/_base/_Indexed",
-        "store/loader/basic",
+        "store/_base/_Loader!Basic",
         "store/_base/KeyRange",
         "store/_base/Observer",
 		"store/listener/Listener",

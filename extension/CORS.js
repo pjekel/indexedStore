@@ -15,10 +15,9 @@ define(["dojo/_base/declare",
 		"dojo/request/handlers",
 		"../_base/library",
 		"../error/createError!../error/StoreErrors.json",
-		"../loader/_LoadDeferred",
-		"../loader/_LoaderPlus"
-	], function (declare, has, Deferred, request, handlers, lib,
-				createError, LoadDeferred, Loader) {
+		"../loader/_LoadDeferred"
+	], function (declare, has, Deferred, request, handlers, lib, createError,
+				 LoadDeferred) {
 	"use strict";
 
 	// module:
@@ -27,8 +26,11 @@ define(["dojo/_base/declare",
 	//		Add Cross-Origin Resource Sharing (CORS) support the to local instance
 	//		of the store loader (indexedStore/_base/LoaderPlus).
 	// NOTE:
-	//		Adding CORS support to the base loader, indexedStore/_base/LoaderBase,
-	//		has no affect.
+	//		Microsoft Internet Explorer prior to version 10 requires the use of
+	//		XDomainRequest() instead of XMLHttpRequest() to support CORS.
+
+	var C_MSG_INVALID_ORDER  = "a XHR capable loader must be installed prior to CORS";
+	var C_MSG_INVALID_LOADER = "missing or incompatible loader";
 
 	var StoreError = createError("CORS");		// Create the StoreError type.
 	var msXDR = !!(has('ie') && has('ie') < 10 && XDomainRequest !== undefined);
@@ -37,22 +39,25 @@ define(["dojo/_base/declare",
 
 	var baseRsp = {options: null, status: 0, text: "", url: ""};
 
-	function xhrGet(url, handleAs, options) {
+	function xhrRequest(url, options) {
 		// summary:
-		// url:
-		//		Universal Resource Location the request will be made to.
-		// handleAs:
-		//		If specified, the content handler to process the response payload
-		//		with. (default is "json")
-		// options:?
+		// url: String
+		//		Universal Resource Location
+		// options: LoadDirectives
 		// tag:
 		//		Private
-		var headers  = (options && options.headers) || null;
-		var prevent  = (options && options.preventCache) || false;
-		var timeout  = (options && options.timeout) || 0;
-		handleAs = handleAs || "json";
+		var data = null, handleAs = "json", headers, method = "GET", noCache = false,
+			timeout, url;
+		if (options) {
+			method   = options.method   || "GET",
+			handleAs = options.handleAs || "json";
+			headers  = options.headers  || null;
+			noCache  = options.preventCache;
+			timeout  = options.timeout  || 0;
+			data     = options.formData || null;
+		}
 
-		// URL must start with either 'http://' or 'https://'
+		// URL must have the 'http' or 'https' schema
 		if (/^https?\:\/\//i.test(url)) {
 			if (msXDR) {
 				var xdr = new XDomainRequest();
@@ -93,26 +98,36 @@ define(["dojo/_base/declare",
 					}
 				}
 			} else {
-				// Force dojo NOT to add the 'X-Requested-With' header.
+				// Overwrite the default dojo 'X-Requested-With' header.
 				headers = lib.mixin({"X-Requested-With": null}, headers);
 			}
 		}
-		return request(url, {method: "GET", handleAs: handleAs, headers: headers,
-							 timeout: timeout, preventCache: prevent});
+		return request(url, {method: method, handleAs: handleAs, headers: headers,
+							 timeout: timeout, data: data, preventCache: noCache});
 	}
 
 	var CORS = declare(null, {
+
 		//=========================================================================
 		// constructor
+
 		constructor: function () {
-			if (!this.features.has("loaderAdvanced")) {
-				throw new StoreError("Dependency", "constructor", "the 'advanced' loader class must be loaded first");
+			if (!this.loader || !this.features.has("loader")) {
+				throw new StoreError("Dependency", "constructor", C_MSG_INVALID_ORDER);
 			}
-			if (!(this.loader instanceof Loader)) {
-				throw new StoreError("TypeError", "constructor", "store loader must be an instance of Loader");
+			if (this.loader.features) {
+				var method = this.loader.features.has("xhr");
+				if (!lib.isString(method) || !method.length) {
+					if (method !== true) {
+						throw new StoreError("TypeError", "constructor", C_MSG_INVALID_LOADER);
+					}
+					method = "_xhrRequest";
+				}
+			} else {
+				throw new StoreError("TypeError", "constructor", C_MSG_INVALID_LOADER);
 			}
 			// Extend the local store loader instance.
-			this.loader._xhrGet = xhrGet;
+			this.loader[method] = xhrRequest;
 			this.features.add("CORS");
 		}
 	});

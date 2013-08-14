@@ -13,7 +13,7 @@
       var dojoConfig = {
 		async: true,
 		parseOnLoad: true,
-		isDebug: true,
+		isDebug: false,
 		baseUrl: "../../",
 		packages: [
 		  { name: "dojo", location: "dojo" },
@@ -33,7 +33,7 @@
         "store/_base/_Store",
         "store/_base/_Indexed",
         "store/_base/_Natural",
-        "store/loader/advanced",
+        "store/_base/_Loader!advanced",
 		"store/extension/CORS"
         ], function( doh, declare, lang, ready,
 					_Store, _Indexed, _Natural, _Loader,

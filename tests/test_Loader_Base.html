@@ -13,7 +13,7 @@
       var dojoConfig = {
 		async: true,
 		parseOnLoad: true,
-		isDebug: true,
+		isDebug: false,
 		baseUrl: "../../",
 		packages: [
 		  { name: "dojo", location: "dojo" },
@@ -35,7 +35,7 @@
         "store/_base/_Store",
         "store/_base/_Indexed",
         "store/_base/_Natural",
-		"store/loader/basic",
+		"store/_base/_Loader!",
 		"store/extension/Hierarchy"
         ], function( doh, declare, lang, promiseAll, Promise, ready,
 					_Store, _Indexed, _Natural, Loader, Hierarchy ) {

@@ -133,7 +133,7 @@ define(["../_base/Record",
 		// summary:
 		//		Query engine that matches using filter functions, named filter functions
 		//		or a key:value pairs objects (hash).
-		// query: Object|Function
+		// query: (Object|Function)?
 		//		- If query is a key:value pairs object, each key:value pair is matched
 		//		with the corresponding key:value pair of the store objects unless the
 		//		query property value is a function in which case the function is called

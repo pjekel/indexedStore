@@ -17,9 +17,10 @@ define(["dojo/Deferred",
 		"../util/sorter",
 		"./Keys",
 		"./KeyRange",
-		"./library"
+		"./library",
+		"./opcodes"
 	], function (Deferred, Promise, when, createError, Listener, ListenerList,
-				 sorter, Keys, KeyRange, lib) {
+				 sorter, Keys, KeyRange, lib, opcodes) {
 	"use strict";
 
 	// module:
@@ -120,20 +121,6 @@ define(["dojo/Deferred",
 		// tag:
 		//		Private
 
-		var qFunc, matches, revision, chunked, sorted, chunkOff, chunkOn, cleaner,
-			updater, master, view;
-		var ascending = false;
-		var destroyed = false;
-		var obsType   = C_QUERY;
-		var options   = directives || {};
-		var results   = arguments[3];		// Reserved for Observable extension
-		var store     = source;
-		var index     = null;
-		var self      = this;
-
-		var listeners = new ListenerList();
-		var deferred  = new Deferred();
-
 		function clear() {
 			// summary:
 			//		This method is called when the store associated with this Observer
@@ -193,7 +180,6 @@ define(["dojo/Deferred",
 				view = sorter(dataset.slice(), chunkOn);
 				if (obsType == C_RANGE) {
 					view.direction = dataset.direction;
-					view.keysOnly  = dataset.keysOnly;
 				}
 				view.total = dataset.total;
 			} else {
@@ -496,9 +482,23 @@ define(["dojo/Deferred",
 
 		//=======================================================================
 
+		var qFunc, matches, revision, chunked, sorted, chunkOff, chunkOn, cleaner,
+			updater, master, view;
+		var ascending = false;
+		var destroyed = false;
+		var obsType   = C_QUERY;
+		var options   = directives || {};
+		var results   = arguments[3];		// Reserved for Observable extension
+		var store     = source;
+		var index     = null;
+		var self      = this;
+
+		var listeners = new ListenerList();
+		var deferred  = new Deferred();
+
 		// First, validate the source object.
-		if (source && (source.type == "store" || source.type == "index")) {
-			if (source.type == "index") {
+		if (source && (source.baseClass == "store" || source.baseClass == "index")) {
+			if (source.baseClass == "index") {
 				store = source.store;
 				index = source;
 			}
@@ -551,8 +551,8 @@ define(["dojo/Deferred",
 		lib.defProp(this, "data", {	get: function () {return view; }, enumerable: true });
 
 		// Register observer callbacks with the store.
-		updater = store._register("write, delete", update);
-		cleaner = store._register("clear", clear);
+		updater = store._register([opcodes.DELETE, opcodes.NEW, opcodes.UPDATE], update);
+		cleaner = store._register(opcodes.CLEAR, clear);
 	}
 	return Observer;
 });	/* end define() */

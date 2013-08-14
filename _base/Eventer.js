@@ -8,12 +8,11 @@
 //	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["dojo/_base/declare",
-		"./library",
+define(["./library",
 		"../dom/event/Event",
 		"../dom/event/EventTarget",
 		"../error/createError!../error/StoreErrors.json"
-	], function (declare, lib, Event, EventTarget, createError) {
+	], function (lib, Event, EventTarget, createError) {
 	"use strict";
 
 	// module
@@ -31,110 +30,70 @@ define(["dojo/_base/declare",
 	//
 	// example:
 	//	|	require(["./Eventer", ... ], function (Eventer, ... ) {
-	//	|		store.eventer = new Eventer();
-	//	|		store.eventer.addHandler("delete", "new", "update");
+	//	|		store.eventer = new Eventer(store, "delete, new, update");
 	//	|		store.emit = store.eventer.emit;
 	//	|	});
 
 	var StoreError = createError("Eventer");		// Create the StoreError type.
-	var isObject   = lib.isObject;
 	var isString   = lib.isString;
-	var defProp    = lib.defProp;
 
 	function Eventer(source, types) {
 		// summary:
 		// source: EventTarget
 		// types: String|String[]?
-
-		var callbacks = {};
-
-		function removeHandler(source, type) {
-			// summary:
-			//		Remove the current event listener for the given type unless it is
-			//		the dummy listener, which will always be the first in the list.
-			//		Preserving the dummy listener guarantees advice can still be added
-			//		if required.
-			// source: EventTarget
-			// type: type
-			//		Event type.
-			// tag:
-			//		Private
-			var i, listeners = source.getEventListeners(type);
-			// Keep the dummy listener so advice can still be added....
-			if (listeners && listeners.length > 1) {
-				source.removeEventListener(type, callbacks[type]);
-			}
-		}
+		//		A string or a comma-separated-value string or an array of strings
+		//		specifying the event type(s) for which an handler entry is declared.
+		// tag:
+		//		public
+		var eventTypes = [];
 
 		this.destroy = function () {
 			// summary:
+			//		Remove the listeners associated with the event types that have
+			//		been registered with this eventer instance.  Assigning null to
+			//		the store event handler property will remove the handler.
 			// tag:
 			//		public
-			var types = Object.keys(callbacks);
-			types.forEach(function (type) {
-				source.removeEventListener(type);
-				delete source["on" + type];
+			eventTypes.forEach(function (type) {
+				var propName = "on" + type;
+				source[propName] = null;
+				delete source[propName];
 			});
-			callbacks = {};
 		};
 
 		this.addHandler = function (type) {
 			// summary:
-			//		Add an event handler to the store.
+			//		Add an event handler property to the store.
 			// description
 			//		Add an event handler to the store.  Adding an event handler adds
-			//		a method to the store with the name: on<type>. For example adding
-			//		a handler for type 'error' adds the store function onerror(). The
-			//		new function can then be used to add advice. However, assigning a
-			//		new function to a store property on<xxx> will actually register
-			//		an event listener.
+			//		a special property to the store with the name: on<type>.
+			//		The new property can be assigned a function with a prototype of:
+			//			function handler(event) {}
+			//		Assigning the property a function will register the function as
+			//		an event listener for the specified type.
+			//		(See also indexedStore/dom/event/EventTarget.declareHandler())
 			// type: String
 			// example:
 			//	|	var eventer = new Eventer(someObj, "abort, error, complete");
 			//	|	someObj.onerror = function (event) {
 			//	|	  console.log(event.type,":",event.error);
-			//	| };
-			//	|	someObject.emit("error", {bubbles:true, error: new Error("SayWhat")});
+			//	|	};
+			//	|	eventer.emit("error", {bubbles:true, error: new Error("SayWhat")});
 			// tag:
 			//		Public
-			if (type instanceof Array) {
-				type.forEach(function (type) {
-					this.addHandler(type);
-				}, this);
-			} else if (isString(type)) {
-				if (/,/.test(type)) {
-					this.addHandler(type.split(/\s*,\s*/));
+			var types = lib.anyToArray(type);
+			types.forEach(function (eventType) {
+				if (isString(eventType)) {
+					var type = eventType.toLowerCase();
+					if (eventTypes.indexOf(type) == -1 && !source.hasOwnProperty(type)) {
+						EventTarget.declareHandler(source, type);
+						eventTypes.push(type);
+					}
 				} else {
-					var prop = "on" + type.toLowerCase();
-					lib.defProp(source, prop, {
-						get: function () {
-							var listener = source.getEventListeners(type)[0];
-							if (listener) {
-								return listener.listener;
-							}
-						},
-						set: function (callback) {
-							if (callback !== null) {
-								if (callback instanceof Function) {
-									removeHandler(source, type);
-									source.addEventListener(type, callback);
-									callbacks[type] = callback;
-								} else {
-									throw new StoreError("TypeError", "register", "callback is not a callable object");
-								}
-							} else {
-								removeHandler(source, type);
-							}
-						},
-						configurable: true,
-						enumerable: true
-					});
-					// Add a dummy placeholder function so users can add advice....
-					source[prop] = function () {};
+					throw new StoreError("TypeError", "addHandler", "invalid type argument");
 				}
-			} else {
-				throw new StoreError("TypeError", "register", "invalid type");
-			}
+				eventTypes.sort();
+			});
 		};
 
 		this.emit = function (type, properties, custom) {
@@ -143,14 +102,15 @@ define(["dojo/_base/declare",
 			// type: String
 			// properties: Object?
 			// custom: Boolean?
-			// returns: Event
-			//		The event AFTER it has been dispatched. The event may have an error
-			//		property in case an exception occurred while dispatching the event.
+			// returns: Boolean
+			//		If true, the event was dispatched successfully otherwise the
+			//		event was canceled and the defaults action(s) associated with
+			//		the event, if any, were skipped.
 			// tag:
 			//		Public
 			var event, props = properties;
 			if (!type || !isString(type)) {
-				throw new StoreError("TypeError", "emit", "invalid type property");
+				throw new StoreError("TypeError", "emit", "invalid type argument");
 			}
 			if (custom && props) {
 				var custProp = props;
@@ -166,8 +126,7 @@ define(["dojo/_base/declare",
 				props = custProp;
 			}
 			event = new Event(type, props);
-			source.dispatchEvent(event);
-			return event;
+			return source.dispatchEvent(event);
 		};
 
 		//=======================================================================
@@ -176,14 +135,14 @@ define(["dojo/_base/declare",
 			if (types) {
 				this.addHandler(types);
 			}
-			defProp(this, "events", {
+			lib.defProp(this, "events", {
 				get: function () {
-					return Object.keys(callbacks);
+					return eventTypes;
 				},
 				enumerable: true
 			});
 		} else {
-			throw new StoreError("DataError", "constructor", "source must be an instance of EventTarget");
+			throw new StoreError("DataError", "constructor", "source is  not an EventTarget");
 		}
 	}	/* end Eventer() */
 

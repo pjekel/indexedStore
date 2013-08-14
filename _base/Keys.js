@@ -34,7 +34,6 @@ define(["exports",
 	var isObject   = lib.isObject;
 	var getProp    = lib.getProp;
 	var setProp    = lib.setProp;
-	var clone      = lib.clone;
 
 	exports.cmp = function cmp(key1, key2, strict) {
 		// summary:
@@ -123,8 +122,9 @@ define(["exports",
 		// summary:
 		//		Determine the upper or lower boundary of an ordered list of records
 		//		sharing the same key.
-		// source: Store|Index
-		//		The source to search which is either an Index or Store.
+		// source: Store|Index|Record[]
+		//		The source to search which is either a Store, an Index or an array
+		//		of records.
 		// key: Key
 		//		Key for which the boundary is to be determined.
 		// type: String
@@ -139,16 +139,16 @@ define(["exports",
 		//		last record.
 		// tag:
 		//		Public
-		var records = source ? source._records : [];
+		var records = source._records || source;
 		var	lower   = (type == "lower");
 		var	max     = records.length;
+		var entry, index;
 
 		if (key == null) {
 			return lower ? 0 : max;
 		}
-
-		var entry = exports.search(source, key);
-		var index = entry.eq >= 0 ? entry.eq : entry.gt;
+		entry = exports.search(records, key);
+		index = entry.eq >= 0 ? entry.eq : entry.gt;
 
 		while (index < max) {
 			var result = exports.cmp(key, records[index].key);
@@ -183,47 +183,52 @@ define(["exports",
 		//		Key value.
 		// tag:
 		//		Private
-		var inline = false;
-
+		var inlineKey, objKey = key;
+		
 		if (store.keyPath != null) {
-			if (key != null) {
-				throw new StoreError("DataError", "getKey", "both keyPath and optional key specified");
+			// The following deviates from the indexedDB procedure in that it allows
+			// for both the key and keypath to be specified as long as 1) the keypath
+			// does not yield a value or 2) the keypath value and key are the same.
+			inlineKey = exports.keyValue(store.keyPath, value);
+			if (inlineKey != null) {
+				if (objKey != null && exports.cmp(inlineKey, objKey)) {
+					throw new StoreError("DataError", "getKey", "both keyPath and optional key specified");
+				}
+				objKey = inlineKey;
 			}
-			key    = exports.keyValue(store.keyPath, value);
-			inline = !!key;
 		}
-		if (key != null) {
-			if (!exports.validKey(key)) {
-				throw new StoreError("DataError", "getKey", "invalid key value: [%{0}]", key);
+		if (objKey != null) {
+			if (!exports.validKey(objKey)) {
+				throw new StoreError("DataError", "getKey", "invalid key value: [%{0}]", objKey);
 			}
-			if (typeof key == "number") {
+			if (typeof objKey == "number") {
 				if (store.autoIncrement) {
-					if (key >= store._autoIndex) {
-						store._autoIndex = Math.floor(key + 1);
+					if (objKey >= store._autoIndex) {
+						store._autoIndex = Math.floor(objKey + 1);
 					}
 				}
 			} else {
 				if (uppercase) {
-					key = exports.toUpperCase(key);
+					objKey = exports.toUpperCase(objKey);
 				}
 			}
 		} else {
 			if (!store.autoIncrement) {
 				throw new StoreError("DataError", "getKey", "unable to obtain or generate a key");
 			}
-			key = store._autoIndex++;
+			objKey = store._autoIndex++;
 		}
 		// If the key is out-of-line or was generated AND the store has a key path
 		// assign the new key value to the key path property assuming 'value' is
 		// an object or array.
-		if (!inline && store.keyPath) {
+		if (inlineKey == null && store.keyPath) {
 			if (isObject(value) || value instanceof Array) {
-				setProp(store.keyPath, key, value);
+				setProp(store.keyPath, objKey, value);
 			} else {
 				throw new StoreError("DataError", "getKey", "value must be an object or array");
 			}
 		}
-		return key;
+		return objKey;
 	};
 
 	exports.getRange = function (source, keyRange) {
@@ -232,20 +237,23 @@ define(["exports",
 		//		does NOT return records, instead it returns a Range Descriptor
 		//		object which holds information about the first and last record
 		//		in range.
-		// source: Store|Index
-		//		An index or a store with their records in ascending key order.
+		// source: Store|Index|Record[]
+		//		A store, an Index or an array of records with their records in
+		//		ascending key order.
 		// keyRange: KeyRange
 		//		A KeyRange object
-		// returns: Range
+		// returns: RangeDesc
 		//		A Range object.
 		// tag:
 		//		Public
-		var first = -1, last = -1, records = source._records;
+		var records = source._records || source;
+		var first = -1, last = -1;
 
-		function RangeDesc(source, first, last) {
+		function RangeDesc(records, first, last) {
 			// summary:
 			//		Compose a Range Descriptor object.
-			// source: Store|Index
+			// records: Records[]
+			//		An array of records
 			// first: Number
 			//		Index number of the first record in range.
 			// last:  number
@@ -254,32 +262,32 @@ define(["exports",
 			//		A Range object
 			// tag:
 			//		Private
-			var max  = source._records.length;
+			var max = records ? records.length : 0;
 			last = Math.min(last, max);
 
 			if (last >= 0 && (first > -1 && first <= last && first < max)) {
 				this.first  = first;
 				this.last   = max > 0 ? Math.min(last, max - 1)  : 0;
 				this.total  = (this.last - this.first) + 1;
-				this.record = source._records[first];
+				this.record = records[first];
 			} else {
 				this.record = null;
 				this.total  = 0;
 				this.first  = -1;
 				this.last   = -1;
 			}
-			this.source = source;
-		}
+		} /* end RangeDesc() */
 
 		if (records && records.length) {
 			if (keyRange) {
-				first = exports.boundary(source, keyRange.lower, "lower", keyRange.lowerOpen);
-				last  = exports.boundary(source, keyRange.upper, "upper", keyRange.upperOpen);
+				first = exports.boundary(records, keyRange.lower, "lower", keyRange.lowerOpen);
+				last  = exports.boundary(records, keyRange.upper, "upper", keyRange.upperOpen);
 			} else {
-				return new RangeDesc(source, 0, records.length);
+				last  = records.length;
+				first = 0;
 			}
 		}
-		return new RangeDesc(source, first, last);		// return a range object
+		return new RangeDesc(records, first, last);		// return a range object
 	};
 
 	exports.indexOf = function (keyArray, key, fromIndex) {
@@ -412,20 +420,19 @@ define(["exports",
 		// summary:
 		//		Search in an ordered list of records all records that share key and
 		//		return a location object.
-		// source: Store|Index
-		//		Either a store or index object.
+		// source: Store|Index|Records[]
+		//		A store, an Index or an array of Records in ascending order.
 		// key: Key
 		//		Key identifying the record(s).
 		// returns: Location
 		//		A location object.
 		// tag:
 		//		Public
-		var records = source._records;
+		var records = source._records || source;
 
 		if (key != null && records && records.length) {
+			var lb = 0, ub = records.length;
 			var idx, rc;
-			var ub = records.length;
-			var lb = 0;
 			do {
 				idx = lb + Math.floor((ub - lb) / 2);
 				rc  = exports.cmp(key, records[idx].key);
@@ -434,19 +441,19 @@ define(["exports",
 				} else if (rc == -1) {
 					ub = idx;
 				} else if (rc == 0) {
-					return new Location(source, idx - 1, idx, idx + 1);
+					return new Location(records, idx - 1, idx, idx + 1);
 				}
 			} while (lb < ub);
-			return new Location(source, (rc < 0 ? idx - 1 : idx), -1, (rc < 0 ? idx : idx + 1));
+			return new Location(records, (rc < 0 ? idx - 1 : idx), -1, (rc < 0 ? idx : idx + 1));
 		}
-		return new Location(source);
+		return new Location(records);
 	};
 
 	exports.sortKeys = function (keys, ascending) {
 		// summary:
 		//		Sort an array of keys. If keys are arrays a deep array comparison
 		//		is performed. In accordance with the W3C IndexedDB specs, the rule:
-		//		(Array > String > Date > Number) is applied while sorting keys.
+		//		(Array > String > Date > Number) is applied when sorting keys.
 		// keys: Key[]
 		//		Array of keys.
 		// ascending: Boolean?

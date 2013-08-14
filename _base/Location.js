@@ -15,12 +15,12 @@ define([], function () {
 	//		IndexedStore/_base/Location
 	//
 	// interface:
-	//		[Constructor((Index or Store) source, optional number ls, optional number eq, optional number gt)]
+	//		[Constructor(sequence<Record> records, optional long ls = -1, optional long eq = -1, optional long gt = 0)]
 	//		interface Location {
-	//			attribute number	ls = -1;
-	//			attribute number	eq = -1;
-	//			attribute number	gt = 0;
-	//			attribute object	record = null;
+	//			attribute number	ls;
+	//			attribute number	eq;
+	//			attribute number	gt;
+	//			attribute object	record;
 	//			attribute any		key;
 	//			attribute any		value;
 	//		};
@@ -29,8 +29,8 @@ define([], function () {
 		// summary:
 		//		A Record location object holds indexing (location) information for a
 		//		given record.
-		// source: Store|Index
-		//		The location source which is either an Index or IDBOjectStore.
+		// Source: Store|Index|Record[]
+		//		Instance of Store or Index or an array of records.
 		// ls: Number?
 		//		The index of the last instance of a record whose key is less then
 		//		the key searched for. (typically eq - 1 if a match was found).
@@ -44,12 +44,13 @@ define([], function () {
 		//		A new instance of a Location object.
 		// tag:
 		//		Public
+		var records = source._records || source;
 
 		this.ls = (ls != null ? ls : -1);
 		this.eq = (eq != null ? eq : -1);
 		this.gt = (gt != null ? gt :  0);
 
-		this.record = this.eq != -1 ? source._records[this.eq] : null;
+		this.record = this.eq != -1 ? records[this.eq] : null;
 		this.value  = this.record && this.record.value;
 		this.key    = this.record && this.record.key;
 	}

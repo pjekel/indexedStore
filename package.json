@@ -1,7 +1,7 @@
 {
 	"name": "indexedStore",
 	"author": "Peter Jekel",
-	"version":"0.1",
+	"version":"0.1.0",
 	"description": "Dojo Store implementing the dojo/store/api, the IndexedDB IDBObjectStoreSync, IDBIndexSync, IDBCursorSync and IDBTransactionSync interfaces",
 	"licenses": [
 		 {
@@ -13,12 +13,19 @@
 			 "url": "http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43"
 		 }
 	],
+	"repositories": [
+		{
+			"type":"git",
+			"url":"https://github.com/pjekel/indexedStore"
+		}
+	],
 	"dependencies": {
 		"dojo" : "1.8",
 		"dijit" : "1.8"
 	},
 	"keywords": [ "Store", "Index", "IndexedDB", "IDBObjectStore", "IDBIndex" ],
 	"homepage": "http://thejekels.com",
+	"bugs": "https://github.com/pjekel/indexedStore/issues",
 	"icon":"http://thejekels.com/indexStore32.png",
 	"dojoBuild": "indexedStore.profile.js"
 }

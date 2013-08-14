@@ -20,21 +20,15 @@ define(["dojo/_base/declare",
 	//		Add event generation capabilities to the store.
 	//		(See also indexedStore/_base/Eventer).
 
+	var storeEvents = ["clear", "close", "delete", "load", "new", "update"];
 	var Eventable = declare(null, {
-		constructor: function (kwArgs) {
+		constructor: function () {
 			if (!this.features.has("eventable")) {
+				this.eventer = new Eventer(this, storeEvents);
+				this.emit    = this.eventer.emit;
 				this.features.add("eventable");
-				this.eventable = true;
 
-				this.eventer = new Eventer(this, "clear, close, delete, error, load, new, update");
-
-				lib.defProp(this, "_emit", {
-					configurable: false,
-					enumerable: true,
-					writable: true,
-					value: this.eventer.emit
-				});
-				lib.writable("eventable", false);
+				lib.defProp(this, "eventable", {value: true, writable: false, enumerable: true});
 			}
 		}
 	});

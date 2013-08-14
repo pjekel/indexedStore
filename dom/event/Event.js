@@ -17,7 +17,7 @@ define(["../../_base/library"], function (lib) {
 	//	http://www.w3.org/TR/dom/		(DOM4)
 	//	http://www.w3.org/TR/DOM-Level-3-Events/
 
-	var flags = ["dispatch", "stopImmediate", "stopPropagate"];
+	var flags = ["_dispatch", "_handled", "_stopImmediate", "_stopPropagate"];
 
 	var isObject = lib.isObject;
 	var isString = lib.isString;
@@ -96,7 +96,7 @@ define(["../../_base/library"], function (lib) {
 			//		Event details in case of a custom event.
 			// tag:
 			//		Public
-			if (!this.dispatch) {
+			if (!this._dispatch) {
 				this.cancelable = (cancelable !== undefined ? !!cancelable : this.cancelable);
 				this.bubbles    = (bubbles    !== undefined ? !!bubbles    : this.bubbles);
 
@@ -109,8 +109,9 @@ define(["../../_base/library"], function (lib) {
 				this.currentTarget    = null;
 				this.eventPhase       = SyntheticEvent.NONE;
 				this.defaultPrevented = false;
-				this.stopImmediate    = false;
-				this.stopPropagate    = false;
+				this._stopImmediate   = false;
+				this._stopPropagate   = false;
+				this._handled         = false;
 			}
 		};
 
@@ -134,8 +135,8 @@ define(["../../_base/library"], function (lib) {
 			//		dispatch, including any remaining candiate event listeners.
 			// tag:
 			//		Public
-			this.stopPropagate = true;
-			this.stopImmediate = true;
+			this._stopPropagate = true;
+			this._stopImmediate = true;
 		};
 
 		this.stopPropagation = function () {
@@ -144,7 +145,7 @@ define(["../../_base/library"], function (lib) {
 			//		remaining candiate event listeners.
 			// tag:
 			//		Public
-			this.stopPropagate = true;
+			this._stopPropagate = true;
 		};
 
 		// Add and hide protected flags
@@ -161,7 +162,7 @@ define(["../../_base/library"], function (lib) {
 			}
 			mixin(this, properties);
 			setEventType(this, evtType);
-			lib.writable(this, "type, isTrusted, timeStamp", false);
+			lib.readOnly(this, "type, isTrusted, timeStamp");
 		}
 		return this;
 	}	/* end SyntheticEvent() */

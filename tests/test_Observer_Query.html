@@ -13,7 +13,7 @@
       var dojoConfig = {
 		async: true,
 		parseOnLoad: true,
-		isDebug: true,
+		isDebug: false,
 		baseUrl: "../../",
 		packages: [
 		  { name: "dojo", location: "dojo" },
@@ -33,10 +33,9 @@
         "dojo/when",
         "store/_base/_Store",
         "store/_base/_Indexed",
-        "store/_base/Observer",
-		"store/loader/basic"
-        ], function( doh, declare, Promise, ready, when, _Store, _Indexed, Observer,
-					 Loader) {
+        "store/_base/_Loader!Basic",
+        "store/_base/Observer"
+        ], function( doh, declare, Promise, ready, when, _Store, _Indexed, Loader, Observer) {
 		"use strict";
 
 			// IMPORTANT:

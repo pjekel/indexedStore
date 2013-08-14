@@ -12,25 +12,12 @@ define(["dojo/Deferred", "../_base/library"], function (Deferred, lib) {
 	"use strict";
 
 	// module
-	//		indexedStore/loader/LoadDeferred
+	//		indexedStore/loader/_LoadDeferred
 	// summary:
 	//		Create a new deferred. The deferred promise property has an extra
 	//		property not found on on standard promises: response.
 	//		The response property is a standard promise that is resolved with
 	//		an object representing a server-like response.
-
-	function okHandler(response) {
-		return Object.freeze(response);
-	}
-
-	function dataHandler(response) {
-		return response.data || response.text;
-	}
-
-	function errHandler(err, response) {
-		err.response = response;
-		throw err;
-	}
 
 	function LoadDeferred(cancel) {
 		// summary:
@@ -44,20 +31,29 @@ define(["dojo/Deferred", "../_base/library"], function (Deferred, lib) {
 		//		Will be invoked if the deferred is canceled. The canceler receives
 		//		the reason the deferred was canceled as its argument.
 		//		The deferred is rejected with its return value.
-		// returns: indexedStore/loader/LoadDeferred
+		// returns: LoadDeferred
 		//		A new instance of LoadDeferred.
 		// tag:
 		//		Public
 		Deferred.call(this, cancel);
 
-		var respPromise = this.then(okHandler).otherwise(function (err) {
-			errHandler(err, self.response);
+		var respPromise = this.then(
+			function (response) {
+				self.response = response ? Object.freeze(response) : null;
+				return self.response;
+			},
+			function (err) {
+				err.response = self.response;
+				throw err;
+			}
+		);
+		var dataPromise = respPromise.then(function (response) {
+			return response ? (response.data || response.text) : null;
 		});
-		var dataPromise = respPromise.then(dataHandler);
-		var promise     = lib.delegate(dataPromise, {response: respPromise});
-		var self        = this;
+		var promise = lib.delegate(dataPromise, {response: respPromise});
+		var self    = this;
 
-		this.response = {data: null, status: 0, text: ""};
+		this.response = null;
 		this.promise  = promise;
 		this.then     = promise.then;
 		this.cancel   = promise.cancel;

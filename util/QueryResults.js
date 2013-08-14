@@ -30,6 +30,10 @@ define(["dojo/when", "../shim/Object"], function (when) {
 		//	|	store.query({ prime: true }).forEach(function(item){
 		//	|		//	do something
 		//	|	});
+
+		if (!data) {
+			return data;
+		}
 		var results = Object.create(data);
 
 		function addIterativeMethod(method) {
@@ -37,7 +41,7 @@ define(["dojo/when", "../shim/Object"], function (when) {
 				results[method] = function () {
 					var args = arguments;
 					return when(results, function (results) {
-						return queryResults(Array.prototype[method].apply(results, args));
+						return QueryResults(Array.prototype[method].apply(results, args));
 					});
 				};
 			}

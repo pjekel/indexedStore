@@ -8,28 +8,28 @@
 //	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["require",
-		"dojo/_base/declare",
+define(["dojo/_base/declare",
 		"dojo/Deferred",
 		"dojo/when",
+		"./_assert",
+		"./_Procedures",
+		"./_Trigger",
+		"./Directives",
 		"./FeatureList",
 		"./Index",
 		"./library",
 		"./Keys",
-		"./KeyRange",
+		"./opcodes",
 		"./range",
-		"../dom/event/Event",
 		"../dom/event/EventTarget",
 		"../dom/string/DOMStringList",
 		"../error/createError!../error/StoreErrors.json",
-		"../listener/ListenerList",
-		"../transaction/_opcodes",
 		"../util/QueryEngine",
 		"../util/QueryResults",
 		"../util/sorter"
-		], function (require, declare, Deferred, when, FeatureList, Index, lib,
-					Keys, KeyRange, recRange, Event, EventTarget, DOMStringList, createError,
-					ListenerList, _opcodes, QueryEngine, QueryResults, sorter) {
+		], function (declare, Deferred, when, assert, _Procedures, _Trigger, Directives, FeatureList,
+		            Index, lib, Keys, opcodes, range, EventTarget, DOMStringList,
+					createError, QueryEngine, QueryResults, sorter) {
 	"use strict";
 	// module:
 	//		indexedStore/_base/_Store
@@ -71,6 +71,7 @@ define(["require",
 	//			- Loader
 	//			- Observable
 	//			- Watch
+	//			- WebStorage
 	//
 	//		Hierarchy:
 	//			The Hierarchy extension adds support for the dojo/store/api/Store
@@ -101,6 +102,9 @@ define(["require",
 	//			If an object property that is being monitored changes, the user
 	//			specified handler(s) are notified and optionally a 'set' event is
 	//			dispatched.
+	//		WebStorage:
+	//			Adds persistent storage capabilities using the WindowLocalStorage
+	//			interface (http://www.w3.org/TR/webstorage/)
 	//
 	//		For detailed information on the bases classes and extensions please
 	//		refer to the modules in either the store/_base or store/extension
@@ -144,10 +148,10 @@ define(["require",
 	//	|	require(["dojo/_base/declare",
 	//	|	         "store/_base/_Store",
 	//	|	         "store/_base/_Indexed",
-	//	|	         "store/_base/_Loader",
+	//	|	         "store/_base/_Loader!Advanced",
 	//	|	         "store/extension/Hierarchy",
-	//	|	        ], function (declare, _Store, _Indexed, _Loader, Hierarchy) {
-	//	|	  var store = declare([_Store, _Indexed, _Loader, Hierarchy]);
+	//	|	        ], function (declare, _Store, _Indexed, Loader, Hierarchy) {
+	//	|	  var store = declare([_Store, _Indexed, Loader, Hierarchy]);
 	//	|	  var myStore = new store({url:"../data/Simpsons.json", keyPath:"name"});
 	//	|	                       ...
 	//	|	  var index  = store.index("parents");
@@ -160,41 +164,26 @@ define(["require",
 	//
 
 	var StoreError  = createError("_Store");		// Create the StoreError type.
-	var isDirection = lib.isDirection;
 	var isObject    = lib.isObject;					// Test for [object Object];
 	var isString    = lib.isString;
 	var clone       = lib.clone;					// HTML5 structured clone.
 	var mixin       = lib.mixin;
 
+	var readOnly = ["async, autoIncrement", "baseClass", "features", "idProperty", "name",
+					"keyPath", "sid", "uppercase", "version"];
 	var uniqueId = 0;
 
-	function abstractOnly(method) {
-		throw new StoreError("AbstractOnly", method);
-	}
-
-	var _Store = declare([EventTarget], {
-
-		//=========================================================================
-		// Constructor keyword arguments:
+	var StoreDirectives = {
+		// async: Boolean
+		async: false,
 
 		// autoIncrement: Boolean
 		//		If true, enables the store key generator.
 		autoIncrement: false,
 
-		// autoLoad: Boolean
-		//		Indicates, when data or URL is specified, if the data should be loaded
-		//		immediately (during store construction) or deferred until the user
-		//		explicitly calls the store's load() method.
-		autoLoad: true,
-
 		// clearOnClose: Boolean
 		//		If true, the store content will be deleted when the store is closed.
 		clearOnClose: false,
-
-		// data: Array
-		//		The array of all raw objects to be loaded in the memory store. This
-		//		property is only used during store construction.
-		data: null,
 
 		// defaultProperties: Object
 		//		A JavaScript key:values pairs object whose properties and associated
@@ -211,8 +200,9 @@ define(["require",
 		idProperty: "id",
 
 		// indexes: Object|Object[]
-		//		A JavaScript key:value pairs object defining an index
-		//		index = { name: String, keyPath: KeyPath, options: Object? }
+		//		A JavaScript key:value pairs object or an array of objects defining
+		//		the store indexes. An index object object looks like:
+		//			{ name: String, keyPath: KeyPath, options: Object? }
 		indexes: null,
 
 		// keyPath: String|String[]
@@ -247,19 +237,12 @@ define(["require",
 		//		key are not affected.
 		uppercase: false,
 
-		// End constructor keyword
-		//=========================================================================
+		// version: Number
+		//		The initial version number of any new store record.
+		version: 1
+	};
 
-		// features: FeatureList [READ-ONLY]
-		features: null,
-
-		// transaction: Transaction	[READ-ONLY]
-		//		The transaction the store belongs to.
-		transaction: null,
-
-		// total: Number [read-only]
-		//		The total number of objects currently in the store.
-		total: 0,
+	var _Store = declare([EventTarget, _Procedures, _Trigger], {
 
 		//=========================================================================
 		// Constructor
@@ -268,47 +251,40 @@ define(["require",
 			// summary:
 			//		Creates a generic indexed store.
 			// kwArgs: Object?
-			//		A JavaScript key:value pairs object
-			//			{
-			//				autoIncrement: Boolean?,
-			//				autoLoad: Boolean?,
-			//				clearOnClose: Boolean?,
-			//				data: Object[]?
-			//				defaultProperties: Object?
-			//				idProperty: String?,
-			//				indexes: (Object|Object[])?
-			//				keyPath: String?,
-			//				suppressEvents: Boolean?,
-			//				uppercase: Boolean?
-			//			}
+			//		A JavaScript key:value pairs object.   Each key:value pair is
+			//		either a store directive, listed above, or a directive to any
+			//		of the additional modules and extensions mixed in.
+			// tag:
+			//		protected
 
+			// Initialize the event target portion and declare the default event
+			// handlers.
 			EventTarget.call(this);
+			EventTarget.declareHandler(this, "error, load");
 
-			// Mixin the keyword arguments.
-			declare.safeMixin(this, kwArgs);
-
+			// Protected  properties.
+			this._directives = new Directives(this, StoreDirectives, kwArgs);
 			this._autoIndex  = 1;
 			this._clone      = true;				// Handout only cloned objects
 			this._indexes    = {};
-			this._listeners  = new ListenerList();
+			this._loading    = false;
 			this._records    = [];
-			this._storeReady = new Deferred();
+			this._storeReady = this._resetState();
+			this._waiting    = this._storeReady.promise;
 
 			// NOTE: A keyPath value of null is allowed...
 			if (kwArgs && kwArgs.keyPath !== undefined) {
 				this.idProperty = kwArgs.keyPath;
 			}
+			// Public properties.
+			this.baseClass   = "store";
 			this.features    = new FeatureList();
 			this.indexNames  = new DOMStringList();
 			this.keyPath     = this.idProperty;
-			this.loader      = null;
 			this.sid         = uniqueId++;
 			this.name        = this.name || "store_" + this.sid;
 			this.revision    = 1;		// Initial revision must be > 0 (See Observer).
 			this.total       = 0;
-			this.transaction = null;
-			this.type        = "store";
-			this.waiting     = this._storeReady.promise;
 
 			if (this.keyPath != null && !Keys.validPath(this.keyPath)) {
 				throw new StoreError("DataError", "constructor", "invalid keypath: '%{0}'", this.keyPath);
@@ -329,20 +305,22 @@ define(["require",
 					}
 				}, this);
 			}
-			lib.defProp(this, "_emit", {value: function () {}, enumerable: false, configurable: true });
-			lib.writable(this, "features, name, sid, type", false);
-			lib.protect(this);	// Hide own protected properties.
-
+			lib.readOnly(this, readOnly);
 			this.features.add("store");
 		},
 
-		postscript: function () {
+		postscript: function (/*=== kwArgs ===*/) {
 			// summary:
 			//		Called after all chained constructors have executed. At this point
-			//		the store has been fully assembled.
+			//		the store is fully assembled.
+			// kwArgs: Object?
+			//		A JavaScript key:value pairs object. The kwArgs object is the same
+			//		object passed to the constructor.
 			// tag:
 			//		protected
 			var store   = this;
+
+			lib.protect(this);	// Hide own protected properties.
 
 			if (!this.features.has("indexed, natural")) {
 				throw new StoreError("Dependency", "postscript", "base class _Indexed or _Natural required");
@@ -356,29 +334,18 @@ define(["require",
 						var prom = this._storeReady.then(function (store) {
 							return func.apply(store, args);
 						});
-						if (this.cloned && this.transaction) {
+						if (this.transactional) {
 							this.transaction._waitFor(prom);
 						}
 						return prom;
 					};
 				}, this);
 			}
-
-			if (this.loader) {
-				// If the user specified a custom data handler go register it.
-				if (this.loader && this.dataHandler) {
-					require(["../handler/register"], function (register) {
-						register(store.handleAs, store.dataHandler);
-					});
-				}
-				if (this.autoLoad) {
-					this.load();
-				}
-			} else {
+			if (!this.features.has("loader")) {
 				setTimeout(function () {
 					store._storeReady.resolve(store);
 				}, 0);
-				store.waiting = false;
+				store._waiting = false;
 			}
 		},
 
@@ -394,214 +361,40 @@ define(["require",
 			//		protected
 			var prop;
 
-			for (prop in this.defaultProperties) {
-				if (lib.getProp(prop, object) === undefined) {
-					lib.setProp(prop, this.defaultProperties[prop], object);
-				}
-			}
-		},
-
-		_assertKey: function (key, method, required) {
-			// summary:
-			//		Assert key argument.
-			// key: Key|KeyRange
-			// method: String
-			//		Name of the calling function.
-			// required: Boolean?
-			// tag:
-			//		protected
-			if (key != null) {
-				if (!(key instanceof KeyRange) && !Keys.validKey(key)) {
-					throw new StoreError("DataError", method, "invalid key specified");
-				}
-			} else if (required) {
-				throw new StoreError("ParameterMissing", method, "key is a required argument");
-			}
-		},
-
-		_assertStore: function (store, method, readWrite) {
-			// summary:
-			//		Assert store.  Validate if the store hasn't been destroyed or, when
-			//		the store is part of a transaction, the transaction is still active
-			//		and of the correct type.
-			// store: Store
-			//		Store to be asserted (this)
-			// method: String
-			//		Name of the calling function.
-			// readWrite: Boolean?
-			//		Indicates if the store operation requires read/write access.
-			// tag:
-			//		protected
-			if (store.transaction) {
-				if (!store.transaction.active) {
-					throw new StoreError("TransactionInactive", method);
-				}
-				if (store.transaction.mode === "readonly" && readWrite) {
-					throw new StoreError("ReadOnly", method);
-				}
-				if (!store.cloned) {
-					throw new StoreError("AccessError", method, "no access allowed inside a transaction");
-				}
-			} else {
-				if (store.cloned) {
-					throw new StoreError("AccessError", method, "no access allowed outside a transaction");
-				}
-			}
-			if (store._destroyed) {
-				throw new StoreError("InvalidState", method, "store has been destroyed");
-			}
-		},
-
-		_notify: function (opType, key, newVal, oldVal, oldRev, at, options) {
-			// summary:
-			//		Commit a store mutation. This method is called either directly from
-			//		the store or, when in transaction mode, from the transaction when
-			//		the transaction completed successfully.
-			// opType:
-			//		Operation type.
-			// key: Key
-			//		Record key.
-			// newVal: any
-			//		The new value property value of the store record.
-			// oldVal: any
-			//		The old value property value of the store record.
-			// oldRev: Number
-			//		The old revision number of the store record.
-			// at: Number
-			//		Record index number
-			// options: Object?
-			//		Operation directives
-			// tag:
-			//		protected
-			var action, event;
-			try {
-				// If the operation was performed on a transactional (cloned) store add
-				// the info to the transaction journal.
-				if (this.cloned) {
-					this.transaction._journal(this, arguments);
-				}
-				switch (opType) {
-					case _opcodes.NEW:
-					case _opcodes.UPDATE:
-						this._trigger("write", key, newVal, oldVal, at, options);
-						event = mixin({item: newVal}, (oldVal ? {oldItem: oldVal} : null));
-						break;
-					case _opcodes.DELETE:
-						this._trigger("delete", key, null, oldVal, at);
-						event = {item: oldVal};
-						break;
-				}
-				if (event && this.eventable && !this.suppressEvents) {
-					action = _opcodes.name(opType);
-					event  = this._emit(action, event, true);
-					if (event.error) {
-						// An error was encountered in the user specified handler.
-						// Although not an actual store error threat it as one as
-						// it may be the only to get notified.
-						throw event.error;
+			if (this.defaultProperties) {
+				for (prop in this.defaultProperties) {
+					if (lib.getProp(prop, object) === undefined) {
+						lib.setProp(prop, this.defaultProperties[prop], object);
 					}
 				}
-			} catch (err) {
-				// Don't rely on _emit() being available, use dispatchEvent() instead.
-				event = new Event("error", {error: err, bubbles: true, cancelable: true});
-				this.dispatchEvent(event);
 			}
 		},
 
-		_register: function (action, listener, scope) {
+		_resetState: function () {
 			// summary:
-			//		Register a listener (callback) with the store. Registering callbacks
-			//		with the store is reserved for store modules and extension only.
-			// action: String|String[]
-			//		Store action to register for. Action is one of the following:
-			//			clear, close, delete, loadStart, loadCancel, loadEnd, loadFailed
-			//			or write.
-			//		The action argument can also be a comma separated string of action
-			//		names.
-			// listener: Listener|Function
-			//		The listener that is called when the store action occurred.
-			// scope: Object?
-			//		The object use as 'this' in the listener body.
+			//		Reset the store state.
+			// returns: dojo/Deferred
+			//		A new instance of dojo/Deferred
 			// tag:
 			//		protected
-			return this._listeners.addListener(action, listener, scope);
-		},
+			var defer = new Deferred();
+			var store = this;
 
-		_trigger: function (action /* [, arg0 [, arg1, ... , argN]] */) {
-			// summary:
-			//		Invoke the registered listeners for the given action.
-			// action: String
-			//		See _register()
-			// tag:
-			//		protected
-			this._listeners.trigger.apply(this, arguments);
-		},
-
-		//===================================================================
-		// IndexedDB procedures
-
-		_clearRecords: function () {
-			// summary:
-			//		Remove all records from the store and all associated indexes.
-			// tag:
-			//		protected
-			abstractOnly("_clearRecords");
-		},
-
-		_deleteKeyRange: function (key) {
-			// summary:
-			//		Remove all records from store whose key is in the key range.
-			// key: Key|KeyRange
-			//		Key identifying the record to be deleted. The key arguments can
-			//		also be an KeyRange.
-			// returns: Boolean
-			//		true on successful completion otherwise false.
-			// tag:
-			//		protected
-
-			abstractOnly("_deleteKeyRange");
-		},
-
-		_retrieveRecord: function (key) {
-			// summary:
-			//		Retrieve the first record from the store whose key matches
-			//		key and return a Location object if found.
-			// key: Key|KeyRange
-			//		Key identifying the record to be retrieved. The key arguments
-			//		can also be an KeyRange in which case the first record in range
-			//		is returned.
-			// returns: Location
-			//		A location object. See indexedStore/_base/Location for details.
-			// tag:
-			//		protected
-
-			abstractOnly("_retrieveRecord");
-		},
-
-		_storeRecord: function (value, options) {
-			// summary:
-			//		Add a record to the store. Throws a StoreError of type ConstraintError
-			//		if the key already exists and directive overwrite is set to false.
-			// value: Any
-			//		Record value property
-			// options: PutDirectives?
-			//		Optional, PutDirectives
-			// returns: Key
-			//		Record key.
-			// tag:
-			//		protected
-
-			abstractOnly("_storeRecord");
+			this.state = "pending";
+			defer.then(function () {
+				store.state = "ready";
+			});
+			return defer;
 		},
 
 		//=========================================================================
 		// Public IndexedStore/api/store API methods
 
-		add: function (object, options) {
+		add: function (value, options) {
 			// summary:
 			//		Add an object to the store. If an object with the same key already
 			//		exists an exception of type ConstraintError is thrown.
-			// object: Object
+			// value: any
 			//		The new object to store.
 			// options: Store.PutDirectives?
 			//		Additional metadata for storing the data.	Includes an "id" or "key"
@@ -611,10 +404,10 @@ define(["require",
 			// tag:
 			//		Public
 
-			this._assertStore(this, "add", true);
-			if (object) {
+			assert.store(this, "add", true);
+			if (value) {
 				options = mixin(options, {overwrite: false});
-				return this._storeRecord(object, options);
+				return this._storeRecord(value, options);
 			}
 			throw new StoreError("DataError", "add");
 		},
@@ -624,14 +417,11 @@ define(["require",
 			//		Remove all records from the the store and associated indexes.
 			// tag:
 			//		Public
-
-			this._assertStore(this, "clear", true);
+			assert.store(this, "clear", true);
 			this.loader && this.loader.cancel();
-			this._clearRecords();
 			this.revision++;
 
-			this._trigger("clear");
-			this._emit("clear");
+			this._notify(opcodes.CLEAR, null, null, this._clearRecords());
 		},
 
 		close: function (clear) {
@@ -642,14 +432,12 @@ define(["require",
 			//		'clearOnClose' is used instead.
 			// tag:
 			//		Public
-
-			this._assertStore(this, "close", true);
+			assert.store(this, "close", true);
 			if (this._storeReady.isFulfilled()) {
-				this._storeReady = new Deferred();
-				this.waiting = this._storeReady.promise;
+				this._storeReady = this._resetState();
+				this._waiting = this._storeReady.promise;
 			}
-			this._trigger("close");
-			this._emit("close");
+			this._notify(opcodes.CLOSE);
 			if (!!(clear || this.clearOnClose)) {
 				this.clear();
 			}
@@ -667,9 +455,10 @@ define(["require",
 			//		returned.
 			// tag:
 			//		Public
-			this._assertStore(this, "count");
+			assert.store(this, "count");
+			assert.key(key, "count");
 			if (key != null) {
-				return recRange(this, key).total;
+				return range.records(this, key).total;
 			}
 			return this.total;
 		},
@@ -693,7 +482,7 @@ define(["require",
 			//	|	store.createIndex("authors", "author", {unique:false, multiEntry:false});
 			// tag:
 			//		Public
-			this._assertStore(this, "createIndex", true);
+			assert.store(this, "createIndex", true);
 			if (name && keyPath) {
 				if (!this.indexNames.contains(name)) {
 					var index = new Index(this, name, keyPath, options);
@@ -702,7 +491,6 @@ define(["require",
 						indexNames.push(name);
 						this.indexNames = new DOMStringList(indexNames);
 						this._indexes[name] = index;
-						this._notify(_opcodes.CREATE_INDEX);
 					}, null, this);
 					return index;
 				}
@@ -718,13 +506,12 @@ define(["require",
 			//		The name of an existing index.
 			// tag:
 			//		Public
-			this._assertStore(this, "deleteIndex", true);
+			assert.store(this, "deleteIndex", true);
 			var index = this._indexes[name];
 			if (index) {
 				delete this._indexes[name];
 				this.indexNames = new DOMStringList(Object.keys(this._indexes));
 				index._destroy();
-				this._notify(_opcodes.DELETE_INDEX);
 			} else {
 				throw new StoreError("NotFound", "deleteIndex", "index with name %{0} does not exist", name);
 			}
@@ -747,6 +534,8 @@ define(["require",
 			this._listeners.removeListener();			// Remove all listeners...
 			this._indexes   = {};
 			this.indexNames = null;
+
+			this.eventable && this.eventer.destroy();
 		},
 
 		get: function (key) {
@@ -761,17 +550,21 @@ define(["require",
 			//		exists undefined is returned.
 			// tag:
 			//		Public
-			this._assertStore(this, "get", false);
-			this._assertKey(key, "get", true);
+			assert.store(this, "get", false);
+			assert.key(key, "get", true);
+
 			var record = this._retrieveRecord(key).record;
+			var value  = null;
+
 			if (record) {
-				return (this._clone ? clone(record.value) : record.value);
+				value = this._clone ? clone(record.value) : record.value;
 			}
+			return value;
 		},
 
 		getIdentity: function (object) {
 			// summary:
-			//		Returns an object's identity (key).  Note that if object is not an
+			//		Returns an object's identity (key). Note that if object is not an
 			//		existing store object the key returned may not be a valid key!
 			// object: Object
 			//		The object to get the identity from
@@ -793,7 +586,7 @@ define(["require",
 			// returns: Object
 			// tag:
 			//		public
-			this._assertStore(this, "getMetadata", false);
+			assert.store(this, "getMetadata", false);
 			var key = isObject(item) ? this.getIdentity(item) : item;
 			if (key) {
 				var record = this._retrieveRecord(key).record;
@@ -817,30 +610,24 @@ define(["require",
 			//		The results of the range, extended with iterative methods.
 			// tag:
 			//		Public
-			this._assertStore(this, "getRange", false);
+			var defer = this._waiting || this._loading;
+			var paginate = false, results, store = this;
 
-			var direction = "next", keysOnly = false, paginate = false;
-			var defer = this.waiting || (this.loader && this.loader.loading);
-			var results, store = this;
+			assert.store(this, "getRange", false);
+			assert.key(keyRange, "getRange");
 
 			if (options) {
 				if (isString(options)) {
-					direction = options;
+					options = {direction: options};
 				} else if (isObject(options)) {
-					direction = options.direction || direction;
-					paginate  = options.sort || options.start || options.count;
-					keysOnly  = !!options.keysOnly;
+					paginate = options.sort || options.start || options.count;
 				} else {
 					throw new StoreError("DataError", "getRange", "invalid options");
 				}
 			}
-			if (!isDirection(direction)) {
-				throw new StoreError("DataError", "getRange", "invalid direction");
-			}
-
 			results = QueryResults(
 				when(defer, function () {
-					var objects = recRange(store, keyRange, direction, false, keysOnly);
+					var objects = range.values(store, keyRange, options);
 					if (paginate) {
 						objects = sorter(objects, options);
 					}
@@ -856,8 +643,8 @@ define(["require",
 			//		store.
 			// name: DOMString
 			//		The name of an existing index.
-			// returns: Object
-			//		An Index object or undefined
+			// returns: Index
+			//		If the index exists an Index object otherwise undefined
 			// tag:
 			//		Public
 			var index = this._indexes[name];
@@ -866,10 +653,10 @@ define(["require",
 			}
 		},
 
-		put: function (object, options) {
+		put: function (value, options) {
 			// summary:
 			//		Stores an object
-			// object: Object
+			// value: any
 			//		The value to be stored in the record.
 			// options: Store.PutDirectives?
 			//		Additional metadata for storing the data.
@@ -877,41 +664,53 @@ define(["require",
 			//		A valid key.
 			// tag:
 			//		Public
-			this._assertStore(this, "put", true);
-			if (object) {
+			assert.store(this, "put", true);
+			if (value) {
 				options = mixin({overwrite: true}, options);
-				return this._storeRecord(object, options);
+				return this._storeRecord(value, options);
 			}
 			throw new StoreError("DataError", "put");
 		},
 
-		query: function (query, options) {
+		query: function (query, options /*, data */) {
 			// summary:
 			//		Queries the store for objects. The query executes asynchronously if,
 			//		and only if, the store is not ready or a load request is currently
 			//		in progress.
-			// query: Object?
+			// query: (Object|Function)?
 			//		The query to use for retrieving objects from the store.
-			// options: Store.QueryOptions?
-			//		The optional directives apply to the resultset.
-			// returns: Store.QueryResults
+			// options: QueryOptions?
+			//		The optional arguments to apply to the resultset.
+			// returns: dojo/store/api/Store.QueryResults
 			//		The results of the query, extended with iterative methods.
 			// tag:
 			//		Public
 
-			var defer = this.waiting || (this.loading && this.loader.loading);
-			var store = this;
+			// If the reserved argument data is specified the query is performed on
+			// the data argument only. (INTERNAL USE ONLY)
 
-			var results = QueryResults(
-				when(defer, function () {
-					var objects = store.queryEngine(query, options)(store._records);
-					return store._clone ? clone(objects) : objects;
-				})
-			);
+			var data  = (arguments.length > 2 ?	arguments[2] : null);
+			var defer = this._waiting || this._loading;
+			var store = this;
+			var objects, results;
+
+			// NOTE: defer is either boolean false or a dojo/promise/Promise.
+			if (defer == false || data) {
+				objects = store.queryEngine(query, options)(data || store._records);
+				results = QueryResults(store._clone ? clone(objects) : objects);
+			} else {
+				// Store is not ready or a load request is in progress.
+				results = QueryResults(
+					when(defer, function () {
+						var objects = store.queryEngine(query, options)(store._records);
+						return store._clone ? clone(objects) : objects;
+					})
+				);
+			}
 			return results;
 		},
 
-		ready: function (callback, errback, progress, scope) {
+		ready: function (callback, errback, scope) {
 			// summary:
 			//		Execute the callback when the store has finished loading or entered
 			//		the ready state. If an error is detected that will prevent the store
@@ -921,7 +720,6 @@ define(["require",
 			// errback: Function?
 			//		Function called when a condition was detected preventing the store
 			//		from getting ready.
-			// progress: Function?
 			// scope: Object?
 			//		The scope/closure in which callback and errback are executed. If
 			//		not specified the store is used.
@@ -934,11 +732,10 @@ define(["require",
 			//		function instead. (See Load() for details).
 			// tag:
 			//		Public
-			if (callback || errback || progress) {
+			if (callback || errback) {
 				this._storeReady.then(
 					callback ? callback.bind(scope) : null,
-					errback  ? errback.bind(scope)  : null,
-					progress ? progress.bind(scope) : null
+					errback  ? errback.bind(scope)  : null
 				);
 			}
 			return this._storeReady.promise;
@@ -954,8 +751,8 @@ define(["require",
 			//		Returns true if an object was removed otherwise false.
 			// tag:
 			//		Public
-			this._assertStore(this, "remove", true);
-			this._assertKey(key, "remove", true);
+			assert.store(this, "remove", true);
+			assert.key(key, "remove", true);
 			return this._deleteKeyRange(key);
 		},
 
@@ -963,5 +760,6 @@ define(["require",
 			return "[object Store]";
 		}
 	});	/* end declare() */
+
 	return _Store;
 });	/* end define() */

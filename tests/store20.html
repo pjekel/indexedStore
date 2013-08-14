@@ -33,112 +33,85 @@
         "dijit/ProgressBar",
         "dijit/form/ComboBox",
         "dijit/form/TextBox",
-        "store/_base/KeyRange",
-        "store/Indexed"
-        ], function( declare, lang, promiseAll, ready, ProgressBar, ComboBox, TextBox, KeyRange, Store ) {
-					var indexes = [
-						{ name:"state", keyPath:"state" },
-						{ name:"city", keyPath:"city" }
-					];
+		"store/_base/_Store",
+		"store/_base/_Indexed",
+		"store/_base/_Loader!Advanced",
+        "store/_base/KeyRange"
+        ], function( declare, lang, promiseAll, ready, ProgressBar, ComboBox, TextBox,
+					 _Store, _Indexed, _Loader, KeyRange) {
+		var indexes = [
+			{ name:"state", keyPath:"state" },
+			{ name:"city", keyPath:"city" }
+		];
 
-					var stateStore = new Store( {url:"../json/us-states.json", keyPath:"state"} );
-					var mainStore  = new Store( {url:"../json/us-zipcodes-43k.json", 
-																				suppressEvents: true,
-																				keyPath:"zip",
-																				progress: true
-																			 })
+		var Store = declare([_Store, _Indexed, _Loader]);
+		var stateStore = new Store( {url:"../json/us-states.json", keyPath:"state"} );
+		var mainStore  = new Store( {url:"../json/us-zipcodes-43k.json",
+									keyPath:"zip",
+									progress: true,
+									overwrite: true
+								 })
 
-					function start ( store ) {
+		function start ( store ) {
 
-						function stateChanged(newValue) {
-							if (newValue) {
-								var range = KeyRange.bound( newValue, newValue+"z");
-								var index = mainStore.index("state");
-								var state = index.get(range);
-								if (!state) {
-									var query = {state: new RegExp(newValue+".*", "i")};
-									state = stateStore.query( query )[0];
-								}
-								if (state) {
-//									updateCities(mainStore, state.code, null);
-								}
-							}
-						}
-
-						function cityChanged (newValue) {
-console.log("City changed");
-						}
-
-						function zipChanged (newValue) {
-console.log("City changed");
-						}
-						
-						function camel(key) {
-							return key.toLowerCase().replace(/^[a-z]/, function (c) {return c.toUpperCase();});
-						}
-						
-						var scb = new ComboBox( { id:"state-combo", store: store, placeholder:"State",
-																			 searchAttr:"state" }, "state-combo");
-						var ccb = new ComboBox( { id:"city-combo", store: store, searchAttr:"city"}, "city-combo");
-						var zcb = new ComboBox( { id:"zip-combo", store: store, searchAttr:"zip"}, "zip-combo");
-						var ctb = new TextBox( {placeholder:"County", disabled: true}, "county" );
-						 
-						var indexes = [
-							store.createIndex( "state", "state", {async:true}).ready(),
-							store.createIndex( "city", "city", {async:true}).ready()
-						];
-
-						promiseAll( indexes ).then ( function () {
-							ccb.set ("placeholder", "Cities (" + store.index("city").count(null, true) + ")" );
-							zcb.set ("placeholder", "Zipcodes (" + store.count() + ")" );
-						}); 
-
-						store.set("query", function (query, options) {
-							var attr  = Object.keys(query)[0];
-							var val   = query[attr].toString().toLowerCase();
-							var index = this.index(attr);
-							var res   = [];
-
-							val = camel( val.match(/\w*/)[0] );
-
-							switch(attr) {
-								case "state":
-									var range = KeyRange.bound( val, val+"~");
-									res = index.getRange( range, {unique:true} );
-								case "city":
-								case "zip":
-									break;
-							}
-/*
-							if (attr) {
-								val = val.replace(/^[a-z]/, function(c) {return c.toUpperCase();});
-								var index  = this.index(attr);
-								if (index) {
-									var range  = KeyRange.bound( val, val+"z");
-									res = index.getRange( range, {unique:true} );
-								} else {
-									res = this.queryEngine( query, options )(this._records);
-								}
-							} 
-*/
-							res.total = res.length;
-							return res;
-						});
-
-						scb.on("change", stateChanged );
-						ccb.on("change", cityChanged );
-
+			function stateChanged(newValue) {
+				if (newValue) {
+					var range = KeyRange.bound( newValue, newValue+"z");
+					var index = mainStore.index("state");
+					var state = index.get(range);
+					if (!state) {
+						var query = {state: new RegExp(newValue+".*", "i")};
+						state = stateStore.query( query )[0];
 					}
+					if (state) {
+//						updateCities(mainStore, state.code, null);
+					}
+				}
+			}
 
-					ready( function () {
-						var Progress = new ProgressBar( {style:"width:300px"}, "progress" );
-						mainStore.ready( start,
-												 function (err) {console.error(err);},
-												 function (progress) {
-													 Progress.set("value", progress);
-												 } );
+			function cityChanged (newValue) {
+console.log("City changed");
+			}
 
-					});
+			function zipChanged (newValue) {
+console.log("City changed");
+			}
+
+			function camel(key) {
+				return key.toLowerCase().replace(/^[a-z]/, function (c) {return c.toUpperCase();});
+			}
+
+			var scb = new ComboBox( { id:"state-combo", store: stateStore, placeholder:"State",
+										 searchAttr:"state" }, "state-combo");
+			var ccb = new ComboBox( { id:"city-combo", store: store, searchAttr:"city"}, "city-combo");
+			var zcb = new ComboBox( { id:"zip-combo", store: store, searchAttr:"zip"}, "zip-combo");
+			var ctb = new TextBox( {placeholder:"County", disabled: true}, "county" );
+
+			var indexes = [
+				store.createIndex( "state", "state", {async:true}).ready(),
+				store.createIndex( "city", "city", {async:true}).ready()
+			];
+
+			promiseAll( indexes ).then ( function () {
+				ccb.set ("placeholder", "Cities (" + store.index("city").count(null, true) + ")" );
+				zcb.set ("placeholder", "Zipcodes (" + store.count() + ")" );
+			});
+
+
+			scb.on("change", stateChanged );
+			ccb.on("change", cityChanged );
+
+		}
+
+		ready( function () {
+			var Progress = new ProgressBar( {style:"width:300px"}, "progress" );
+			mainStore.ready( start,
+							 function (err) {console.error(err);},
+							 function (progress) {
+								 Progress.set("value", progress);
+							 } );
+
+		});
       });
     </script>
 

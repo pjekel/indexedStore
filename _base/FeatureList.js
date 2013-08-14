@@ -18,23 +18,13 @@ define(["./library"], function (lib) {
 		// tag:
 		//		Public
 
-		var features = {};
-		var length   = 0;
-
 		//=========================================================================
 		// Public properties
 
-		defProp(this, "length", {
-			get: function () {
-				return length;
-			},
-			enumerable: true
-		});
-
+		defProp(this, "length", { get: function () { return length;	}, enumerable: true});
 		defProp(this, "features", {
 			get: function () {
-				var keys = Object.keys(features).sort();
-				return keys;
+				return Object.keys(features).sort();
 			},
 			enumerable: true
 		});
@@ -48,12 +38,15 @@ define(["./library"], function (lib) {
 			// value: any
 			// tag:
 			//		public
-			if (typeof name == "string") {
-				if (!(features.hasOwnProperty(name))) {
-					length++;
+			var names = lib.anyToArray(name);
+			names.forEach(function (name) {
+				if (typeof name == "string") {
+					if (!(features.hasOwnProperty(name))) {
+						length++;
+					}
+					features[name] = value || true;
 				}
-				features[name] = value || true;
-			}
+			});
 			return false;
 		};
 
@@ -87,11 +80,17 @@ define(["./library"], function (lib) {
 			// name: String
 			// tag:
 			//		Public
-			if (features.hasOwnProperty(name)) {
-				delete features[name];
-				length--;
-			}
+			var names = lib.anyToArray(name);
+			names.forEach(function (name) {
+				if (features.hasOwnProperty(name)) {
+					delete features[name];
+					length--;
+				}
+			});
 		};
+
+		var features = {};
+		var length   = 0;
 
 		if (arguments.length > 0) {
 			var feat = Array.prototype.slice.call(arguments);

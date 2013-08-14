@@ -61,14 +61,6 @@ define(["./Keys",
 		// tag:
 		//		Public
 
-		var currentKey, currentVal, locator, primaryKey;
-		var dirUnique  = false;
-		var dirForward = true;
-		var gotValue   = false;
-		var index      = false;
-		var keyRange   = range;
-		var store      = null;
-
 		//=========================================================================
 
 		function assertSource(source) {
@@ -400,10 +392,19 @@ define(["./Keys",
 		};
 
 		//=========================================================================
+
+		var currentKey, currentVal, locator, primaryKey;
+		var dirUnique  = false;
+		var dirForward = true;
+		var gotValue   = false;
+		var index      = false;
+		var keyRange   = range;
+		var store      = null;
+
 		direction  = direction || "next";
 
 		if (source) {
-			switch (source.type) {
+			switch (source.baseClass) {
 				case "index":
 					store = source.store;
 					index = true;

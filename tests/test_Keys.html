@@ -13,7 +13,7 @@
       var dojoConfig = {
 		async: true,
 		parseOnLoad: true,
-		isDebug: true,
+		isDebug: false,
 		baseUrl: "../../",
 		packages: [
 		  { name: "dojo", location: "dojo" },
@@ -38,7 +38,6 @@
         ], function( doh, ready,	Keys, KeyRange ) {
 		"use strict";
 
-			// All records are sorted in ascending key order....
 			var estr = "The Empty String";
 			var records = [
 				{key: "", value: { name:estr }}	,					//  0
@@ -194,7 +193,7 @@
 			{
 				name: "Key instance comparison",
 				runTest:function (t) {
-					// Varify key comparison using the W3C rule: Array > String > Date > number
+					// Verify key comparison using the W3C rule: Array > String > Date > number
 					var intArray = [1,2,3,4];
 					var strArray = ["a", "b", "c"];
 					var string   = "abc";

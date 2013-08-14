@@ -9,14 +9,17 @@
 //
 
 define(["dojo/_base/declare",
+		"./_Procedures",
 		"./Keys",
 		"./KeyRange",
 		"./library",
 		"./Location",
+		"./opcodes",
 		"./Record",
-		"../error/createError!../error/StoreErrors.json",
-		"../transaction/_opcodes"
-	], function (declare, Keys, KeyRange, lib, Location, Record, createError, _opcodes) {
+		"../dom/event/Event",
+		"../error/createError!../error/StoreErrors.json"
+	], function (declare, _Procedures, Keys, KeyRange, lib, Location, opcodes, Record,
+	             Event, createError) {
 	"use strict";
 
 	// module:
@@ -36,6 +39,15 @@ define(["dojo/_base/declare",
 	//		Notice that the 'before' property value can be either an object or a
 	//		valid store key.
 	//
+	// interface:
+	//		_Natural interface {
+	//			sequence<Number|Record>	_getInRange();
+	//			void					_indexRecord();
+	//			void					_reindex();
+	//			void					_removeFromIndex();
+	//		};
+	//		_Natural implements _Procedures;
+	//
 	// restrictions:
 	//		Stores based on the _Natural class do NOT support cursors therefore an
 	//		operation like store.openCursor() is not available.  However, you can
@@ -45,7 +57,7 @@ define(["dojo/_base/declare",
 	//	|	require(["dojo/_base/declare",
 	//	|	         "store/_base/_Store",
 	//	|	         "store/_base/_Natural",
-	//	|	         "store/_base/_Loader",
+	//	|	         "store/_base/_Loader!Advanced",
 	//	|	         "store/_base/KeyRange"
 	//	|	        ], function (declare, _Store, _Natural, _Loader, KeyRange) {
 	//	|
@@ -71,27 +83,28 @@ define(["dojo/_base/declare",
 	var StoreError = createError("_Natural");			// Create the StoreError type.
 	var isObject   = lib.isObject;
 	var clone      = lib.clone;							// HTML5 structured clone.
+	var mixin      = lib.mixin;
 	var move       = lib.move;
 
 	var C_MSG_MUTUAL_EXCLUSIVE = "base class '_Natural' and '_Indexed' are mutual exclusive";
 	var C_MSG_CONSTRAINT_ERROR = "record with key [%{0}] already exist";
 	var C_MSG_DEPENDENCY       = "base class '_Store' must be loaded first";
 
-	var _Natural = declare(null, {
+	var _Natural = declare([_Procedures], {
 
 		//===================================================================
 		// Constructor
 
-		constructor: function () {
+		constructor: function (kwArgs) {
 			if (this.features.has("store")) {
 				if (this.features.has("indexed")) {
 					throw new StoreError("Dependency", "constructor", C_MSG_MUTUAL_EXCLUSIVE);
 				}
 				this._index = {};			// Local record index.
 
-				this.features.add("natural");
+				// Mix in the appropriate directives...
 				lib.defProp(this, "natural", {value: true, writable: false, enumerable: true});
-				lib.protect(this);
+				this.features.add("natural");
 			} else {
 				throw new StoreError("Dependency", "constructor", C_MSG_DEPENDENCY);
 			}
@@ -103,9 +116,11 @@ define(["dojo/_base/declare",
 		_clearRecords: function () {
 			// summary:
 			//		Remove all records from the store and all indexes.
+			// returns: Records[]
+			//		An array of all deleted records
 			// tag:
 			//		protected
-			var name, index;
+			var name, index, oldRecs = clone(this._records, false);
 			for (name in this._indexes) {
 				index = this._indexes[name];
 				index._clear();
@@ -116,6 +131,7 @@ define(["dojo/_base/declare",
 			this._records = [];
 			this._index   = {};
 			this.total    = 0;
+			return oldRecs;
 		},
 
 		//===================================================================
@@ -167,23 +183,27 @@ define(["dojo/_base/declare",
 			//		true on successful completion otherwise false.
 			// tag:
 			//		protected
+			var key, tags, value;
 			try {
 				this._removeFromIndex(record);
 				return true;
 			} catch (err) {
-				throw new StoreError(err, "_deleteRecord");
+				err   = StoreError.call(err, err, "_deleteRecord");
+				event = new Event("error", {error: err, bubbles: true});
+				this.dispatchEvent(event);
+				throw err;
 			} finally {
 				// Make sure we destroy the real store record and not a clone.
 				record = this._records.splice(recNum, 1)[0];
-				var value  = record.value;
-				var key    = record.key;
-				var rev    = record.rev;
+				value  = record.value;
+				key    = record.key;
+				tags   = record.tags;
 				record.destroy();
 
 				this.total = this._records.length;
 				this.revision++;
 
-				this._notify(_opcodes.DELETE, key, null, value, rev, recNum);
+				this._notify(opcodes.DELETE, key, null, value, recNum, null, tags);
 			}
 			return false;
 		},
@@ -326,7 +346,7 @@ define(["dojo/_base/declare",
 			}
 		},
 
-		_storeRecord: function (value, options) {
+		_storeRecord: function (value, options, tags) {
 			// summary:
 			//		Add a record to the store. Throws a StoreError of type ConstraintError
 			//		if the key already exists and noOverwrite is set to true.
@@ -334,18 +354,21 @@ define(["dojo/_base/declare",
 			//		Record value property
 			// options: PutDirectives
 			//		Optional, PutDirectives
+			// tags: Object?
+			//		Optional set of properties to be stored with the record.
 			// returns: Key
 			//		Record key.
 			// tag:
 			//		protected
-			var at, before, opType, optKey, overwrite = false;
-			var curRev, curVal, stale;
+			var at, before, curRev, curTag, curVal, event, newRec, newVal, opType, optKey;
+			var cloned  = this._clone, overwrite = false;
+			var records = this._records;
 
 			if (options) {
 				overwrite = !!options.overwrite;
 				optKey    = options.key != null ? options.key : (options.id != null ? options.id : null);
+				cloned    = options.clone !== undefined ? !!options.clone : cloned;
 				before    = options.before || null;
-				stale     = !!options.stale;
 
 				if (before) {
 					if (isObject(before)) {
@@ -354,55 +377,62 @@ define(["dojo/_base/declare",
 					before = this._retrieveRecord(before);
 				}
 			}
-			// Extract key value and test if the primary key already exists.
-			var keyVal = Keys.getKey(this, value, optKey, this.uppercase);
-			// Try to locate the record.
-			var curLoc  = this._retrieveRecord(keyVal);
-			var curRec  = curLoc.record;
-			var curAt   = curLoc.eq;
-
-			if (curRec) {
-				if (!overwrite) {
-					throw new StoreError("ConstraintError", "_storeRecord", C_MSG_CONSTRAINT_ERROR, keyVal);
-				}
-				opType = _opcodes.UPDATE;
-				curRev = curRec.rev;
-				curVal = curRec.value;
-				this._removeFromIndex(curRec);
-			} else {
-				opType = _opcodes.NEW;
-				curRev = 0;
-				if (this.defaultProperties) {
-					this._applyDefaults(value);
-				}
-			}
-
 			try {
-				var newVal = this._clone ? clone(value) : value;
-				var newRec = new Record(keyVal, newVal, curRev +1, stale);
-			} catch (err) {
-				throw new StoreError("DataCloneError", "_storeRecord");
-			}
+				// Extract key value and test if the primary key already exists.
+				var keyVal = Keys.getKey(this, value, optKey, this.uppercase);
+				// Try to locate the record.
+				var curLoc  = this._retrieveRecord(keyVal);
+				var curRec  = curLoc.record;
+				var curAt   = curLoc.eq;
 
-			if (before && before.record) {
-				move(this._records, curAt, before.eq, newRec);
-				this._indexRecord(newRec, before.eq);
-				this._reindex();
-				at = before.eq;
-			} else {
-				at = curRec ? curAt : this._records.length;
 				if (curRec) {
-					this._records[at] = newRec;
+					if (!overwrite) {
+						var err = new Error("object with key [" + keyVal + "] already exists");
+						err.name = "ConstraintError";
+						throw err;
+					}
+					opType = opcodes.UPDATE;
+					curRev = curRec.tags.rev;
+					curTag = curRec.tags;
+					curVal = curRec.value;
+					this._removeFromIndex(curRec);
 				} else {
-					this._records.push(newRec);
+					if (this.defaultProperties) {
+						this._applyDefaults(value);
+					}
+					opType = opcodes.NEW;
+					curRev = 0;
 				}
-				this._indexRecord(newRec, at);
-			}
-			this.total = this._records.length;
-			this.revision++;
+				tags   = mixin(curTag, tags, {rev: curRev + 1});
+				newVal = cloned ? clone(value) : value;
+				newRec = new Record(keyVal, newVal, clone(tags));
 
-			this._notify(opType, keyVal, value, curVal, curRev, curAt, options);
-			return keyVal;
+				if (before && before.record) {
+					move(records, curAt, before.eq, newRec);
+					this._indexRecord(newRec, before.eq);
+					this._reindex();
+					at = before.eq;
+				} else {
+					at = curRec ? curAt : records.length;
+					if (curRec) {
+						records[at] = newRec;
+					} else {
+						records.push(newRec);
+					}
+					this._indexRecord(newRec, at);
+				}
+				this.total = records.length;
+				this.revision++;
+
+				this._notify(opType, keyVal, value, curVal, curAt, options, tags);
+				return keyVal;
+			} catch (err) {
+				// In case of an exception dispatch an error event at the store.
+				err   = StoreError.call(err, err, "_storeRecord");
+				event = new Event("error", {error: err, bubbles: true});
+				this.dispatchEvent(event);
+				throw err;
+			}
 		}
 
 	});	/* end declare() */

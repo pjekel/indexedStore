@@ -25,10 +25,11 @@ define(["dojo/_base/declare",
 	var getProp    = lib.getProp;
 
 	var Watch = declare(null, {
-		constructor: function (kwArgs) {
-			// If this is an eventable store regsiter the 'set' event type creating
-			// the 'onSet' method.  Note: the Watch extension does not register any
-			// listener with the store until there is something to watch for.
+		constructor: function () {
+			// If this is an eventable store register the 'set' event type creating
+			// the 'onset' property.   Note: the Watch extension does not register
+			// any listener with the store until there is something to watch for.
+
 			if (this.eventable && this.eventer instanceof Eventer) {
 				this.eventer.addHandler("set");
 			}

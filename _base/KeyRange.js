@@ -8,9 +8,10 @@
 //	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["./Keys",
+define(["dojo/has",
+		"./Keys",
 		"../error/createError!../error/StoreErrors.json"
-	], function (Keys, createError) {
+	], function (has, Keys, createError) {
 	"use strict";
 
 	// module:
@@ -30,7 +31,9 @@ define(["./Keys",
 	// Test if a native IDBKeyRange implementation is available
 	var nativeKeyRange = window.IDBKeyRange || window.webkitIDBKeyRange ||
                          window.mozIDBKeyRange || window.msIDBKeyRange;
-	if (nativeKeyRange) {
+
+	// NOTE: IE 10 (10.0.7) IDBKeyRange methods do NOT support arrays as their arguments.
+	if (nativeKeyRange && !has('ie')) {
 		return nativeKeyRange;
 	}
 

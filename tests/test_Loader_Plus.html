@@ -10,17 +10,22 @@
     </style>
 
     <script type="text/javascript">
-      var dojoConfig = {
-		async: true,
-		parseOnLoad: true,
-		isDebug: true,
-		baseUrl: "../../",
-		packages: [
-		  { name: "dojo", location: "dojo" },
-		  { name: "doh",  location: "util/doh" },
-		  { name: "store",location: "indexedStore" }
-		]
-      };
+		var dojoConfig = {
+			async: true,
+			parseOnLoad: true,
+			isDebug: false,
+			baseUrl: "../../",
+			packages: [
+			  { name: "dojo", location: "dojo" },
+			  { name: "doh",  location: "util/doh" },
+			  { name: "store",location: "indexedStore" }
+			]
+		};
+		var indexedStore = {
+			event: {
+				unhandledError: false
+			}
+		};
     </script>
 
     <script type="text/javascript" src="../../dojo/dojo.js"></script>
@@ -36,12 +41,12 @@
         "store/_base/_Store",
         "store/_base/_Indexed",
         "store/_base/_Natural",
-        "store/loader/advanced",
+        "store/_base/_Loader!Advanced",
         "store/_base/Keys",
         "store/_base/KeyRange",
 		"store/extension/Hierarchy",
-		"store/handler/register",
-		"store/handler/csvHandler"
+		"store/loader/handler/register",
+		"store/loader/handler/csvHandler"
         ], function( doh, declare, lang, ready, promiseAll, Promise, handlers,
 					_Store, _Indexed, _Natural, _Loader,
 					Keys, KeyRange, Hierarchy, register, csvHandler ) {
@@ -88,7 +93,9 @@
 				{ "name":"Root", "age":40, "parent":"Apu", "hair":"brown"}
 			];
 			var data_error_2 = [
-				{ name:"Root", parent:[], hair:"none" }
+				{ name:"Root", parent:[], hair:"none" },
+				{ name:"Root", age:65, parent:["Root"], hair:"none" },
+				{ name:"Root", age:65, parent:["Root"], hair:"none" }
 			];
 			var undef;
 
@@ -114,7 +121,7 @@
 				timeout: 2000,
 				runTest:function (t) {
 					var Store = declare( [_Store, _Natural, _Loader]);
-					var store = new Store ( {data: data, autoIncrement: true, keyPath:null});
+					var store = new Store ( {data: data, autoIncrement: true, keyPath:null, progress: true});
 					var defer = new doh.Deferred();
 					var max   = data.length;
 
@@ -124,7 +131,7 @@
 					store.ready(
 						defer.getTestCallback(
 							function (store) {
-								t.is( store.count(), max );
+								t.is( max, store.count() );
 							}
 						),
 						function (err) {
@@ -146,9 +153,9 @@
 					var defer = new doh.Deferred();
 					var max   = data.length;
 
-					t.is ( store.autoIncrement, false );
-					t.is ( store.idProperty, null );
-					t.is ( store.keyPath, null );
+					t.is ( false, store.autoIncrement );
+					t.is ( null, store.idProperty );
+					t.is ( null, store.keyPath );
 
 					store.ready(
 						defer.getTestCallback(
@@ -182,13 +189,13 @@
 					var max   = data.length;
 
 					var keyProp = store.keyPath;
-					t.is (keyProp, "id");
+					t.is ("id", keyProp);
 
 					store.ready(
 						defer.getTestCallback(
 							function (store) {
 								var objs = store.getRange();
-								t.is( objs.total, max );
+								t.is( max, objs.total );
 								objs.forEach( function (obj) {
 									t.t( obj[keyProp] != undef );
 									t.t( typeof obj[keyProp] == "number" );
@@ -215,13 +222,13 @@
 					var max   = data.length;
 
 					var keyProp = store.keyPath;
-					t.is (keyProp, "name");
+					t.is ("name", keyProp);
 
 					store.ready(
 						defer.getTestCallback(
 							function (store) {
 								var objs = store.getRange();
-								t.is( objs.total, max );
+								t.is( max, objs.total );
 								objs.forEach( function (obj) {
 									t.t( obj[keyProp] != undef );
 									t.t( typeof obj[keyProp] == "string" );
@@ -248,7 +255,7 @@
 					store.ready(
 						defer.getTestCallback(
 							function (store) {
-								t.is( store.count(), max );
+								t.is( max, store.count() );
 							}
 						),
 						function (err) {
@@ -271,7 +278,7 @@
 					store.ready(
 						defer.getTestCallback(
 							function (store) {
-								t.is( store.count(), max );
+								t.is( max, store.count() );
 							}
 						),
 						function (err) {
@@ -283,7 +290,7 @@
 			},
 
 			{
-				name: "Load store forcing a data error",
+				name: "Load store forcing a data error (1)",
 				timeout: 1000,
 				runTest:function (t) {
 					var Store = declare( [_Store, _Natural, _Loader]);
@@ -291,14 +298,50 @@
 					var store = new Store ( {data: data_error_2, handleAs:"json", keyPath:"name"});
 					var defer = new doh.Deferred();
 
+					// Test error condition at the store level.
 					store.ready(
-						function (err) {
-							defer.errback(err);
+						function () {
+							defer.errback("Should not have completed");
 						},
 						defer.getTestCallback(
 							function (err) {
 								t.is("SyntaxError", err.name);
-								t.is(500, err.response.status);
+								t.is(12, err.response.status);
+							}
+						)
+					);
+					return defer;
+				}
+			},
+
+			{
+				name: "Load store forcing a data error (2)",
+				timeout: 1000,
+				runTest:function (t) {
+					var Store = declare( [_Store, _Natural, _Loader]);
+					// Tell store we are loading JSON which it isn't....
+					var store = new Store ( {autoLoad: false, handleAs:"json", keyPath:"name"});
+					var defer = new doh.Deferred();
+
+					// Test error condition at the loader level.
+					var result = store.load({data: data_error_2});
+					result.then(
+						function () {
+							defer.errback("Store should not have completed");
+						},
+						defer.getTestCallback(
+							function (err) {
+								t.is("SyntaxError", err.name);
+								t.is(12, err.response.status);
+								result.response.then(
+									function () {
+										defer.errback("Response should not have completed");
+									},
+									function (err) {
+										t.is("SyntaxError", err.name);
+										t.is(12, err.response.status);
+									}
+								);
 							}
 						)
 					);
@@ -371,13 +414,15 @@
 					var max   = data.length;
 
 					// Issue store load request....
-					store.load( {data: data} );
-
-					// Wait until 'ready' resolves
-					store.ready(
+					var result = store.load( {data: data} );
+					result.then(
 						defer.getTestCallback(
-							function (store) {
-								t.is( store.count(), max );
+							function (data) {
+								result.response.then(function(response) {
+									t.is(data, response.data);
+									t.is(200, response.status);
+								});
+								t.is( max, store.count());
 							}
 						),
 						function (err) {
@@ -402,7 +447,7 @@
 					store.load( {data: data} ).then (
 						defer.getTestCallback(
 							function (data) {
-								t.is( store.count(), max );
+								t.is( max, store.count() );
 							}
 						),
 						function (err) {
@@ -434,7 +479,7 @@
 							store.ready(
 								defer.getTestCallback(
 									function (store) {
-										t.is( store.count(), max*3 );
+										t.is( max*3, store.count() );
 										// Because of the three load requests we should have
 										// 3 instances of each record.
 										var result = store.query( {name:"Bart"});
@@ -463,7 +508,7 @@
 					var defer = new doh.Deferred();
 					var max   = data.length;
 
-					var req1 = store.load( {url:"../json/us-zipcodes-00-05k.json"} );
+					var req1 = store.load( {url:"../json/us-zipcodes-00-05k.json", progress: true} );
 					var req2 = store.load( {url:"../json/us-zipcodes-05-10k.json"} );
 					var req3 = store.load( {url:"../json/us-zipcodes-10-15k.json"} );
 
@@ -556,7 +601,7 @@
 								// Store should be empty..
 								t.is (0, store.count() );
 
-								// Issueing a new load request should reset '_storeReady'
+								// Issuing a new load request should reset '_storeReady'
 								store.load( {url:"../json/us-zipcodes-00-05k.json"} );
 								t.is ( false, store._storeReady.isFulfilled() );
 							}
@@ -602,14 +647,15 @@
 				timeout: 5000,
 				runTest:function (t) {
 					var Store   = declare( [_Store, _Natural, _Loader]);
-					var store   = new Store ( {autoLoad: false, keyPath:"name"} );
+					var store   = new Store ( {autoLoad: false, keyPath:"name", headers: {"content_type": "application/json"}} );
+
 					var defer   = new doh.Deferred();
 
 					// Register the data handler directly with the store loader
 					var handler = register( "csv", csvHandler );
 					handler.set( "fieldNames", ["name", "parent", "hair", "checked"]);
 
-					store.load({url:"../json/Simpsons.csv", handleAs:"csv"});
+					store.load({url:"../json/Simpsons.csv", handleAs:"csv", headers:{"accept":"application/csv"}});
 
 					store.ready(
 						defer.getTestCallback(
@@ -750,7 +796,7 @@
 				timeout: 1000,
 				runTest:function (t) {
 					var Store = declare( [_Store, _Natural, _Loader]);
-					var store = new Store ( {keyPath:"name"});
+					var store = new Store ( {autoLoad: false, keyPath:"name"});
 					var defer = new doh.Deferred();
 
 					var index = store.createIndex("names", "name");
@@ -848,7 +894,8 @@
 					)
 					return defer;
 				}
-			}]);
+			}
+			]);
 
 			ready( function () {
 				doh.run();

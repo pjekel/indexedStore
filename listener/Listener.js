@@ -17,9 +17,9 @@ define(["../_base/library",
 	//		indexedStore/listener/Listener
 	// summary:
 
-	var StoreError = createError("Listener");		// Create the StoreError type.
-	var isString   = lib.isString;
-	var mixin      = lib.mixin;
+	var ListenerError = createError("Listener");		// Create the ListenerError type.
+	var isString      = lib.isString;
+	var mixin         = lib.mixin;
 
 	function Listener(callback, scope /*[,arg0 [,arg1, ..., argN]]*/) {
 		// summary:
@@ -50,7 +50,7 @@ define(["../_base/library",
 				this.listener = undefined;
 			}
 			if (this.listener && !(this.listener instanceof Function)) {
-				throw new StoreError("TypeError", "Listener", "callback is not a callable object");
+				throw new ListenerError("TypeError", "Listener", "callback is not a callable object");
 			}
 			if (arguments.length > 2) {
 				// save optional arguments...

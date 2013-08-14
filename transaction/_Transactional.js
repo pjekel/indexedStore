@@ -11,13 +11,14 @@
 define(["dojo/Deferred",
 		"../_base/Eventer",
 		"../_base/library",
+		"../_base/opcodes",
 		"../dom/event/EventTarget",
 		"../dom/string/DOMStringList",
 		"../listener/ListenerList",
 		"../error/createError!../error/StoreErrors.json",
-		"./_opcodes"
-	], function (Deferred, Eventer, lib, EventTarget, DOMStringList, ListenerList,
-				 createError, _opcodes) {
+		"./_Transaction"
+	], function (Deferred, Eventer, lib, opcodes, EventTarget, DOMStringList, ListenerList,
+				 createError, Transaction) {
 	"use strict";
 
 	// module
@@ -30,7 +31,8 @@ define(["dojo/Deferred",
 	var defProp    = lib.defProp;
 	var clone      = lib.clone;
 
-	var notAllowed = ["close", "destroy", "load", "setData"];
+	var storeEvents = ["clear", "close", "delete", "error", "load", "new", "update"];
+	var notAllowed  = ["close", "destroy", "load", "setData"];
 
 	function Transactional() {}
 
@@ -55,7 +57,7 @@ define(["dojo/Deferred",
 				transaction._scope[name].clone = undefined;
 			}
 			transaction._done    = true;
-			transaction._state   = _opcodes.DONE;
+			transaction._state   = Transaction.DONE;
 			transaction._scope   = {};
 			transaction._oper    = [];
 			transaction._promLst = [];
@@ -74,8 +76,10 @@ define(["dojo/Deferred",
 		function mergeIndexes(pStore, tStore) {
 			var index, names = Object.keys(tStore._indexes);
 			names.forEach(function (name) {
-				if (pStore._indexes[name]) {
-					pStore._indexes[name]._records = tStore._indexes[name]._records;
+				if (pStore._indexes[name] !== undefined) {
+					if (tStore._updates) {
+						pStore._indexes[name]._records = tStore._indexes[name]._records;
+					}
 				} else {
 					// New index was created...
 					index = tStore._indexes[name];
@@ -109,15 +113,13 @@ define(["dojo/Deferred",
 				if (pStore._index) {
 					pStore._index = clone(tStore._index);
 				}
-				mergeIndexes(pStore, tStore);
 			}
+			mergeIndexes(pStore, tStore);
 		}	/* end mergeStore() */
 
-		var name, operCount = transaction._oper.length;
-		if (operCount) {
-			for (name in transaction._scope) {
-				mergeStore(transaction._scope[name].clone);
-			}
+		var name;
+		for (name in transaction._scope) {
+			mergeStore(transaction._scope[name].clone);
 		}
 	};
 
@@ -135,8 +137,9 @@ define(["dojo/Deferred",
 			//		Store to be cloned.
 			// tag:
 			//		public
+			var cs;
 
-			if (store.cloned) {
+			if (store.transactional) {
 				throw new StoreError("Unknown", "cloneStore", "internal error, store already cloned");
 			}
 
@@ -155,16 +158,20 @@ define(["dojo/Deferred",
 				return cis;
 			}	/* end cloneIndexes() */
 
-			var cs = Object.create(store);
-			cs._storeReady = new Deferred();
+			cs = Object.create(store);
+
+			// Reset the event listeners for the cloned store so we don't call any
+			// of the parent store listeners.
+			EventTarget.call(cs, transaction);
+
 			cs._listeners  = new ListenerList();
-			cs._records    = cs._records.slice();
 			cs._indexes    = cloneIndexes(cs);
 			cs._index      = clone(cs._index);		// _Natural stores only...
+			cs._storeReady = cs._resetState();
+			cs._records    = cs._records.slice();
 			cs._updates    = 0;
 
 			cs.indexNames  = new DOMStringList(cs.indexNames);
-			cs.parent      = transaction;
 
 			// IMPORTANT: If ready() is called on a cloned store we have to make
 			// sure the associated callbacks are called with the correct store,
@@ -177,22 +184,13 @@ define(["dojo/Deferred",
 				cs._storeReady.reject
 			);
 
+			defProp(cs, "transactional", {value: true, enumerable: true, writable: false});
 			defProp(cs, "parentStore", {value: store, enumerable: true, writable: false});
-			defProp(cs, "cloned", {value: true, enumerable: true, writable: false});
-
-			// Reset the event listeners for the cloned store so we don't call any
-			// of the parent store listeners.
-			EventTarget.call(cs);
 
 			// If the store is eventable replace the 'Eventer'
 			if (cs.eventable) {
-				cs.eventer = new Eventer(cs, "clear, close, delete, error, load, new, update");
-				defProp(cs, "_emit", {
-					configurable: false,
-					enumerable: true,
-					writable: true,
-					value: cs.eventer.emit
-				});
+				cs.eventer = new Eventer(cs, storeEvents);
+				cs.emit    = cs.eventer.emit;
 			}
 			// Disallow several store functions
 			notAllowed.forEach(function (fncName) {
@@ -200,10 +198,21 @@ define(["dojo/Deferred",
 					throw new StoreError("NotSupported", null, C_MSG_NOTSUPPORTED, fncName);
 				};
 			});
+
+			// Register for the notifications associated with any of the store
+			// operations. Capturing the notifications of the transactional store
+			// allows for the population of the transaction journal which, if the
+			// transaction is successful, will be played back for the parent store.
+
+			cs._register(opcodes.toArray(), function (/* trigger *[,arg] */) {
+				transaction._journal(cs, arguments);
+			});
+
+			lib.protect(cs);
 			return cs;
 		}	/* end cloneStore() */
 
-		var name;
+		var name, entry;
 
 		if (transaction._handle) {
 			clearTimeout(transaction._handle);
@@ -211,7 +220,7 @@ define(["dojo/Deferred",
 		}
 		// Prepare the transaction scope.
 		for (name in transaction._scope) {
-			var entry = transaction._scope[name];
+			entry = transaction._scope[name];
 			entry.parent.transaction = transaction;
 			entry.clone = cloneStore(entry.parent);
 		}

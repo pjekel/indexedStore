@@ -154,7 +154,7 @@ define(["dojo/_base/declare",
 			return chunked ? paginate(results, chunkOn) : results;
 		},
 
-		query: function (query, options) {
+		query: function (query, options /*, data */) {
 			// summary:
 			//		Queries the store for objects. The query result gets an additional
 			//		method called observe which, when called, starts monitoring the
@@ -168,6 +168,7 @@ define(["dojo/_base/declare",
 			// tag:
 			//		Public
 			var chunked, chunkOff, chunkOn, results, observer, store;
+			var data = (arguments.length > 2 ?	arguments[2] : null);
 
 			function observe(listener, includeUpdates, scope) {
 				// summary:
@@ -188,7 +189,7 @@ define(["dojo/_base/declare",
 			chunkOff = mixin(clone(options), {start: 0, count: 0});
 			chunkOn  = {start: options.start, count: options.count};
 
-			results  = this.inherited(arguments, [query, chunkOff]);	// Call 'parent' query()
+			results  = this.inherited(arguments, [query, chunkOff, data]);	// Call 'parent' query()
 			observer = null;
 			store    = this;
 

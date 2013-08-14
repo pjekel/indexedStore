@@ -1,8 +1,8 @@
 define(["doh/main", "require"], function(doh, require){
 
 	// Make sure the keys and listener functionality is tested first as it is the
-	// foundation of most other functions.
-	
+	// foundation of a lot of other functions.
+
 	doh.register("Store Keys", require.toUrl("./test_Keys.html"), 999999);
 	doh.register("Listeners", require.toUrl("./test_Listeners.html"), 999999);
 
@@ -25,5 +25,6 @@ define(["doh/main", "require"], function(doh, require){
 	doh.register("Ancestry Extension", require.toUrl("./test_Ancestry_Extension.html"), 999999);
 	doh.register("Watch Extension", require.toUrl("./test_Watch_Extension.html"), 999999);
 	doh.register("Observable Extension", require.toUrl("./test_Observable_Extension.html"), 999999);
+	doh.register("WebStorage Extension", require.toUrl("./test_WebStorage_Extension.html"), 999999);
 
 });

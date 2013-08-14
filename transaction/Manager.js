@@ -10,9 +10,8 @@
 
 define(["../_base/library",
 		"../dom/event/EventTarget",
-		"./_opcodes",
 		"./_Transaction"
-	], function (lib, EventTarget, _opcodes, Transaction) {
+	], function (lib, EventTarget, Transaction) {
 	"use strict";
 
 	// module:
@@ -87,8 +86,8 @@ define(["../_base/library",
 			if (!(transaction instanceof Transaction)) {
 				throw new TypeError("Invalid transaction");
 			}
-			if (transaction._state == _opcodes.IDLE) {
-				transaction._state = _opcodes.PENDING;
+			if (transaction._state == Transaction.IDLE) {
+				transaction._state = Transaction.PENDING;
 				transactions.push(transaction);
 				startTransactions([transaction]);
 			}
@@ -109,9 +108,9 @@ define(["../_base/library",
 			//       we are flooded with read-only transactions...
 
 			transList.forEach(function (trans) {
-				if (trans._state == _opcodes.PENDING) {
+				if (trans._state == Transaction.PENDING) {
 					if (!violateConstraint(trans)) {
-						trans._state = _opcodes.ACTIVE;
+						trans._state = Transaction.ACTIVE;
 						activeTrans.push(trans);
 						setTimeout(function () {
 							trans._start();
@@ -179,7 +178,7 @@ define(["../_base/library",
 			return false;
 		}
 
-		this.transaction = function (stores, callback, mode, timeout) {
+		this.transaction = function (stores, callback, mode, timeout, smart) {
 			// summary:
 			//		The method creates a Transaction object representing the transaction
 			//		and immediately tries to start the transaction. This method replaces
@@ -196,6 +195,10 @@ define(["../_base/library",
 			//		Maximum time allowed to wait before the transaction can be started.
 			//		If the transaction cannot be started before the timer expires the
 			//		transaction is aborted and the error property is set to TimeOutError.
+			// smart: Boolean?
+			//		If true, smart journaling will is applied, that is, operations that
+			//		cancel each out are automatically removed from the journal. Default
+			//		is true.
 			// returns: Transaction
 			//		A new instance of a Transaction object.
 			// example:
@@ -225,7 +228,7 @@ define(["../_base/library",
 					tmode = "readonly";
 				}
 			}
-			var transaction = new Transaction(stores, callback, tmode, timer);
+			var transaction = new Transaction(stores, callback, tmode, timer, smart);
 			execute(transaction);
 			return transaction;
 		};

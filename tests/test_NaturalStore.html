@@ -13,7 +13,7 @@
       var dojoConfig = {
 		async: true,
 		parseOnLoad: true,
-		isDebug: true,
+		isDebug: false,
 		baseUrl: "../../",
 		packages: [
 		  { name: "dojo", location: "dojo" },
@@ -35,11 +35,11 @@
         "dojo/when",
         "store/_base/_Store",
         "store/_base/_Natural",
+		"store/_base/_Loader!Basic",
         "store/_base/KeyRange",
-		"store/loader/basic",
 		"store/util/sorter"
         ], function( doh, declare, lang, Promise, QueryResults, ready, when,
-					_Store, _Natural, KeyRange, Loader, sorter ) {
+					_Store, _Natural, Loader, KeyRange, sorter ) {
 			"use strict";
 
 			// IMPORTANT:
@@ -83,7 +83,7 @@
 								t.t(store.name != undef);
 								t.t(!store.autoIncrement);
 								t.is("id", store.keyPath);
-								t.is("store", store.type);
+								t.is("store", store.baseClass);
 								t.is(0, store.total);
 							}
 						),
@@ -593,7 +593,7 @@
 
 					store.ready().then(
 						defer.getTestCallback(
-							function () {
+							function (store) {
 								t.is(max, store.count());
 								var result1 = store.query();
 								t.t( result1 instanceof Array);

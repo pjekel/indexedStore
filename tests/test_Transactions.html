@@ -10,18 +10,23 @@
     </style>
 
     <script type="text/javascript">
-      var dojoConfig = {
-		async: true,
-		parseOnLoad: true,
-		isDebug: true,
-		baseUrl: "../../",
-		packages: [
-		  { name: "dojo", location: "dojo" },
-		  { name: "doh",  location: "util/doh" },
-		  { name: "store",location: "indexedStore" }
-		]
-      };
-    </script>
+		var dojoConfig = {
+			async: true,
+			parseOnLoad: true,
+			isDebug: false,
+			baseUrl: "../../",
+			packages: [
+			  { name: "dojo", location: "dojo" },
+			  { name: "doh",  location: "util/doh" },
+			  { name: "store",location: "indexedStore" }
+			]
+		};
+		var indexedStore = {
+			event: {
+				unhandledError: true
+			}
+		};
+	</script>
 
     <script type="text/javascript" src="../../dojo/dojo.js"></script>
     <script type="text/javascript">
@@ -31,18 +36,19 @@
         "dojo/ready",
         "store/_base/_Store",
         "store/_base/_Indexed",
-        "store/loader/advanced",
+        "store/_base/_Loader!advanced",
+        "store/_base/library",
+        "store/_base/opcodes",
         "store/_base/KeyRange",
-		"store/loader/basic",
+        "store/transaction/_Transaction",
         "store/transaction/Manager",
-        "store/transaction/_opcodes",
         "store/extension/Eventable",
 		"store/error/createError!store/error/StoreErrors.json"
-        ], function( doh, declare, ready,
-					_Store, _Indexed, _Loader, KeyRange, Loader, Manager, _opcodes, Eventable,
-					createError) {
+        ], function( doh, declare, ready, _Store, _Indexed, Loader, lib, opcodes,
+		             KeyRange, Transaction, Manager, Eventable, createError) {
 			"use strict";
 
+			lib.setProp("indexedStore.event.unhandledError", false);
 			var data = [
 				{ "name":"Root", "parent":[], "hair":"none" },
 				{ "name":"Abe", "age":65, "parent":["Root"], "hair":"none" },
@@ -71,6 +77,9 @@
 
 			var efnc = function () {};
 
+			// Transactions can be monitored using either events or the promise
+			// property of the transaction.
+
 			doh.register("Transactions", [
 			{
 				name: "Validate Transaction properties",
@@ -85,8 +94,8 @@
 						var pStore = tStore.parentStore;
 
 						// Test transaction store(s)
-						t.t(tStore != store && tStore.cloned);
-						t.t(pStore == store && !pStore.cloned);
+						t.t(tStore != store && tStore.transactional);
+						t.t(pStore == store && !pStore.transactional);
 						t.t(tStore.transaction == trans);
 						t.t(pStore.transaction == trans);
 
@@ -96,7 +105,7 @@
 
 						// Test protected properties.
 						t.is(1, Object.keys(trans._scope).length);
-						t.is(_opcodes.ACTIVE, trans._state);
+						t.is(Transaction.ACTIVE, trans._state);
 						t.is(false, trans._done);
 						t.is(null, trans._handle);
 						t.is(0, trans._oper.length);
@@ -107,7 +116,7 @@
 					}
 					trans.oncomplete = function (event) {
 						defer.getTestCallback( function (event) {
-							t.is(_opcodes.DONE, trans._state);
+							t.is(opcodes.DONE, trans._state);
 							t.is(false, trans.active);
 							t.is(null, trans.error);
 						})(event);
@@ -159,7 +168,6 @@
 					trans.oncomplete = function (event) {
 						defer.reject("Test should have failed.");
 					}
-
 					return defer;
 				}
 			},
@@ -265,7 +273,7 @@
 			},
 
 			{
-				name: "Add Object to the store",
+				name: "Add Object to the store (Event)",
 				timeout: 2000,
 				runTest: function (t) {
 					var Store = declare( [_Store, _Indexed]);
@@ -298,6 +306,37 @@
 			},
 
 			{
+				name: "Add Object to the store (Promise)",
+				timeout: 2000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed]);
+					var store = new Store ({name:"store0", keyPath:"name"});
+					var defer = new doh.Deferred();
+
+					var rev = store.revision;
+					var tot = store.total;
+
+					var trans = Manager.transaction(store, function () {
+						var tStore = trans.store("store0");
+						t.t(store.transaction == trans);
+						var abc = tStore.put({name:"Timmy"});
+					}, "readwrite" );
+
+					var promise = trans.promise;
+					promise.then(
+						defer.getTestCallback( function () {
+							t.t( store.transaction == null);
+							t.t( store.revision == rev+1 );
+							t.t( store.total == tot+1 );
+							t.t( store.get("Timmy") instanceof Object);
+						}),
+						defer.errback
+					);
+					return defer;
+				}
+			},
+
+			{
 				name: "Add Object to an Eventable store (1)",
 				timeout: 2000,
 				runTest: function (t) {
@@ -321,22 +360,29 @@
 					var trans = Manager.transaction(store, function () {
 						var tStore = trans.store("store0");
 						// Listen for new object on the transaction store.
-						tStore.onnew = function (event) {t.is( 0, seqnr++ );};
+						tStore.onnew = function (event) {
+							t.is( 0, seqnr++ );
+						};
 						t.t(store.transaction == trans);
 						tStore.put({name: name});
 						t.is(1,tStore.total);
 					}, "readwrite" );
 
+					// In case any of the transaction notifications fail....
+					store.onerror = function (event) {
+						defer.reject(event.error);
+					};
+
 					// The transaction should not generate an error....
 					trans.onerror = function (event) {
 						defer.reject(event.error);
-					}
+					};
 					trans.oncomplete = function (event) {
 						// called AFTER onnew() on tStore
 						defer.getTestCallback( function (event) {
 							t.is( 1, seqnr++ );
 						})(event);
-					}
+					};
 
 					return defer;
 				}
@@ -373,6 +419,11 @@
 						tStore.put({name: name});
 						t.is(1,tStore.total);
 					}, "readwrite" );
+
+					// In case any of the transaction notifications fail....
+					store.onerror = function (event) {
+						defer.reject(event.error);
+					};
 
 					// The transaction should not generate an error....
 					trans.onerror = function (event) {
@@ -476,7 +527,7 @@
 						var tStore = trans.store("store0");
 						// Listen for new object on the transaction store.
 						tStore.onnew = function (event) { t.is( 0, seqnr++ ); };
-						tStore.ondelete = function (event) {	t.is( 1, seqnr++ );	};
+						tStore.ondelete = function (event) {t.is( 1, seqnr++ );	};
 						// Add and then remove object
 						tStore.put({name: name});
 						t.is(1,tStore.total);
@@ -538,6 +589,38 @@
 			},
 
 			{
+				name: "Abort Transaction, outside the transaction (Promise)",
+				timeout: 2000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Eventable]);
+					var store = new Store ({name:"store0", keyPath:"name"});
+					var defer = new doh.Deferred();
+
+					var name  = "Timmy";
+
+					// This transaction should not even start...
+					var trans = Manager.transaction(store, function () {
+						var tStore = trans.store("store0");
+						// Listen for new object on the transaction store.
+						tStore.put({name: name});
+						t.is(1,tStore.total);
+					}, "readwrite" );
+
+					trans.promise.then(
+						function () {
+							defer.reject(C_MSG_UNEXPECTED_NORMAL);
+						},
+						defer.getTestCallback( function (err) {
+							t.is(0,store.total);
+						})
+					);
+					trans.promise.cancel();
+
+					return defer;
+				}
+			},
+
+			{
 				name: "Abort Transaction, inside the transaction",
 				timeout: 2000,
 				runTest: function (t) {
@@ -564,6 +647,77 @@
 					};
 					trans.oncomplete = function (event) {
 						defer.reject(C_MSG_UNEXPECTED_NORMAL);
+					};
+					return defer;
+				}
+			},
+
+			{
+				name: "Abort Transaction, inside the transaction (Promise)",
+				timeout: 2000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Eventable]);
+					var store = new Store ({name:"store0", keyPath:"name"});
+					var defer = new doh.Deferred();
+
+					var name  = "Timmy";
+
+					// This transaction should not even start...
+					var trans = Manager.transaction(store, function (trans) {
+						var tStore = trans.store("store0");
+						// Listen for new object on the transaction store.
+						tStore.put({name: name});
+						t.is(1,tStore.total);
+						trans.promise.cancel();		// cancel the promise.
+					}, "readwrite" );
+
+					trans.promise.then(
+						function () {
+							defer.reject(C_MSG_UNEXPECTED_NORMAL);
+						},
+						defer.getTestCallback( function (err) {
+							t.is(0,store.total);
+						})
+					);
+
+					return defer;
+				}
+			},
+
+			{
+				// Abort transaction silently. The transaction callback returns
+				// boolean false which will cause the transaction to abort but
+				// no error or abort event is fired, instead complete is fired.
+
+				name: "Abort Transaction silently",
+				timeout: 2000,
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Eventable]);
+					var store = new Store ({name:"store0", keyPath:"name"});
+					var defer = new doh.Deferred();
+
+					var name  = "Timmy";
+
+					var trans = Manager.transaction(store, function () {
+						var tStore = trans.store("store0");
+						// Listen for new object on the transaction store.
+						tStore.put({name: name});
+						t.is(1,tStore.total);
+						// Abort silently by returning 'false'
+						return false;
+					}, "readwrite" );
+
+					// The transaction should generate an abort....
+					trans.onabort = function (event) {
+						defer.reject(C_MSG_UNEXPECTED_ABORT);
+					};
+					trans.onerror = function (event) {
+						defer.reject(C_MSG_UNEXPECTED_ERROR);
+					};
+					trans.oncomplete = function (event) {
+						defer.getTestCallback( function (event) {
+							t.is(0,store.total);
+						})(event);
 					};
 					return defer;
 				}

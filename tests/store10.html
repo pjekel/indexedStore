@@ -32,15 +32,19 @@
         "dijit/ProgressBar",
         "dijit/form/ComboBox",
         "dijit/form/TextBox",
+        "store/_base/_Store",
+        "store/_base/_Indexed",
+        "store/_base/_Loader",
         "store/_base/KeyRange",
         "store/_base/Keys",
-        "store/Indexed"
-        ], function( declare, lang, ready, ProgressBar, ComboBox, TextBox, KeyRange, Keys, Store ) {
+        ], function( declare, lang, ready, ProgressBar, ComboBox, TextBox, 
+                      _Store, _Indexed, _Loader, KeyRange, Keys ) {
 					var indexes = [
 						{ name:"state", keyPath:"code", options: {uppercase:true} },
 						{ name:"city", keyPath:"city", options: {uppercase:true} }
 					];
 
+					var Store = declare([_Store, _Indexed, _Loader]);
 
 					var query = function (query, options) {
 						var attr = Object.keys(query)[0];
@@ -68,7 +72,7 @@
 					var data = {state:null, city: null, county: null, zipcode: null, ccb:null};
 					
 					var stateStore = new Store( {url:"../json/us-states.json", keyPath:"state"} );
-					var profile = { indexes: indexes, suppressEvents: true, keyPath:"zip", query: query, progress:true };
+					var profile = { indexes: indexes, keyPath:"zip", query: query, progress:true, overwrite: true };
 
 					var mainStore = new Store( lang.mixin({url:"../json/us-zipcodes-43k.json", progress: true}, profile)
 																		);

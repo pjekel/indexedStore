@@ -13,7 +13,7 @@
       var dojoConfig = {
 		async: true,
 		parseOnLoad: true,
-		isDebug: true,
+		isDebug: false,
 		baseUrl: "../../",
 		packages: [
 		  { name: "dojo", location: "dojo" },
@@ -32,7 +32,7 @@
 		"dojo/ready",
 		"store/_base/_Store",
 		"store/_base/_Indexed",
-		"store/loader/advanced",
+		"store/_base/_Loader!advanced",
 		"store/_base/Keys",
 		"store/_base/library",
 		"store/extension/Hierarchy",

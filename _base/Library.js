@@ -326,19 +326,17 @@ define(["../shim/shims"], function () {
 			//		A list of comma separated objects
 			// tag:
 			//		Public
-			var i = 1, emp = {};
-			var obj = arguments[i++];
+			var i, emp = {}, key, obj, val;
 			var dst = dest || {};
 
-			while (obj) {
-				var key, val;
+			for (i = 1; i < arguments.length; i++) {
+				obj = arguments[i] || {};
 				for (key in obj) {
 					val = obj[key];
 					if (!(key in dst) || (dst[key] !== val && (!(key in emp) || emp[key] !== val))) {
 						dst[key] = val;
 					}
 				}
-				obj = arguments[i++];
 			}
 			return dst;
 		},

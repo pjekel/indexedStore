@@ -353,7 +353,8 @@ define(["dojo/request",
 			});
 		};
 
-		this._directives.declare(protectedDirectives, kwArgs, Directives.PROTECTED);
+		// Declare directives and set their default values
+		this._directives.declare(protectedDirectives, null, Directives.PROTECTED);
 		this._directives.declare(publicDirectives, kwArgs);
 
 		// Indicate this loader has a 'xhr' method that can be overwritten, this

@@ -36,7 +36,7 @@ define(["dojo/_base/declare",
 
 	var C_MSG_DEPENDENCY_STORE = "base class '_Store' must be loaded first";
 
-	var restDirectives = {
+	var storeDirectives = {
 		// cache: Boolean
 		cache: true
 	};
@@ -49,7 +49,7 @@ define(["dojo/_base/declare",
 		constructor: function (kwArgs) {
 			if (this.features.has("store")) {
 				// Mixin and initialize the REST directives.
-				this._directives.declare(restDirectives, directives);
+				this._directives.declare(storeDirectives, kwArgs);
 				this.features.add("rest");
 			} else {
 				throw new StoreError("Dependency", "constructor", C_MSG_DEPENDENCY_STORE);
@@ -72,20 +72,22 @@ define(["dojo/_base/declare",
 			//		A valid key
 			// tag:
 			//		Public
-			var data, handleAs, headers, objKey, optKey, result;
+			var ldrOpts, exists, formData, objKey, method, optKey, resourceId, result;
 			var self = this;
 
 			assert.store(this, "add", true);
+			if (!value) {
+				throw new StoreError("DataError", "add");
+			}
+			ldrOpts = mixin(null, options, {overwrite: false});
+			optKey  = ldrOpts.key != null ? ldrOpts.key : (ldrOpts.id != null ? ldrOpts.id : null);
+			objKey  = this.getIdentity(value) || optKey;
 
-			options  = mixin(options, {overwrite: false});
-			optKey   = options.key != null ? options.key : (options.id != null ? options.id : null);
-			objKey   = this.getIdentity(object) || optKey;
+			resourceId = keyToPath(objKey);
+			formData   = JSON.stringify(value);
 
-			handleAs = options.handleAs || this.handleAs || "json";
-			data     = JSON.stringify(object);
-
-			headers = mixin(this.headers, options.headers);
-			result = this.submit({method: "PUT", resourceId: objKey, headers: headers, formData: data});
+			mixin(ldrOpts, {method: "PUT", resourceId: resourceId, formData: formData});
+			result = this.submit(ldrOpts);
 			return when(result.response,
 				function (response) {
 					// The service may return an object or a key.
@@ -108,17 +110,17 @@ define(["dojo/_base/declare",
 			// returns: Promise
 			// tag:
 			//		Public
-			var defer, headers, objKey, record, results, value;
+			var defer, ldrOpts, record, resourceId, results, value;
 			var self = this;
 
 			assert.store(this, "get", false);
 			assert.key(key, "get", true);
 
-			options = options || {};
-			objKey  = keyToPath(key);
+			resourceId = keyToPath(key);
+			ldrOpts = mixin(null, options, {resourceId: resourceId});
 
 			if (this.cache) {
-				record = this._retrieveRecord(objKey).record;
+				record = this._retrieveRecord(resourceId).record;
 				if (record) {
 					if (!record.tags.stale) {
 						value = this._clone ? clone(record.value) : record.value;
@@ -127,20 +129,19 @@ define(["dojo/_base/declare",
 					}
 				}
 			}
-			headers = mixin(this.headers, options.headers);
-			results = this.load({resourceId: objKey, headers: headers});
+			results = this.load(ldrOpts);
 			return when(results.response, function (response) {
 				if (response && response.data) {
-					var value = self._retrieveRecord(objKey).value;
+					var value = self._retrieveRecord(resourceId).value;
 					return value;
 				}
 			});
 		},
 
-		put: function (object, options) {
+		put: function (value, options) {
 			// summary:
 			//		Stores an object
-			// object: Object
+			// value: Object
 			//		The value to be stored in the record.
 			// options: Store.PutDirectives?
 			//		Additional metadata for storing the data.
@@ -148,24 +149,26 @@ define(["dojo/_base/declare",
 			//		A valid key.
 			// tag:
 			//		Public
-			var data, exists, handleAs, headers, objKey, method, optKey, result;
+			var ldrOpts, exists, formData, objKey, method, optKey, resourceId, result;
 			var self = this;
 
 			assert.store(this, "put", true);
+			if (!value) {
+				throw new StoreError("DataError", "put");
+			}
+			ldrOpts = mixin(null, options, {overwrite: true});
+			optKey  = ldrOpts.key != null ? ldrOpts.key : (ldrOpts.id != null ? ldrOpts.id : null);
+			objKey  = this.getIdentity(value) || optKey;
 
-			options  = mixin(options, {overwrite: true});
-			optKey   = options.key != null ? options.key : (options.id != null ? options.id : null);
-			objKey   = this.getIdentity(object) || optKey;
-
-			handleAs = options.handleAs || this.handleAs || "json";
-			data     = JSON.stringify(object);
+			resourceId = keyToPath(objKey);
+			formData   = JSON.stringify(value);
 
 			// Check the cache if the object exists
-			exists   = objKey != null ? !!this._retrieveRecord(objKey).record : false;
-			method   = exists ? "PUT" : "POST";
+			exists  = !!this._retrieveRecord(resourceId).record;
+			method  = exists ? "PUT" : "POST";
 
-			headers = mixin(this.headers, options.headers);
-			result = this.submit({method: method, resourceId: objKey, headers: headers, formData: data});
+			mixin(ldrOpts, {method: method, resourceId: resourceId, formData: formData});
+			result = this.submit(ldrOpts);
 			return when(result.response,
 				function (response) {
 					// The service may return an object or a key.
@@ -190,21 +193,22 @@ define(["dojo/_base/declare",
 			//		The optional arguments to apply to the resultset.
 			// returns: dojo/store/api/Store.QueryResults
 			//		The results of the query, extended with iterative methods.
-			var headers, results;
+
 			var data  = (arguments.length > 2 ?	arguments[2] : null);
+			var results, ldrOpts;
 
 			if (!isObject(query)) {
 				throw new StoreError("DataError", "query", "query argument must be an object");
 			}
-			options = options || {};
+			ldrOpts = mixin(null, options, {resourceId: query, loadOnly: true});
 			if (this.cache && data) {
-				if (data.length && (options.sort || options.start || options.count)) {
-					sorter(data, options);
+				if (data.length && (ldrOpts.sort || ldrOpts.start || ldrOpts.count)) {
+					sorter(data, ldrOpts);
 				}
 				return QueryResults(this._clone ? clone(data) : data);
 			}
-			headers = mixin(this.headers, options.headers);
-			results = this.load({resourceId: query, headers: headers, loadOnly: true});
+
+			results = this.load(ldrOpts);
 			return when(results.response,
 				function (response) {
 					var data = (response && response.data) || [];
@@ -227,16 +231,13 @@ define(["dojo/_base/declare",
 			//		false.
 			// tag:
 			//		Public
-			var headers, objKey, result;
+			var ldrOpts, result;
 
 			assert.store(this, "remove", true);
 			assert.key(key, "remove", true);
 
-			options = options || {};
-			objKey  = keyToPath(key);
-
-			headers = mixin(this.headers, options.headers);
-			result  = this.submit({method: "DELETE", resourceId: objKey, headers: headers});
+			ldrOpt  = mixin(null, options, {method: "DELETE", resourceId: keyToPath(key)});
+			result  = this.submit(ldrOpts);
 			return when(result.response, function (response) {
 				if (response && response.data) {
 					return true;

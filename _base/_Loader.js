@@ -21,26 +21,23 @@ define(["require",
 	// summary:
 	//		Add a data loader to the store.
 	// description:
-	//		Add a data loader to the store. This module can be invoked as any other
-	//		AMD module or as a dojo plugin. Unless invoked as a plugin it will load
-	//		the basic store loader (indexedStore/loader/Basic). When invoked as a
-	//		plugin the resource string following the exclamation mark will identify
-	//		the store loader to be installed. All plugin loaders must be located in
-	//		the indexedStore/loader directory.
+	//		Add a data loader to the store. This module is a dojo plugin, the resource
+	//		string following the exclamation mark identifies the loader to be installed.
+	//		All plugin loaders must be located in the indexedStore/loader/ directory.
 	// prerequisites:
-	//		All loaders MUST comply with the following interface:
+	//		All loaders MUST, at a minimum, implement the following interface:
 	//
 	//			Loader interface {
-	//				readonly	attribute String		type;
-	//				readonly	attribute Boolean		loading;
+	//				readonly	attribute DOMString		type;
+	//				readonly	attribute boolean		loading;
 	//				readonly	attribute FeatureList	features;
 	//				void		cancel ();
-	//				Directives	directives ();
 	//				Promise		load (optional Directives directives);
-	//				Promise		submit (optional Directives directives);
 	//			};
 	//
-	//		Directives is a JavaScript key:value pairs object.
+	//			dictionary Directives {
+	//			        ...
+	//			};
 	// example:
 	//	|	required(["store/_base/_Loader!", ... ], function (Loader, ... ) {
 	//	|						...
@@ -56,8 +53,11 @@ define(["require",
 	var C_MSG_INVALID_ORDER   = "loader must be installed prior to any extension";
 	var C_MSG_MULTI_INSTANCE  = "store already has a loader";
 	var C_MSG_NO_LOADER_CLASS = "no plugin loader class specified, use '/_base/loader!<loaderClass>'";
+	var C_MSG_NO_LOAD_METHOD  = "loader has no load method";
 
 	var StoreError = createError("Loader");		// Create the StoreError type.
+	var isString   = lib.isString;
+
 	var cache = {};
 
 	//	Define additional store directives.
@@ -73,7 +73,9 @@ define(["require",
 
 		constructor: function (kwArgs) {
 			// summary:
-			//		Create a loader instance.
+			//		Create a loader instance. A loader MUST at a minimum have a
+			//		load() method and optionally a submit() method both with a
+			//		signature: <method>(optional Directives directives)
 			// kwArgs: Object?
 			//		A JavaScript key:value pairs object. Each key:value pair is
 			//		a store directive or a directive to the additional modules
@@ -85,23 +87,28 @@ define(["require",
 					throw new StoreError("Dependency", "constructor", C_MSG_INVALID_ORDER);
 				}
 				if (this.LoaderClass) {
-					// Mix the additional store directives in with the store.
-					this._directives.declare(storeDirectives, kwArgs);
-					// Create an instance of the loader and test if the loader also
-					// has a submit method (e.g. REST style loaders).
 					this.loader = new this.LoaderClass(this, kwArgs);
-					if (typeof this.loader.submit == "function") {
-						this.submit = function (kwArgs) {
-							return this.loader.submit(kwArgs);
-						};
+					if (typeof this.loader.load == "function") {
+						// If the loader also has a submit method, extend the store
+						// with that method. (REST style loaders only).
+						var submit = this.loader.features.has("submit") || this.loader.submit;
+						submit = isString(submit) ? this.loader[submit] : submit;
+						if (submit && typeof submit == "function") {
+							this.submit = submit.bind(this.loader);
+							this.features.add("submit", true);
+						}
+					} else {
+						throw new StoreError("DataError", "constructor", C_MSG_NO_LOAD_METHOD);
 					}
-					this.features.add("loader", this.loader);
 				} else {
 					throw new StoreError("DataError", "constructor", C_MSG_NO_LOADER_CLASS);
 				}
 			} else {
 				throw new StoreError("Dependency", "constructor", C_MSG_MULTI_INSTANCE);
 			}
+			// Mix the additional store directives in with the store.
+			this._directives.declare(storeDirectives, kwArgs);
+			this.features.add("loader", this.loader);
 		},
 
 		postscript: function (kwArgs) {

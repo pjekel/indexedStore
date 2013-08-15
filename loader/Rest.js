@@ -9,19 +9,18 @@
 //
 define(["dojo/request",
 		"dojo/json",
+		"../_base/Directives",
 		"../_base/Keys",
 		"../_base/library",
 		"../error/createError!../error/StoreErrors.json",
 		"./_LoaderBase",
 		"./_LoadRequest"
-	], function (request, JSON, Keys, lib, createError, LoaderBase, LoadRequest) {
+	], function (request, JSON, Directives, Keys, lib, createError, LoaderBase, LoadRequest) {
 	"use strict";
 
 	// module
 	//		indexedStore/loader/Basic
 	// summary:
-
-	var C_MSG_ARG_MISSING  = "both 'dataHandler' and 'handleAs' arguments required";
 
 	var StoreError = createError("Loader");		// Create the StoreError type.
 	var isObject = lib.isObject;
@@ -30,7 +29,44 @@ define(["dojo/request",
 	var mixin    = lib.mixin;
 
 	// Declare the additional load directives supported by this loader.
-	var LoadDirectives = {
+	var publicDirectives = {
+		// handleAs: String
+		//		The content handler to process the data or response payload with.
+		//		If omitted and the url property is specified handleAs will default
+		//		to "json".
+		handleAs: null,
+
+		// headers:
+		//		A hash of the custom headers to be sent with the request. Defaults to:
+		//		{ "Content-Type":"application/x-www-form-urlencoded" }
+		headers: null,
+
+		// loadAsync: Boolean
+		//		If true, the load request is executed asynchronous, that is,
+		//		immediately when the request is received.
+		loadAsync: true,
+
+		loadOnly: false,
+
+		// preventCache: Boolean
+		//		If false it allows the browser and any proxy server to cache
+		//		the server response. (applicable to URL's only).
+		preventCache: false,
+
+		// timeout: Number
+		//		If a URL is specified the time allowed for the underlying XHR request
+		//		to complete before it is aborted.  The timeout property is specified
+		//		in milliseconds.
+		timeout: 0,
+
+		// baseURL: String
+		//		The base URL to use for all requests to the server.  This string
+		//		will be pre-pended to the resourceId to compose the URL for the
+		//		requests sent to the server
+		url: ""
+	};
+
+	var protectedDirectives = {
 		// dataHandler: Function|Object
 		//		The data handler for the data/response. If dataHandler is an key:value
 		//		pairs object, the object should looks like:
@@ -62,45 +98,10 @@ define(["dojo/request",
 		// formData: Object
 		formData: null,
 
-		// handleAs: String
-		//		The content handler to process the data or response payload with.
-		//		If omitted and the url property is specified handleAs will default
-		//		to "json".
-		handleAs: null,
-
-		// headers:
-		//		A hash of the custom headers to be sent with the request. Defaults to:
-		//		{ "Content-Type":"application/x-www-form-urlencoded" }
-		headers: null,
-
-		// loadAsync: Boolean
-		//		If true, the load request is executed asynchronous, that is,
-		//		immediately when the request is received.
-		loadAsync: true,
-
-		loadOnly: false,
-
 		method: "GET",
 
-		// preventCache: Boolean
-		//		If false it allows the browser and any proxy server to cache
-		//		the server response. (applicable to URL's only).
-		preventCache: false,
-
 		// resourceId:
-		resourceId: "",
-
-		// timeout: Number
-		//		If a URL is specified the time allowed for the underlying XHR request
-		//		to complete before it is aborted.  The timeout property is specified
-		//		in milliseconds.
-		timeout: 0,
-
-		// baseURL: String
-		//		The base URL to use for all requests to the server.  This string
-		//		will be pre-pended to the resourceId to compose the URL for the
-		//		requests sent to the server
-		baseURL: ""
+		resourceId: ""
 	};
 
 	var getHeaders = {
@@ -112,7 +113,7 @@ define(["dojo/request",
 		"Content-Type": "application/json"
 	};
 
-	function Rest(store, storeArgs) {
+	function loaderREST(store, kwArgs) {
 		// summary:
 		//		REST loader constructor
 		// store: Store
@@ -122,8 +123,7 @@ define(["dojo/request",
 
 		// Extract the applicable properties from the store arguments and use their
 		// values as the defaults for the loader.
-		var defaults = mixinOwn(null, LoadDirectives, storeArgs, {data: null, url: null});
-		LoaderBase.call(this, store, "rest", defaults);
+		LoaderBase.call(this, store, "rest", kwArgs);
 
 		//====================================================================
 		// private methods
@@ -165,13 +165,26 @@ define(["dojo/request",
 			// When the resourceId is an [object Object] it is safe to assume it is a
 			// query object simply because it would otherwise be an invalid key.
 			if (isObject(rescId)) {
-				prefix  = (/\?/).test(options.baseURI) ? "&" : "?";
+				prefix  = (/\?/).test(options.url) ? "&" : "?";
 				rscPath = prefix + lib.objectToURIQuery(rescId);
 			} else {
 				rscPath = lib.keyToPath(rescId, true);
 			}
 			options.headers = this._mergeHeaders(getHeaders, options.headers);
-			return this._xhrRequest(options.baseURL + rscPath, options);
+			return this._xhrRequest(options.url + rscPath, options);
+		};
+
+		this._putData = this._postData = function (request) {
+			// summary:
+			// request: LoadRequest
+			// tag:
+			//		protected
+			var options = request.directives;
+			var rscId   = options.resourceId;
+			var target  = options.url + lib.keyToPath(rscId, true);
+
+			options.headers = this._mergeHeaders(submitHeaders, options.headers);
+			return this._xhrRequest(target, options);
 		};
 
 		this._storeData = function (request, response) {
@@ -266,19 +279,6 @@ define(["dojo/request",
 			return true;
 		};
 
-		this._putData = this._postData = function (request) {
-			// summary:
-			// request: LoadRequest
-			// tag:
-			//		protected
-			var options = request.directives;
-			var rscId   = options.resourceId;
-			var target  = options.baseURL + lib.keyToPath(rscId, true);
-
-			options.headers = this._mergeHeaders(submitHeaders, options.headers);
-			return this._xhrRequest(target, options);
-		};
-
 		this._xhrRequest = function (url, options) {
 			// summary:
 			//		Initiate a XMLHttpRequest. This method may be overridden by
@@ -311,8 +311,7 @@ define(["dojo/request",
 			if (directives && !isObject(directives)) {
 				throw new StoreError("DataError", "submit", "directives argument is not an object");
 			}
-			options = mixinOwn(null, this.getDirectives(), directives);
-			this._validate(options);
+			options = this._directives.get(null, directives);
 			method  = options.method || "POST";
 			request = new LoadRequest(method, options);
 			defer   = this.manager.submit(request, options.loadAsync);
@@ -320,16 +319,21 @@ define(["dojo/request",
 			return defer.promise;
 		};
 
-		// Indicate this loader has a 'xhr' method that can be overwritten, this
-		// information is used by the CORS extension.
+		// Declare directives and set their default values
+		this._directives.declare(protectedDirectives, null, Directives.PROTECTED);
+		this._directives.declare(publicDirectives, kwArgs);
+
+		// Indicate this loader has both a 'xhr' and 'submit' method.
 		this.features.add("xhr", "_xhrRequest");
+		this.features.add("submit", "submit");
+		this.features.add("url", true);
 		lib.protect(this);
 
 	} /* end Advanced() */
 
 	// Inherit from the LoaderBase class
-	Rest.prototype = new LoaderBase();
-	Rest.prototype.constructor = Rest;
+	loaderREST.prototype = new LoaderBase();
+	loaderREST.prototype.constructor = loaderREST;
 
-	return Rest;
+	return loaderREST;
 });

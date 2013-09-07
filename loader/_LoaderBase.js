@@ -176,11 +176,26 @@ define(["../_base/Directives",
 			this.manager.cancel(reason);
 		};
 
+		this.destroy = function () {
+			// summary:
+			//		Destroy the loader resources.
+			// tag:
+			//		public
+			this._destroyed = true;
+			this._directives.destroy();
+
+			this.removeEventListener();
+			this.features = null;
+			this.manager  = null;
+			this.store    = null;
+		}
+
 		this.load = function (directives) {
 			// summary:
 			//		Submit a load request. If the loader is executing another request
 			//		the new request is queued.  All load requests are executed in the
 			//		order they are received.
+			// store: Store
 			// directives: LoadDirectives?
 			//		Optional Loader Directives
 			// returns: dojo/promise/Promise
@@ -195,6 +210,7 @@ define(["../_base/Directives",
 			if (directives && !isObject(directives)) {
 				throw new StoreError("DataError", "load", C_MSG_DIR_NOT_OBJ);
 			}
+
 			// Merge the user specified directives with the default loader directives
 			options = this._directives.get(null, directives);
 			handler = options.dataHandler && this._setDataHandler(options);
@@ -219,14 +235,13 @@ define(["../_base/Directives",
 		this.error      = null;				// Last load error encountered
 		this.store      = store;
 
-		// Register with the store for the close and clear triggers.
 		if (store) {
 			store._register([opcodes.CLOSE, opcodes.CLEAR], function (action) {
 				var text   = "load request was canceled due to a store " + action + " operation";
 				var reason = new StoreError("RequestCancel", "cancel", text);
 				self.cancel(reason);
 			});
-		}
+		};
 
 		// Catch load request and load manager events.
 		this.addEventListener("active, error, idle", function (event) {

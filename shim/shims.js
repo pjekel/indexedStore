@@ -1,1 +1,1 @@
-define(["./Array", "./Date", "./Object"], function () {});
+define(["./Array", "./Date", "./Function", "./Object"], function () {});

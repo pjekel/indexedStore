@@ -278,9 +278,9 @@ define(["dojo/request",
 			//		private
 			var i, key, max, errors = 0;
 			var options = request.directives;
+			var store   = request.store;
 			var flags   = options.overwrite ? {overwrite: true} : null;
 			var filter  = options.filter;
-			var store   = this.store;
 			var data    = response.data || [];
 			var stored  = [];
 			var value;
@@ -302,7 +302,7 @@ define(["dojo/request",
 						data = data.filter(filter);
 					}
 				}
-				for (i = 0; i < max; i++) {
+				for (i = 0; i < max && !request.canceled; i++) {
 					try {
 						value = data[i];
 						key = store._storeRecord(value, flags);

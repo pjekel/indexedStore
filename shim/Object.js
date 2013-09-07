@@ -192,11 +192,11 @@ define( [], function () {
 	//check whether getOwnPropertyDescriptor works if it's given. Otherwise,
 	//shim partially.
 	if (Object.defineProperty) {
-		var getOwnPropertyDescriptorWorksOnObject = 
+		var getOwnPropertyDescriptorWorksOnObject =
 			doesGetOwnPropertyDescriptorWork({});
 		var getOwnPropertyDescriptorWorksOnDom = typeof document == "undefined" ||
 		doesGetOwnPropertyDescriptorWork(document.createElement("div"));
-		if (!getOwnPropertyDescriptorWorksOnDom || 
+		if (!getOwnPropertyDescriptorWorksOnDom ||
 				!getOwnPropertyDescriptorWorksOnObject
 		) {
 			var getOwnPropertyDescriptorFallback = Object.getOwnPropertyDescriptor;
@@ -613,5 +613,17 @@ define( [], function () {
 		};
 	}
 
+	// ES6
+	if (!Object.setPrototypeOf) {
+		Object.setPrototypeOf = function (object, proto) {
+
+			if ((typeof object != "object" && typeof object != "function") ||	object === null	) {
+				throw new TypeError("Object.setPrototypeOf called on a non-object");
+			}
+
+			object.__proto__ = proto;
+			return object;
+		}
+	}
 
 });	/* end define() */

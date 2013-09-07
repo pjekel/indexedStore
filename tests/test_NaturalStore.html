@@ -71,7 +71,7 @@
 				name: "Create Natural Store",
 				timeout: 1000,
 				runTest: function (t) {
-					var Store = declare( [_Store, _Natural]);
+					var Store = declare( "myStore", [_Store, _Natural]);
 					var store = new Store ();
 					var defer = new doh.Deferred();
 					var max   = data.length;

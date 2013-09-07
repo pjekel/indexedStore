@@ -91,13 +91,13 @@
 
 					var trans = Manager.transaction(store, function (trans) {
 						var tStore = trans.store("store0");
-						var pStore = tStore.parentStore;
+						var mStore = tStore.master;
 
 						// Test transaction store(s)
 						t.t(tStore != store && tStore.transactional);
-						t.t(pStore == store && !pStore.transactional);
+						t.t(mStore == store && !mStore.transactional);
 						t.t(tStore.transaction == trans);
-						t.t(pStore.transaction == trans);
+						t.t(mStore.transaction == trans);
 
 						// Test public properties.
 						t.is("readonly", trans.mode);
@@ -157,7 +157,7 @@
 						// This should fail because you can't use the parents while
 						// a transaction is ongoing..
 						var tStore = trans.store("store0");
-						tStore.load({data:data});
+						tStore.close();
 					}, "readonly" );
 					// The transaction should generate an error....
 					trans.onerror = function (event) {
@@ -601,7 +601,6 @@
 					// This transaction should not even start...
 					var trans = Manager.transaction(store, function () {
 						var tStore = trans.store("store0");
-						// Listen for new object on the transaction store.
 						tStore.put({name: name});
 						t.is(1,tStore.total);
 					}, "readwrite" );
@@ -624,30 +623,37 @@
 				name: "Abort Transaction, inside the transaction",
 				timeout: 2000,
 				runTest: function (t) {
-					var Store = declare( [_Store, _Indexed, Eventable]);
-					var store = new Store ({name:"store0", keyPath:"name"});
+					var Store = declare( [_Store, _Indexed, Loader, Eventable]);
+					var store = new Store ({data: data, name:"store0", keyPath:"name"});
 					var defer = new doh.Deferred();
 
 					var name  = "Timmy";
 
-					var trans = Manager.transaction(store, function () {
-						var tStore = trans.store("store0");
-						// Listen for new object on the transaction store.
-						tStore.put({name: name});
-						t.is(1,tStore.total);
-						// Abort from inside a transaction
-						trans.abort();
-					}, "readwrite" );
+					store.ready(function (store) {
+						var trans = Manager.transaction(store, function () {
+							var tStore = trans.store("store0");
+							// Update an existing record and add a new record.
+							var homer = tStore.get("Homer");
+							homer.age = 60;
+							tStore.put(homer);
+							tStore.put({name: name});
+							t.is(max+1,tStore.total);
+							// Abort from inside a transaction
+							trans.abort();
+						}, "readwrite" );
 
-					// The transaction should generate an abort....
-					trans.onabort = function (event) {
-						defer.getTestCallback( function (event) {
-							t.is(0,store.total);
-						})(event);
-					};
-					trans.oncomplete = function (event) {
-						defer.reject(C_MSG_UNEXPECTED_NORMAL);
-					};
+						// The transaction should generate an abort....
+						trans.onabort = function (event) {
+							defer.getTestCallback( function (event) {
+								var homer = store.get("Homer");
+								t.f(homer.age == 60);
+								t.is(max,store.total);
+							})(event);
+						};
+						trans.oncomplete = function (event) {
+							defer.reject(C_MSG_UNEXPECTED_NORMAL);
+						};
+					});
 					return defer;
 				}
 			},
@@ -911,7 +917,9 @@
 					};
 					return defer;
 				}
-			}]);
+			}
+
+			]);
 
 			// WHEN AN ERROR OCCURS DURING THE EXECUTION OF A TRANSACTIONS THE
 			// ERROR/EXCEPTION MAY BE RE-THROWN, SO CATCH THEM HERE !!!

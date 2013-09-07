@@ -191,6 +191,21 @@ define(["./library",
 			names.sort();
 		};
 
+		this.destroy = function () {
+			// summary:
+			//		Remove all object references and release allocated resources.
+			// tag:
+			//		public
+			var props = Object.keys(properties);
+			// First remove any watchers
+			watchers.removeListener();
+			props.forEach(function (prop) {
+				properties[prop] = undefined;
+				delete parent[prop];
+			});
+			properties = {};
+		};
+
 		this.get = function (nameOrType /* *[,obj] */) {
 			// summary:
 			// nameOrType: String | Number

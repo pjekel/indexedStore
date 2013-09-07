@@ -9,7 +9,7 @@
 //
 
 define(["dojo/_base/declare",
-		"./_Procedures",
+		"./FeatureList",
 		"./Keys",
 		"./KeyRange",
 		"./library",
@@ -18,8 +18,8 @@ define(["dojo/_base/declare",
 		"./Record",
 		"../dom/event/Event",
 		"../error/createError!../error/StoreErrors.json"
-	], function (declare, _Procedures, Keys, KeyRange, lib, Location, opcodes, Record,
-	             Event, createError) {
+	], function (declare, FeatureList, Keys, KeyRange, lib, Location,
+	             opcodes, Record, Event, createError) {
 	"use strict";
 
 	// module:
@@ -90,24 +90,17 @@ define(["dojo/_base/declare",
 	var C_MSG_CONSTRAINT_ERROR = "record with key [%{0}] already exist";
 	var C_MSG_DEPENDENCY       = "base class '_Store' must be loaded first";
 
-	var _Natural = declare([_Procedures], {
+	var _Natural = declare(null, {
 
 		//===================================================================
 		// Constructor
 
 		constructor: function (kwArgs) {
-			if (this.features.has("store")) {
-				if (this.features.has("indexed")) {
-					throw new StoreError("Dependency", "constructor", C_MSG_MUTUAL_EXCLUSIVE);
-				}
-				this._index = {};			// Local record index.
-
-				// Mix in the appropriate directives...
-				lib.defProp(this, "natural", {value: true, writable: false, enumerable: true});
-				this.features.add("natural");
-			} else {
-				throw new StoreError("Dependency", "constructor", C_MSG_DEPENDENCY);
+			if (this.features.has("indexed")) {
+				throw new StoreError("Dependency", "constructor", C_MSG_MUTUAL_EXCLUSIVE);
 			}
+			lib.defProp(this, "natural", {value: true, enumerable: true});
+			this.features.add("natural");
 		},
 
 		//===================================================================

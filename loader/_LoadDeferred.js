@@ -43,7 +43,9 @@ define(["dojo/Deferred", "../_base/library"], function (Deferred, lib) {
 				return self.response;
 			},
 			function (err) {
-				err.response = self.response;
+				if (err && self.response) {
+					err.response = self.response;
+				}
 				throw err;
 			}
 		);

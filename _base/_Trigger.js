@@ -82,7 +82,7 @@ define(["dojo/_base/declare",
 			// Guarantee that listeners can rely on the fact there always is an
 			// options and flags argument available in case they want to use or
 			// extend them.
-			
+
 			vargs[5] = options || {};
 			vargs[6] = flags || {};
 
@@ -101,7 +101,8 @@ define(["dojo/_base/declare",
 						case opcodes.CLOSE:
 							break;
 					}
-					this.emit(opName, detail, true);
+					event = detail ? new Event(opName, {detail: detail}) : new Event(opName);
+					this.dispatchEvent(event);
 				}
 			} catch (err) {
 				event = new Event("error", {error: err, bubbles: true, cancelable: true});

@@ -158,28 +158,6 @@ define(["dojo/Deferred",
 			});
 		}
 
-		function onLoadTrigger(action) {
-			// summary:
-			//		This method is called when a store loader dispatched one of the
-			//		following events: error, load, loadStart or loadCancel
-			// event: Event
-			//		DOM4 style event.
-			// tag:
-			//		private, callback
-			switch (action) {
-				case "loadStart":
-					index._loading = true;
-					index._updates = 0;
-					break;
-				case "loadEnd":
-					if (index._loading) {
-						delete index._loading;
-						sortDuplicates(index);
-					}
-					break;
-			}
-		}
-
 		function sortDuplicates(index) {
 			// summary:
 			//		Sort all duplicate index entries. This method is called when either
@@ -327,6 +305,28 @@ define(["dojo/Deferred",
 			//		Private
 			this._destroyed = true;
 			this._clear();
+		};
+
+		this._onLoadTrigger = function (action) {
+			// summary:
+			//		This method is called when a store loader dispatched one of the
+			//		following events: error, load, loadStart or loadCancel
+			// event: Event
+			//		DOM4 style event.
+			// tag:
+			//		private, callback
+			switch (action) {
+				case "loadStart":
+					index._loading = true;
+					index._updates = 0;
+					break;
+				case "loadEnd":
+					if (index._loading) {
+						delete index._loading;
+						sortDuplicates(index);
+					}
+					break;
+			}
 		};
 
 		this._remove = function (storeRecord) {
@@ -667,7 +667,7 @@ define(["dojo/Deferred",
 			lib.readOnly(this, readOnly);
 			lib.protect(this);
 
-			store._register("loadEnd, loadStart", onLoadTrigger, this);
+			store._register("loadEnd, loadStart", this._onLoadTrigger, this);
 
 			this._indexReady.then(null, function (err) {
 				var event = new Event("error", {error: err, bubbles: true});

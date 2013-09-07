@@ -67,12 +67,13 @@ define(["../dom/event/Event",
 
 		var defer, self = this;
 
-		this.directives = directives;
 		this.async      = false;
-		this.done       = false;
-		this.type       = type.toUpperCase();
 		this.defer      = null;
+		this.directives = directives;
+		this.done       = false;
 		this.origin     = getOrigin(directives);
+		this.store      = null;
+		this.type       = type.toUpperCase();
 
 		this.cancel = function (reason) {
 			// summary:
@@ -82,6 +83,7 @@ define(["../dom/event/Event",
 			// tag:
 			//		public
 			this.defer.cancel(reason);
+			this.canceled = true;
 		};
 
 		this.error = function (err) {

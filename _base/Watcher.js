@@ -8,12 +8,13 @@
 //	2 - The Academic Free License	(http://trac.dojotoolkit.org/browser/dojo/trunk/LICENSE#L43)
 //
 
-define(["../error/createError!../error/StoreErrors.json",
+define(["../dom/event/Event",
+		"../error/createError!../error/StoreErrors.json",
 		"../listener/ListenerList",
 		"./Keys",
 		"./library",
 		"./opcodes"
-	], function (createError, ListenerList, Keys, lib, opcodes) {
+	], function (Event, createError, ListenerList, Keys, lib, opcodes) {
 	"use strict";
 
 	// module:
@@ -76,7 +77,6 @@ define(["../error/createError!../error/StoreErrors.json",
 	//	|	});
 
 	var StoreError = createError("Watcher");			// Create the StoreError type.
-	var isString   = lib.isString;
 	var defProp    = lib.defProp;
 	var getProp    = lib.getProp;
 
@@ -87,6 +87,11 @@ define(["../error/createError!../error/StoreErrors.json",
 		//		The store to monitor.
 		// tag:
 		//		public
+
+		var handle   = null;
+		var propList = [];
+		var spotters = new ListenerList();
+		var self     = this;
 
 		function watchProperty(action, key, newObj, oldObj) {
 			// summary:
@@ -106,22 +111,22 @@ define(["../error/createError!../error/StoreErrors.json",
 			function test(store, prop, newObj, oldObj) {
 				var newVal = getProp(prop, newObj);
 				var oldVal = getProp(prop, oldObj);
-				var props;
-				
+				var props, event;
+
 				if (Keys.cmp(newVal, oldVal)) {
 					// Notify all listeners, if any.
 					spotters.trigger(prop, newObj, newVal, oldVal);
 					if (store.eventable && !store.suppressEvents) {
 						props = {item: newObj, property: prop, newValue: newVal, oldValue: oldVal};
-						store.emit("set", props, true);
+						event = new Event("set", {detail: props});
+						store.dispatchEvent(event);
 					}
 				}
 			}
-
 			if (propList.length) {
 				propList.forEach(function (prop) {
-					test(source, prop, newObj, oldObj);
-				});
+					test(this, prop, newObj, oldObj);
+				}, this);
 			}
 		}
 
@@ -175,6 +180,7 @@ define(["../error/createError!../error/StoreErrors.json",
 			// tag:
 			//		Public
 
+			var target = !(this instanceof Watcher) ? this : source;
 			if (property) {
 				var props = lib.anyToArray(property);
 				props.forEach(function (prop) {
@@ -182,7 +188,7 @@ define(["../error/createError!../error/StoreErrors.json",
 						if (listener) {
 							spotters.addListener(prop, listener, scope);
 						} else {
-							if (!source.eventable) {
+							if (!target.eventable) {
 								throw new StoreError("ParameterMissing", "watch", "store is not eventable, listener required");
 							}
 						}
@@ -190,7 +196,7 @@ define(["../error/createError!../error/StoreErrors.json",
 							// Now that we have something to watch for, register the
 							// listener for store updates.
 							if (!handle) {
-								handle = source._register(opcodes.UPDATE, watchProperty);
+								handle = target._register(opcodes.UPDATE, watchProperty, target);
 							}
 							propList.push(prop);
 						}
@@ -245,11 +251,6 @@ define(["../error/createError!../error/StoreErrors.json",
 		};
 
 		//======================================================================
-
-		var handle   = null;
-		var propList = [];
-		var spotters = new ListenerList();
-		var self     = this;
 
 		if (source && source.baseClass == "store") {
 			defProp(this, "properties", {

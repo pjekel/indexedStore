@@ -200,7 +200,7 @@ define(["../_base/library",
 			//		Returns all listeners for a give type.
 			// type: String?
 			//		The type for which the listeners are to be retrieved.
-			// returns: Object|Array
+			// returns: Listener[] | Object
 			//		If type is specified an array of all listeners for the given type,
 			//		otherwise a key:value pairs object with each key representing a
 			//		type and the value being an array of all listeners for that type.
@@ -330,17 +330,17 @@ define(["../_base/library",
 			//		Listener type.
 			// tag:
 			//		Public
-			var vargs = Array.prototype.slice.call(arguments, 1);
+			var vargs  = Array.prototype.slice.call(arguments, 1);
 			var lsByType;
 
 			if (isValidType(type) && type !== C_ANYTYPE) {
 				lsByType  = listeners[type] || [];
 				if (this.actions) {
 					triggerActions(this.actions, type, "before", vargs);
-					triggerListener(lsByType, type, vargs, this);
+					triggerListener(lsByType, type, vargs);
 					triggerActions(this.actions, type, "after", vargs);
 				} else {
-					triggerListener(lsByType, type, vargs, this);
+					triggerListener(lsByType, type, vargs);
 				}
 			} else {
 				throw new ListError("TypeError", "trigger", "invalid type argument");
@@ -349,6 +349,7 @@ define(["../_base/library",
 
 		//=====================================================================
 
+		defProp(this, "types", {get: function () { return Object.keys(listeners); }, enumerable: true});
 		defProp(this, "length", {get: function () { return count; }, enumerable: true});
 
 		if (actions) {

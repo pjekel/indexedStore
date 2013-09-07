@@ -108,7 +108,7 @@ define(["../_base/library",
 			if (data instanceof Array) {
 				store._trigger("preload", data, options);
 				try {
-					for (i = 0; i < max; i++) {
+					for (i = 0; i < max && !request.canceled; i++) {
 						store._storeRecord(data[i], flags);
 						stored.push(data[i]);
 					}

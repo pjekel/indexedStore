@@ -10,9 +10,9 @@
 
 define(["dojo/_base/declare",
 		"dojo/Deferred",
+		"dojo/promise/Promise",
 		"dojo/when",
 		"./_assert",
-		"./_Procedures",
 		"./_Trigger",
 		"./Directives",
 		"./FeatureList",
@@ -24,12 +24,14 @@ define(["dojo/_base/declare",
 		"../dom/event/EventTarget",
 		"../dom/string/DOMStringList",
 		"../error/createError!../error/StoreErrors.json",
+		"../listener/ListenerList",
 		"../util/QueryEngine",
 		"../util/QueryResults",
 		"../util/sorter"
-		], function (declare, Deferred, when, assert, _Procedures, _Trigger, Directives, FeatureList,
+		], function (declare, Deferred, Promise, when, assert, _Trigger,
+		            Directives, FeatureList,
 		            Index, lib, Keys, opcodes, range, EventTarget, DOMStringList,
-					createError, QueryEngine, QueryResults, sorter) {
+					createError, ListenerList, QueryEngine, QueryResults, sorter) {
 	"use strict";
 	// module:
 	//		indexedStore/_base/_Store
@@ -168,6 +170,7 @@ define(["dojo/_base/declare",
 	var isString    = lib.isString;
 	var clone       = lib.clone;					// HTML5 structured clone.
 	var mixin       = lib.mixin;
+	var defProp     = lib.defProp;
 
 	var readOnly = ["async, autoIncrement", "baseClass", "features", "idProperty", "name",
 					"keyPath", "sid", "uppercase", "version"];
@@ -242,7 +245,7 @@ define(["dojo/_base/declare",
 		version: 1
 	};
 
-	var _Store = declare([EventTarget, _Procedures, _Trigger], {
+	var _Store = declare([EventTarget, _Trigger], {
 
 		//=========================================================================
 		// Constructor
@@ -263,28 +266,28 @@ define(["dojo/_base/declare",
 			EventTarget.declareHandler(this, "error, load");
 
 			// Protected  properties.
-			this._directives = new Directives(this, StoreDirectives, kwArgs);
-			this._autoIndex  = 1;
-			this._clone      = true;				// Handout only cloned objects
-			this._indexes    = {};
-			this._loading    = false;
-			this._records    = [];
-			this._storeReady = this._resetState();
-			this._waiting    = this._storeReady.promise;
+			this._directives  = new Directives(this, StoreDirectives, kwArgs);
+			this._autoIndex   = 1;
+			this._clone       = true;               // Handout only cloned objects
+			this._indexes     = {};
+			this._index       = {};                 // Used by Natural store only.
+			this._loading     = false;
+			this._records     = [];
+			this._storeReady  = this._resetState();
 
 			// NOTE: A keyPath value of null is allowed...
 			if (kwArgs && kwArgs.keyPath !== undefined) {
 				this.idProperty = kwArgs.keyPath;
 			}
 			// Public properties.
-			this.baseClass   = "store";
-			this.features    = new FeatureList();
-			this.indexNames  = new DOMStringList();
-			this.keyPath     = this.idProperty;
-			this.sid         = uniqueId++;
-			this.name        = this.name || "store_" + this.sid;
-			this.revision    = 1;		// Initial revision must be > 0 (See Observer).
-			this.total       = 0;
+			this.baseClass    = "store";
+			this.features     = this.features || new FeatureList();
+			this.indexNames   = new DOMStringList();
+			this.keyPath      = this.idProperty;
+			this.sid          = uniqueId++;
+			this.name         = this.name || "store_" + this.sid;
+			this.revision     = 1;		// Initial revision must be > 0 (See Observer).
+			this.total        = 0;
 
 			if (this.keyPath != null && !Keys.validPath(this.keyPath)) {
 				throw new StoreError("DataError", "constructor", "invalid keypath: '%{0}'", this.keyPath);
@@ -309,7 +312,7 @@ define(["dojo/_base/declare",
 			this.features.add("store");
 		},
 
-		postscript: function (/*=== kwArgs ===*/) {
+		postscript: function (kwArgs) {
 			// summary:
 			//		Called after all chained constructors have executed. At this point
 			//		the store is fully assembled.
@@ -320,8 +323,6 @@ define(["dojo/_base/declare",
 			//		protected
 			var store   = this;
 
-			lib.protect(this);	// Hide own protected properties.
-
 			if (!this.features.has("indexed, natural")) {
 				throw new StoreError("Dependency", "postscript", "base class _Indexed or _Natural required");
 			}
@@ -330,17 +331,19 @@ define(["dojo/_base/declare",
 				methods.forEach(function (method) {
 					var func = this[method];
 					this[method] = function () {
-						var args = arguments;
-						var prom = this._storeReady.then(function (store) {
-							return func.apply(store, args);
-						});
-						if (this.transactional) {
-							this.transaction._waitFor(prom);
+						var result = func.apply(this, arguments);
+						if (result instanceof Promise) {
+							if (this.transactional) {
+								this.transaction._waitFor(result);
+							}
+						} else {
+							result = new Deferred().resolve(result);
 						}
-						return prom;
+						return result;
 					};
 				}, this);
 			}
+			// If there is no loader, declare the store open for business...
 			if (!this.features.has("loader")) {
 				setTimeout(function () {
 					store._storeReady.resolve(store);
@@ -380,9 +383,12 @@ define(["dojo/_base/declare",
 			var defer = new Deferred();
 			var store = this;
 
-			this.state = "pending";
+			this._waiting = defer.promise;
+			this.state    = "pending";
+
 			defer.then(function () {
-				store.state = "ready";
+				store._waiting = false;
+				store.state    = "ready";
 			});
 			return defer;
 		},
@@ -525,17 +531,27 @@ define(["dojo/_base/declare",
 			//		Public
 			var name;
 
+			this._beingDestroyed = true;
 			this._clearRecords();
 			// Destroy all indexes.
 			for (name in this._indexes) {
 				this.deleteIndex(name);
 			}
 			this._destroyed = true;
-			this._listeners.removeListener();			// Remove all listeners...
-			this._indexes   = {};
-			this.indexNames = null;
 
-			this.eventable && this.eventer.destroy();
+			this.loader && this.loader.destroy();
+			this._listeners.removeListener();			// Remove all listeners...
+			this._directives.destroy();
+			this.removeEventListener();
+
+			this._listerners = null;
+			this._indexes    = {};
+			this._index      = {};
+
+			this.indexNames  = null;
+			this.loader      = null;
+
+			delete this._beingDestroyed;
 		},
 
 		get: function (key) {

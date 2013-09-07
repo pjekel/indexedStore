@@ -10,10 +10,12 @@
 
 define(["require",
 		"dojo/_base/declare",
+		"../_base/_Trigger",
+		"../_base/FeatureList",
 		"../_base/library",
 		"../dom/event/Event",
 		"../error/createError!../error/StoreErrors.json"
-	], function (require, declare, lib, Event, createError) {
+	], function (require, declare, _Trigger, FeatureList, lib, Event, createError) {
 //	"use strict";
 
 	// module:
@@ -69,7 +71,7 @@ define(["require",
 		autoLoad: true
 	};
 
-	var StoreLoader = declare([], {
+	var StoreLoader = declare(null, {
 
 		constructor: function (kwArgs) {
 			// summary:
@@ -82,6 +84,7 @@ define(["require",
 			//		and extensions mixed in.
 			// tag:
 			//		protected
+			this.features = this.features || new FeatureList();
 			if (!this.features.has("loader")) {
 				if (this.features.has("hierarchy, CORS")) {
 					throw new StoreError("Dependency", "constructor", C_MSG_INVALID_ORDER);
@@ -94,7 +97,9 @@ define(["require",
 						var submit = this.loader.features.has("submit") || this.loader.submit;
 						submit = isString(submit) ? this.loader[submit] : submit;
 						if (submit && typeof submit == "function") {
-							this.submit = submit.bind(this.loader);
+							this.submit = function (directives) {
+								return this.loader.submit(directives);
+							};
 							this.features.add("submit", true);
 						}
 					} else {
@@ -150,7 +155,6 @@ define(["require",
 			// another attempt.
 			if (this._storeReady.isRejected()) {
 				this._storeReady = this._resetState();
-				this._waiting    = this._storeReady.promise;
 			}
 			store._trigger("loadStart");
 			this._loading = promise = this.loader.load(directives);
@@ -200,7 +204,9 @@ define(["require",
 
 		if (!loader) {
 			require([ldrURI], function (loader) {
-				StoreLoader.prototype.LoaderClass = loader;
+				StoreLoader.extend({
+					LoaderClass: loader
+				});
 				cache[ldrURI] = loader;
 				loaded(StoreLoader);
 			});

@@ -9,11 +9,11 @@
 //
 
 define(["dojo/_base/declare",
-		"../_base/Eventer",
 		"../_base/library",
 		"../_base/Watcher",
+		"../dom/event/EventTarget",
 		"../error/createError!../error/StoreErrors.json"
-	], function (declare, Eventer, lib, Watcher, createError) {
+	], function (declare, lib, Watcher, EventTarget, createError) {
 	"use strict";
 
 	// module:
@@ -30,16 +30,21 @@ define(["dojo/_base/declare",
 			// the 'onset' property.   Note: the Watch extension does not register
 			// any listener with the store until there is something to watch for.
 
-			if (this.eventable && this.eventer instanceof Eventer) {
-				this.eventer.addHandler("set");
+			if (this.eventable) {
+				EventTarget.declareHandler(this, "set");
 			}
 			if (!this._clone) {
 				console.warn("Watch Extension only works when object cloning is enabled");
 			}
 
+			// NOTE:
+			//	Because the store watcher property is overwritten on transactional
+			//	stores we reference the watcher property when calling watch() and
+			//	unwatch() instead of directly mapping the methods.
+			
 			this.watcher = new Watcher(this);
-			this.unwatch = this.watcher.unwatch;
-			this.watch   = this.watcher.watch;
+			this.unwatch = function () { return this.watcher.unwatch.apply(this, arguments); };
+			this.watch   = function () { return this.watcher.watch.apply(this, arguments); };
 
 			this.features.add("watcher");
 		}

@@ -124,7 +124,8 @@ define(["../shim/shims"], function () {
 			// props: Object?
 			// tag:
 			//		public
-			return props ? lib.mixin(Object.create(obj), props) : Object.create(obj);
+			var dest = Object.create(typeof obj === 'function' ? obj.prototype : obj || Object.prototype);
+			return props ? lib.mixin(dest, props) : dest;
 		},
 
 		enumerate: function (object, property, value) {
@@ -135,11 +136,9 @@ define(["../shim/shims"], function () {
 			if (object && property) {
 				var props = lib.anyToArray(property);
 				props.forEach(function (prop) {
-					if (typeof object[prop] == "function") {
-						Object.defineProperty(object, prop, {value: object[prop], enumerable: !!value});
-					} else {
-						Object.defineProperty(object, prop, {enumerable: !!value});
-					}
+					var desc = Object.getOwnPropertyDescriptor(object, prop);
+					desc.enumerable = !!value;
+					Object.defineProperty(object, prop, desc);
 				});
 			}
 		},
@@ -394,7 +393,7 @@ define(["../shim/shims"], function () {
 			// tag:
 			//		Public
 			var props = Object.keys(any).filter(function (prop) { return (/^_/).test(prop); });
-//			this.enumerate(any, props, false);
+			this.enumerate(any, props, false);
 		},
 
 		readOnly: function (obj, property, value) {

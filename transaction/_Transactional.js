@@ -9,15 +9,15 @@
 //
 
 define(["dojo/Deferred",
-		"../_base/Eventer",
 		"../_base/library",
 		"../_base/opcodes",
+		"../_base/Watcher",
 		"../dom/event/EventTarget",
 		"../dom/string/DOMStringList",
 		"../listener/ListenerList",
 		"../error/createError!../error/StoreErrors.json",
 		"./_Transaction"
-	], function (Deferred, Eventer, lib, opcodes, EventTarget, DOMStringList, ListenerList,
+	], function (Deferred, lib, opcodes, Watcher, EventTarget, DOMStringList, ListenerList,
 				 createError, Transaction) {
 	"use strict";
 
@@ -32,7 +32,7 @@ define(["dojo/Deferred",
 	var clone      = lib.clone;
 
 	var storeEvents = ["clear", "close", "delete", "error", "load", "new", "update"];
-	var notAllowed  = ["close", "destroy", "load", "setData"];
+	var notAllowed  = ["close", "destroy"];
 
 	function Transactional() {}
 
@@ -46,6 +46,14 @@ define(["dojo/Deferred",
 		// tag:
 		//		public
 		var name;
+
+		function release(cs) {
+			cs._listeners.removeListener();
+			cs._records = null;
+			cs._indexes = null;
+			cs._index   = {};
+		}
+
 		if (transaction.active) {
 			if (transaction._handle) {
 				clearTimeout(transaction._handle);
@@ -53,18 +61,18 @@ define(["dojo/Deferred",
 			}
 			// Remove transaction from parent store(s)
 			for (name in transaction._scope) {
+				transaction._scope[name].clone = release(transaction._scope[name].clone);
 				transaction._scope[name].parent.transaction = null;
-				transaction._scope[name].clone = undefined;
 			}
-			transaction._done    = true;
-			transaction._state   = Transaction.DONE;
-			transaction._scope   = {};
-			transaction._oper    = [];
-			transaction._promLst = [];
-
-			transaction.active = false;
-			transaction.error  = null;
 		}
+		transaction._done    = true;
+		transaction._state   = Transaction.DONE;
+		transaction._scope   = {};
+		transaction._oper    = [];
+		transaction._promLst = [];
+
+		transaction.active = false;
+		transaction.error  = null;
 	};
 
 	Transactional.commit = function (transaction) {
@@ -73,27 +81,27 @@ define(["dojo/Deferred",
 		// tag:
 		//		public
 
-		function mergeIndexes(pStore, tStore) {
+		function mergeIndexes(mStore, tStore) {
 			var index, names = Object.keys(tStore._indexes);
 			names.forEach(function (name) {
-				if (pStore._indexes[name] !== undefined) {
+				if (mStore._indexes[name] !== undefined) {
 					if (tStore._updates) {
-						pStore._indexes[name]._records = tStore._indexes[name]._records;
+						mStore._indexes[name]._records = tStore._indexes[name]._records;
 					}
 				} else {
 					// New index was created...
 					index = tStore._indexes[name];
-					defProp(index, "parent", {value: pStore, enumerable: true, writable: false});
-					defProp(index, "store", {value: pStore, enumerable: true, writable: false});
-					pStore._indexes[name] = index;
-					pStore.indexNames     = new DOMStringList(tStore.indexNames);
+					defProp(index, "parent", {value: mStore, enumerable: true, writable: false});
+					defProp(index, "store", {value: mStore, enumerable: true, writable: false});
+					mStore._indexes[name] = index;
+					mStore.indexNames     = new DOMStringList(tStore.indexNames);
 				}
 			});
-			names = Object.keys(pStore._indexes);
+			names = Object.keys(mStore._indexes);
 			names.forEach(function (name) {
 				if (tStore._indexes[name] === undefined) {
-					pStore.transaction = null;
-					pStore.deleteIndex(name);
+					mStore.transaction = null;
+					mStore.deleteIndex(name);
 				}
 			});
 		}	/* end commitIndexes() */
@@ -103,18 +111,18 @@ define(["dojo/Deferred",
 			// clonedStore:
 			// tag:
 			//		private
-			var tStore = clonedStore, pStore = tStore.parentStore;
+			var tStore = clonedStore, mStore = tStore.master;
 			// Only merge stores if we had store mutations.
 			if (tStore._updates) {
-				pStore._records = tStore._records.slice();
-				pStore.revision = tStore.revision;
-				pStore.total    = pStore._records.length;
+				mStore._records = tStore._records;
+				mStore.revision = tStore.revision;
+				mStore.total    = mStore._records.length;
 				// Test for the local index of a _Natural store.
-				if (pStore._index) {
-					pStore._index = clone(tStore._index);
+				if (mStore._index) {
+					mStore._index = clone(tStore._index);
 				}
 			}
-			mergeIndexes(pStore, tStore);
+			mergeIndexes(mStore, tStore);
 		}	/* end mergeStore() */
 
 		var name;
@@ -129,49 +137,60 @@ define(["dojo/Deferred",
 		// tag:
 		//		public
 
-		function cloneStore(store) {
-			// summary:
-			//		Return a cloned store suitable for the use inside a transaction. The
-			//		store is referred to as the transaction store (tStore)
-			// store:
-			//		Store to be cloned.
-			// tag:
-			//		public
-			var cs;
-
-			if (store.transactional) {
-				throw new StoreError("Unknown", "cloneStore", "internal error, store already cloned");
+		function cloneIndexes(indexes, store) {
+			var ci, cis = {}, index, name;
+			for (name in indexes) {
+				index = indexes[name];
+				ci = Object.create(index, {
+					_indexReady: {value: new Deferred(), writable: true},
+					_records: {value: index._records.slice(), writable: true},
+					_updates: {value: 0, writable: true},
+					master: {value: index, enumerable: true},
+					cloned: {value: true, enumerable: true},
+					store: {value: store, enumerable: true}
+				});
+				EventTarget.call(ci, store);
+				index.ready(
+					function () {
+						ci._indexReady.resolve(ci);
+					},
+					ci._indexReady.reject
+				);
+				ci._indexReady.then(null, function (err) {
+					var event = new Event("error", {error: err, bubbles: true});
+					ci.dispatchEvent(event);
+				});
+				store._register("loadEnd, loadStart", ci._onLoadTrigger, ci);
+				cis[name] = ci;
 			}
+			return cis;
+		}
 
-			function cloneIndexes(clonedStore) {
-				// summary:
-				// tag:
-				//		private
-				var name, ci, cis = {}, indexes = clonedStore._indexes;
-				for (name in indexes) {
-					ci = Object.create(indexes[name]);
-					ci._records = ci._records.slice();
-					defProp(ci, "cloned", {value: true, enumerable: true, writable: false});
-					defProp(ci, "store", {value: clonedStore, enumerable: true, writable: false});
-					cis[name] = ci;
-				}
-				return cis;
-			}	/* end cloneIndexes() */
+		function cloneStore(store, mode) {
+			// summary:
+			// tag:
+			//		protected
+			var cs, indexNames;
 
-			cs = Object.create(store);
+			if (store.cloned) {
+				throw new StoreError("DataError", "_clone", "store is already a cloned instance");
+			}
+			cs = Object.create(store, {
+				_listeners: {value: new ListenerList(), writable: true},
+				_indexes: {value: cloneIndexes(store._indexes, store, mode), writable: true},
+				_index: {value: clone(store._index), writable: true},
+				_records: {value: store._records.slice(), writable: true},
+				_updates: {value: 0, writable: true},
+				transactional: {value: true, enumerable: true},
+				master: {value: store, enumerable: true},
+				cloned: {value: true, enumerable: true}
+			});
+			EventTarget.call(cs);
+			cs._storeReay = cs._resetState();
 
-			// Reset the event listeners for the cloned store so we don't call any
-			// of the parent store listeners.
-			EventTarget.call(cs, transaction);
-
-			cs._listeners  = new ListenerList();
-			cs._indexes    = cloneIndexes(cs);
-			cs._index      = clone(cs._index);		// _Natural stores only...
-			cs._storeReady = cs._resetState();
-			cs._records    = cs._records.slice();
-			cs._updates    = 0;
-
-			cs.indexNames  = new DOMStringList(cs.indexNames);
+			if (cs.watcher && cs.features.has("watcher")) {
+				cs.watcher = new Watcher(cs);
+			}
 
 			// IMPORTANT: If ready() is called on a cloned store we have to make
 			// sure the associated callbacks are called with the correct store,
@@ -184,14 +203,6 @@ define(["dojo/Deferred",
 				cs._storeReady.reject
 			);
 
-			defProp(cs, "transactional", {value: true, enumerable: true, writable: false});
-			defProp(cs, "parentStore", {value: store, enumerable: true, writable: false});
-
-			// If the store is eventable replace the 'Eventer'
-			if (cs.eventable) {
-				cs.eventer = new Eventer(cs, storeEvents);
-				cs.emit    = cs.eventer.emit;
-			}
 			// Disallow several store functions
 			notAllowed.forEach(function (fncName) {
 				cs[fncName] = function () {
@@ -208,9 +219,8 @@ define(["dojo/Deferred",
 				transaction._journal(cs, arguments);
 			});
 
-			lib.protect(cs);
 			return cs;
-		}	/* end cloneStore() */
+		}
 
 		var name, entry;
 
@@ -221,8 +231,8 @@ define(["dojo/Deferred",
 		// Prepare the transaction scope.
 		for (name in transaction._scope) {
 			entry = transaction._scope[name];
+			entry.clone = cloneStore(entry.parent, transaction.mode);
 			entry.parent.transaction = transaction;
-			entry.clone = cloneStore(entry.parent);
 		}
 	};
 

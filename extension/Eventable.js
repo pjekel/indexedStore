@@ -9,9 +9,9 @@
 //
 
 define(["dojo/_base/declare",
-		"../_base/Eventer",
-		"../_base/library"
-	], function (declare, Eventer, lib) {
+		"../_base/library",
+		"../dom/event/EventTarget"
+	], function (declare, lib, EventTarget) {
 	"use strict";
 
 	// module:
@@ -24,8 +24,7 @@ define(["dojo/_base/declare",
 	var Eventable = declare(null, {
 		constructor: function () {
 			if (!this.features.has("eventable")) {
-				this.eventer = new Eventer(this, storeEvents);
-				this.emit    = this.eventer.emit;
+				EventTarget.declareHandler(this, storeEvents);
 				this.features.add("eventable");
 
 				lib.defProp(this, "eventable", {value: true, writable: false, enumerable: true});

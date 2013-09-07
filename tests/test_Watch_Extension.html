@@ -35,9 +35,10 @@
         "store/_base/Watcher",
 		"store/extension/Hierarchy",
 		"store/extension/Eventable",
-		"store/extension/Watch"
+		"store/extension/Watch",
+		"store/transaction/Manager"
         ], function( doh, declare, ready,
-					_Store, _Indexed, Loader, Watcher, Hierarchy, Eventable, Watch ) {
+					_Store, _Indexed, Loader, Watcher, Hierarchy, Eventable, Watch, Manager ) {
 			"use strict";
 
 			// IMPORTANT:
@@ -267,7 +268,6 @@
 
 					// Watch extension extends the store with watcher watch and unwatch
 					// methods.
-					t.t( store.watcher instanceof Watcher );
 					t.t( store.watch instanceof Function );
 					t.t( store.unwatch instanceof Function );
 
@@ -417,7 +417,50 @@
 					t.is ( 2, events["age"] );
 
 				}
-			}]);
+			},
+
+			{
+				name: "Watch Extension, watch properties transaction store",
+				runTest: function (t) {
+					var Store = declare( [_Store, _Indexed, Loader, Hierarchy, Watch]);
+					var store = new Store ({data:data, keyPath:"name", name:"myStore"});
+					var defer = new doh.Deferred();
+
+					var events = [];
+					var seqnr  = 0;
+
+					function watcher0(property, object, newValue, oldValue) {
+						t.is(2, seqnr++);
+					}
+
+					function watcher1(property, object, newValue, oldValue) {
+						t.is(0, seqnr++);
+					}
+
+					store.watch("age", watcher0, store);
+
+					// Callback sequence: watcher1 -> oncomplete  -> watcher0
+					store.ready(function (store) {
+						var trans = Manager.transaction(store, function (trans) {
+							var tStore = trans.store("myStore");
+							tStore.watch("age", watcher1, tStore);
+							var homer = tStore.get("Homer");
+							homer.age = 60;
+							tStore.put(homer);
+						}, "readwrite");
+
+						trans.oncomplete = function (event) {
+							defer.getTestCallback( function (event) {
+								t.is( 1, seqnr++ );
+							})(event);
+						}
+					});
+
+					return defer;
+				}
+			}
+
+			]);
 
 			ready( function () {
 				doh.run();

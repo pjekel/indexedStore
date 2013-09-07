@@ -32,6 +32,10 @@ define(["../../_base/library",
 
 	var unhandled = lib.getProp("indexedStore.event.unhandledError", null, true);
 
+	function isTarget(target) {
+		return (target instanceof EventTarget || target.isInstanceOf(EventTarget));
+	}
+
 	function propagate(path, phase, event) {
 		// summary:
 		//		Iterate the propagation path for the event.
@@ -50,7 +54,7 @@ define(["../../_base/library",
 		var curTarget = path[i++];
 
 		while (curTarget && !evt._stopPropagate) {
-			if (curTarget instanceof EventTarget) {
+			if (isTarget(curTarget)) {
 				listeners = curTarget.getEventListeners(evt.type, phase);
 				j = 0;
 				if (listeners && listeners.length) {
@@ -314,16 +318,17 @@ define(["../../_base/library",
 		//	|	};
 		// tag:
 		//		public
-		if (!(target instanceof EventTarget)) {
+		if (!isTarget(target)) {
 			throw new StoreError("TypeError", "declareHandler", "target is not an EventTarget");
 		}
 		types = lib.anyToArray(types);
 		types.forEach(function (type) {
 			if (lib.isString(type)) {
-				var propName = "on" + type.toLowerCase();
-				var listener = null;
+				var eventType = type.toLowerCase().replace(/^on/, "");
+				var property  = "on" + eventType;
+				var listener  = null;
 
-				lib.defProp(target, propName, {
+				lib.defProp(target, property, {
 					get: function () {
 						return listener;
 					},
@@ -331,14 +336,14 @@ define(["../../_base/library",
 						if (callback !== null) {
 							if (callback instanceof Function) {
 								// Remove the current listener before adding the new.
-								target.removeEventListener(type, listener, false);
-								target.addEventListener(type, callback);
+								this.removeEventListener(eventType, listener, false);
+								this.addEventListener(eventType, callback);
 								listener = callback;
 							} else {
 								throw new StoreError("TypeError", "declareHandler", "callback is not a callable object");
 							}
 						} else {
-							target.removeEventListener(type, listener, false);
+							this.removeEventListener(eventType, listener, false);
 							listener = null;
 						}
 					},
@@ -350,6 +355,21 @@ define(["../../_base/library",
 			}
 		});
 		return types;
+	};
+
+	EventTarget.removeHandler = function (target, types) {
+		types = lib.anyToArray(types);
+		types.forEach(function (type) {
+			if (lib.isString(type)) {
+				var eventType = type.toLowerCase().replace(/^on/, "");
+				var property  = "on" + eventType;
+
+				if (target.hasOwnProperty(property)) {
+					target.removeEventListener(eventType);
+					delete target[property];
+				}
+			}
+		});
 	};
 
 	EventTarget.unhandledError = function (event) {
